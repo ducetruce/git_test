@@ -8,9 +8,19 @@ public protocol DeviceCoordinator: AnyObject {
     var family: DeviceFamily { get }
     var displayName: String { get }
 
+    /// Whether pairing this device family requires a user-supplied secret
+    /// (e.g. a per-device key extracted from the vendor's own app/account,
+    /// as with `AmazfitHelioCoordinator`) before a connection can be
+    /// authenticated. Defaults to `false`.
+    var requiresPairingSecret: Bool { get }
+
     func canSupport(_ peripheral: DiscoveredPeripheral) -> Bool
 
     func makeSession(for device: Device) -> DeviceSession
+}
+
+public extension DeviceCoordinator {
+    var requiresPairingSecret: Bool { false }
 }
 
 /// An active protocol session for one connected device. `start` is called

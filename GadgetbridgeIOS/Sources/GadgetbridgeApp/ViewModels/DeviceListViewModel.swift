@@ -29,11 +29,15 @@ final class DeviceListViewModel: ObservableObject {
         manager.stopScanning()
     }
 
-    func pair(_ peripheral: DiscoveredPeripheral) {
+    func pair(_ peripheral: DiscoveredPeripheral, pairingSecretHex: String? = nil) {
         guard let coordinator = discoverySupport[peripheral.id] else { return }
-        let device = manager.pair(peripheral, as: coordinator)
+        let device = manager.pair(peripheral, as: coordinator, pairingSecretHex: pairingSecretHex)
         pairedDevices = manager.pairedDevices
         Task { await manager.connect(device) }
+    }
+
+    func requiresPairingSecret(_ peripheral: DiscoveredPeripheral) -> Bool {
+        discoverySupport[peripheral.id]?.requiresPairingSecret ?? false
     }
 
     func connect(_ device: Device) {

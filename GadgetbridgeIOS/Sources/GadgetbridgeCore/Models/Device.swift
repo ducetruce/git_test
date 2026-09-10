@@ -24,6 +24,13 @@ public struct Device: Identifiable, Codable, Hashable, Sendable {
     public var connectionState: ConnectionState
     public var lastSyncDate: Date?
 
+    /// Opaque, family-specific pairing secret, hex-encoded. Some vendor
+    /// protocols (e.g. `AmazfitHelioCoordinator`'s Zepp OS auth) can't
+    /// authenticate without a per-device key the user extracts from the
+    /// vendor's own app/account; `DeviceCoordinator.requiresPairingSecret`
+    /// signals when a family needs this. Unused by families that don't.
+    public var pairingSecretHex: String?
+
     public init(
         id: UUID = UUID(),
         name: String,
@@ -34,7 +41,8 @@ public struct Device: Identifiable, Codable, Hashable, Sendable {
         modelNumber: String? = nil,
         battery: BatteryInfo? = nil,
         connectionState: ConnectionState = .disconnected,
-        lastSyncDate: Date? = nil
+        lastSyncDate: Date? = nil,
+        pairingSecretHex: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -46,5 +54,6 @@ public struct Device: Identifiable, Codable, Hashable, Sendable {
         self.battery = battery
         self.connectionState = connectionState
         self.lastSyncDate = lastSyncDate
+        self.pairingSecretHex = pairingSecretHex
     }
 }

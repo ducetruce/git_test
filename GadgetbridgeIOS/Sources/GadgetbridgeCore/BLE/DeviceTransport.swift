@@ -9,6 +9,18 @@ public enum DeviceTransportError: Error, Sendable {
     case underlying(String)
 }
 
+extension DeviceTransportError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .notConnected: return "Not connected to the device."
+        case .serviceNotFound(let uuid): return "The device doesn't expose the expected service (\(uuid))."
+        case .characteristicNotFound(let uuid): return "The device doesn't expose the expected characteristic (\(uuid))."
+        case .timedOut: return "Timed out waiting for the device to respond."
+        case .underlying(let message): return message
+        }
+    }
+}
+
 /// Abstraction over a single connected GATT link, so `DeviceCoordinator`
 /// implementations in `GadgetbridgeCore` never touch `CoreBluetooth`
 /// directly. This is what makes coordinators unit-testable with a mock

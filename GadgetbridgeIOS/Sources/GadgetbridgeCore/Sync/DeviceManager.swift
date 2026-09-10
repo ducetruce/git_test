@@ -47,11 +47,12 @@ public final class DeviceManager {
     }
 
     @discardableResult
-    public func pair(_ peripheral: DiscoveredPeripheral, as coordinator: DeviceCoordinator) -> Device {
+    public func pair(_ peripheral: DiscoveredPeripheral, as coordinator: DeviceCoordinator, pairingSecretHex: String? = nil) -> Device {
         let device = Device(
             name: peripheral.name ?? coordinator.displayName,
             peripheralIdentifier: peripheral.id,
-            family: coordinator.family
+            family: coordinator.family,
+            pairingSecretHex: pairingSecretHex
         )
         pairedDevices.append(device)
         persistDevices()

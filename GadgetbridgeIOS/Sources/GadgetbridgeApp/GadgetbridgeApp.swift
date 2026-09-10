@@ -8,6 +8,7 @@ struct GadgetbridgeApp: App {
 
     init() {
         DeviceCoordinatorRegistry.shared.register(GenericBLECoordinator())
+        DeviceCoordinatorRegistry.shared.register(AmazfitHelioCoordinator())
 
         let supportDirectory = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
