@@ -16,6 +16,9 @@ public final class DeviceManager {
     private let repository: ActivityRepository
     private let deviceStore: DeviceStore
     private var activeSessions: [UUID: DeviceSession] = [:]
+    /// One HRV window per device: beat-to-beat intervals arrive a couple at
+    /// a time and only mean something in aggregate.
+    private var hrvAccumulators: [UUID: HRVAccumulator] = [:]
 
     public init(
         scanner: BLEScanning,
@@ -89,6 +92,9 @@ public final class DeviceManager {
     public func disconnect(_ device: Device) {
         activeSessions[device.id]?.stop()
         activeSessions.removeValue(forKey: device.id)
+        // A partial HRV window spanning a disconnect would mix beats from
+        // two sessions, so drop it.
+        hrvAccumulators[device.id]?.reset()
         updateDevice(device.id) { $0.connectionState = .disconnected }
     }
 
@@ -121,9 +127,30 @@ extension DeviceManager: DeviceSessionDelegate {
         updateDevice(session.device.id) { $0.battery = battery }
     }
 
-    public func session(_ session: DeviceSession, didReceiveHeartRate sample: HeartRateSample) {
+    public func session(_ session: DeviceSession, didReceive measurement: HeartRateMeasurement) {
+        let deviceId = session.device.id
+        let sample = HeartRateSample(
+            deviceId: deviceId,
+            timestamp: Date(),
+            beatsPerMinute: measurement.beatsPerMinute
+        )
         try? repository.save(sample)
         delegate?.deviceManager(self, didReceiveHeartRate: sample)
+
+        if measurement.sensorContact != .notSupported, let device = pairedDevices.first(where: { $0.id == deviceId }) {
+            delegate?.deviceManager(self, didUpdateSensorContact: measurement.sensorContact, for: device)
+        }
+
+        guard !measurement.rrIntervals.isEmpty else { return }
+        let accumulator = hrvAccumulators[deviceId] ?? {
+            let new = HRVAccumulator()
+            hrvAccumulators[deviceId] = new
+            return new
+        }()
+        if let hrv = accumulator.add(measurement.rrIntervals, deviceId: deviceId) {
+            try? repository.save(hrv)
+            delegate?.deviceManager(self, didComputeHRV: hrv)
+        }
     }
 
     public func session(_ session: DeviceSession, didUpdateDeviceInfo device: Device) {

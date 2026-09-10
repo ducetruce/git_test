@@ -24,6 +24,10 @@
 	<string>Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Gadgetbridge can copy the heart rate and heart rate variability it reads from your device into Apple Health, so the data joins the rest of your health record.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Gadgetbridge does not read data from Apple Health; this permission is requested only so readings can be written to your health record.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

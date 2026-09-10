@@ -92,9 +92,8 @@ public final class GenericBLESession: DeviceSession {
             service: StandardBLEService.heartRate,
             characteristic: StandardBLECharacteristic.heartRateMeasurement
         ) { [weak self] data in
-            guard let self, let bpm = HeartRateMeasurementParser.parseBPM(from: data) else { return }
-            let sample = HeartRateSample(deviceId: self.device.id, timestamp: Date(), beatsPerMinute: bpm)
-            self.delegate?.session(self, didReceiveHeartRate: sample)
+            guard let self, let measurement = HeartRateMeasurementParser.parse(data) else { return }
+            self.delegate?.session(self, didReceive: measurement)
         }
     }
 

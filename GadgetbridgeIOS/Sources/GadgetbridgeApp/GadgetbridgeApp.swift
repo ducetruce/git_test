@@ -41,7 +41,7 @@ struct GadgetbridgeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(deviceListViewModel: deviceListViewModel, repository: repository)
+            RootView(deviceList: deviceListViewModel, repository: repository)
         }
     }
 }

@@ -37,7 +37,7 @@ private final class ReplayingTransport: DeviceTransport {
 
 private final class NoopDelegate: DeviceSessionDelegate {
     func session(_ session: DeviceSession, didUpdateBattery battery: BatteryInfo) {}
-    func session(_ session: DeviceSession, didReceiveHeartRate sample: HeartRateSample) {}
+    func session(_ session: DeviceSession, didReceive measurement: HeartRateMeasurement) {}
     func session(_ session: DeviceSession, didUpdateDeviceInfo device: Device) {}
 }
 

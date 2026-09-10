@@ -297,10 +297,12 @@ public final class AmazfitHelioSession: DeviceSession {
             service: StandardBLEService.heartRate,
             characteristic: StandardBLECharacteristic.heartRateMeasurement
         ) { [weak self] data in
-            guard let self, let bpm = HeartRateMeasurementParser.parseBPM(from: data) else { return }
-            self.logger.log("Heart rate via standard GATT: \(bpm) BPM")
-            let sample = HeartRateSample(deviceId: self.device.id, timestamp: Date(), beatsPerMinute: bpm)
-            self.delegate?.session(self, didReceiveHeartRate: sample)
+            guard let self, let measurement = HeartRateMeasurementParser.parse(data) else { return }
+            self.logger.log(
+                "Heart rate via standard GATT: \(measurement.beatsPerMinute) BPM"
+                + (measurement.rrIntervals.isEmpty ? "" : ", \(measurement.rrIntervals.count) RR interval(s)")
+            )
+            self.delegate?.session(self, didReceive: measurement)
         }
     }
 }

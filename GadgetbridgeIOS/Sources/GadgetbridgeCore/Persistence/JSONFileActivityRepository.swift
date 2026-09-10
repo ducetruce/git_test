@@ -27,6 +27,10 @@ public final class JSONFileActivityRepository: ActivityRepository {
         try queue.sync { try append(sample, to: fileURL(for: .heartRate)) }
     }
 
+    public func save(_ sample: HRVSample) throws {
+        try queue.sync { try append(sample, to: fileURL(for: .hrv)) }
+    }
+
     public func save(_ session: SleepSession) throws {
         try queue.sync { try append(session, to: fileURL(for: .sleep)) }
     }
@@ -45,6 +49,13 @@ public final class JSONFileActivityRepository: ActivityRepository {
         }
     }
 
+    public func hrvSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HRVSample] {
+        try queue.sync {
+            let all: [HRVSample] = try readAll(from: fileURL(for: .hrv))
+            return all.filter { $0.deviceId == deviceId && range.contains($0.timestamp) }
+        }
+    }
+
     public func sleepSessions(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [SleepSession] {
         try queue.sync {
             let all: [SleepSession] = try readAll(from: fileURL(for: .sleep))
@@ -55,7 +66,7 @@ public final class JSONFileActivityRepository: ActivityRepository {
     // MARK: - Private
 
     private enum DataKind: String {
-        case activity, heartRate, sleep
+        case activity, heartRate, hrv, sleep
     }
 
     private func fileURL(for kind: DataKind) -> URL {

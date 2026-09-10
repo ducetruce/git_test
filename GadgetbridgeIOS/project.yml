@@ -25,11 +25,15 @@ targets:
           - UIInterfaceOrientationPortrait
         NSBluetoothAlwaysUsageDescription: "Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device."
         NSBluetoothPeripheralUsageDescription: "Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device."
+        NSHealthUpdateUsageDescription: "Gadgetbridge can copy the heart rate and heart rate variability it reads from your device into Apple Health, so the data joins the rest of your health record."
+        NSHealthShareUsageDescription: "Gadgetbridge does not read data from Apple Health; this permission is requested only so readings can be written to your health record."
         UIBackgroundModes:
           - bluetooth-central
     entitlements:
       path: Sources/GadgetbridgeApp/Resources/Gadgetbridge.entitlements
-      properties: {}
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.gadgetbridge

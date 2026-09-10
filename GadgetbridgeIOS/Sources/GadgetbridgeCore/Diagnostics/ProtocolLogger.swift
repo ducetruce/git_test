@@ -49,9 +49,15 @@ public final class ProtocolLogger: ProtocolLogging, @unchecked Sendable {
 
     /// The recorded lines, oldest first, ready to copy out and share.
     public var transcript: String {
+        transcriptLines.joined(separator: "\n")
+    }
+
+    /// The recorded lines individually, so a viewer can style each one by
+    /// what it means rather than rendering one opaque blob.
+    public var transcriptLines: [String] {
         lock.lock()
         defer { lock.unlock() }
-        return lines.joined(separator: "\n")
+        return lines
     }
 
     public func clear() {

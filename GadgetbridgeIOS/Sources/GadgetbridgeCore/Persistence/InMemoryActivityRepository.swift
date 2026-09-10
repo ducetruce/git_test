@@ -6,6 +6,7 @@ public final class InMemoryActivityRepository: ActivityRepository {
     private let lock = NSLock()
     private var activitySamples: [ActivitySample] = []
     private var heartRateSamples: [HeartRateSample] = []
+    private var hrvSamples: [HRVSample] = []
     private var sleepSessions: [SleepSession] = []
 
     public init() {}
@@ -16,6 +17,10 @@ public final class InMemoryActivityRepository: ActivityRepository {
 
     public func save(_ sample: HeartRateSample) throws {
         lock.withLock { heartRateSamples.append(sample) }
+    }
+
+    public func save(_ sample: HRVSample) throws {
+        lock.withLock { hrvSamples.append(sample) }
     }
 
     public func save(_ session: SleepSession) throws {
@@ -31,6 +36,12 @@ public final class InMemoryActivityRepository: ActivityRepository {
     public func heartRateSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HeartRateSample] {
         lock.withLock {
             heartRateSamples.filter { $0.deviceId == deviceId && range.contains($0.timestamp) }
+        }
+    }
+
+    public func hrvSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HRVSample] {
+        lock.withLock {
+            hrvSamples.filter { $0.deviceId == deviceId && range.contains($0.timestamp) }
         }
     }
 

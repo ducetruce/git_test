@@ -6,9 +6,11 @@ import Foundation
 public protocol ActivityRepository: AnyObject {
     func save(_ sample: ActivitySample) throws
     func save(_ sample: HeartRateSample) throws
+    func save(_ sample: HRVSample) throws
     func save(_ session: SleepSession) throws
 
     func activitySamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [ActivitySample]
     func heartRateSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HeartRateSample]
+    func hrvSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HRVSample]
     func sleepSessions(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [SleepSession]
 }

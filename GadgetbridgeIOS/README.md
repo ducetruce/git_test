@@ -33,8 +33,48 @@ its own and out of scope here. What this repository provides instead is a
 - Local, dependency-free persistence (`Sources/GadgetbridgeCore/Persistence`)
   for paired devices and time-series samples (JSON-lines files under the
   app's Application Support directory).
-- A SwiftUI app (`Sources/GadgetbridgeApp`) with device list, pairing,
-  device detail, and a heart-rate dashboard screen.
+- A SwiftUI app (`Sources/GadgetbridgeApp`) built around a dark
+  instrument-panel design system (`Design/InstrumentTheme.swift`): a
+  data-first home screen with a Swift Charts trace, device management,
+  pairing, and the protocol log as a first-class screen.
+- **Health metrics** (`Sources/GadgetbridgeCore/Health`) — see below.
+
+## Health tracking
+
+Everything here is derived from data the hardware actually sends. Nothing
+is synthesised to fill out a dashboard:
+
+- **Full `0x2A37` parsing.** The standard Heart Rate Measurement
+  characteristic optionally carries beat-to-beat (RR) intervals, sensor
+  contact state, and cumulative energy alongside the pulse rate. Most
+  implementations read byte 1 and discard the rest; this parses the whole
+  payload, which is what makes the rest of this list possible.
+- **Heart rate variability.** RMSSD and SDNN computed from those RR
+  intervals (`HeartRateVariability`). Intervals outside 0.3–2.0s are
+  discarded as artefacts first — a single missed beat otherwise dominates
+  RMSSD completely. Because HRV is only meaningful over a window of
+  consecutive beats rather than the one or two a single notification
+  carries, `HRVAccumulator` buffers a minute's worth and emits one reading
+  per window, or none if too few usable beats arrived.
+- **Resting heart rate**, estimated as the low decile of the window rather
+  than the minimum, so one dropout doesn't define it.
+- **Heart rate zones**, the standard five-zone model as fractions of
+  maximum heart rate, with the usual age-based estimate available as a
+  starting point.
+- **Sensor contact**, surfaced rather than ignored: a strap that has
+  slipped reports plausible-looking but meaningless numbers.
+- **Apple Health export** (`HealthKitExporter`), one-directional and only
+  on explicit authorization — the app never reads from HealthKit. HRV is
+  exported as SDNN because that is specifically what HealthKit's HRV type
+  stores; RMSSD stays local rather than being filed under a label that
+  would misrepresent it.
+
+Step counting and sleep staging are deliberately **absent**: there is no
+standard GATT characteristic for either, so on a standard-profile device
+they can't be read at all, and on Zepp OS they live behind the proprietary
+sync protocol that isn't implemented. The `ActivitySample` and
+`SleepSession` models exist for whoever implements that; nothing currently
+produces them.
 - **A second coordinator**, `AmazfitHelioCoordinator`
   (`Sources/GadgetbridgeCore/Coordinators/AmazfitHelio`), targeting the
   Zepp OS / Huami protocol family used by the Amazfit Helio Strap. This one

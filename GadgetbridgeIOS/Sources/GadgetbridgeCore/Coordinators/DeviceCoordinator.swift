@@ -39,6 +39,9 @@ public protocol DeviceSession: AnyObject {
 
 public protocol DeviceSessionDelegate: AnyObject {
     func session(_ session: DeviceSession, didUpdateBattery battery: BatteryInfo)
-    func session(_ session: DeviceSession, didReceiveHeartRate sample: HeartRateSample)
+    /// The full heart rate measurement, not just the pulse rate: sessions
+    /// pass everything `0x2A37` carried so beat-to-beat intervals reach the
+    /// HRV pipeline rather than being discarded at the edge.
+    func session(_ session: DeviceSession, didReceive measurement: HeartRateMeasurement)
     func session(_ session: DeviceSession, didUpdateDeviceInfo device: Device)
 }
