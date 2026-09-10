@@ -69,6 +69,26 @@ is synthesised to fill out a dashboard:
   stores; RMSSD stays local rather than being filed under a label that
   would misrepresent it.
 
+### Storage and connection behaviour
+
+Two things a tracker has to get right, which are easy to leave broken:
+
+- **Storage is bounded.** A sensor notifying at 1 Hz produces ~86,000
+  readings per device per day. Every reading is published live to the UI,
+  but writes are downsampled (default: one per 15 seconds), files are
+  bucketed by UTC day so a one-hour query reads one day's file rather than
+  all history, and buckets past the retention window are deleted on
+  connect. The live view appends incoming readings to its series instead
+  of re-reading the window, so a new sample costs nothing to display.
+- **Dropped links come back on their own.** Wearables leave range
+  constantly. An unexpected disconnect re-issues the CoreBluetooth connect
+  request — which never times out — so iOS restores the link whenever the
+  device reappears, including from the background; a restoration
+  identifier lets it happen after a relaunch. Tapping Disconnect is
+  distinguished from a drop: it cancels the link for real (which the app
+  previously never did, leaving the radio connected with nothing
+  listening) and stops the retry.
+
 Step counting and sleep staging are deliberately **absent**: there is no
 standard GATT characteristic for either, so on a standard-profile device
 they can't be read at all, and on Zepp OS they live behind the proprietary

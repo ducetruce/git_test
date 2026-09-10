@@ -6,6 +6,7 @@ import GadgetbridgeCore
 struct DevicesView: View {
     @ObservedObject var viewModel: DeviceListViewModel
     let repository: ActivityRepository
+    @ObservedObject var settings: UserSettings
     @State private var isShowingPairingSheet = false
 
     var body: some View {
@@ -51,6 +52,16 @@ struct DevicesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Instrument.ground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink {
+                    SettingsView(settings: settings)
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .tint(Instrument.amber)
+            }
+        }
         .sheet(isPresented: $isShowingPairingSheet) {
             NavigationStack {
                 PairingView(viewModel: viewModel)

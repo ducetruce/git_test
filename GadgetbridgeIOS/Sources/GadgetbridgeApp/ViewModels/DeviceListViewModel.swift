@@ -8,9 +8,12 @@ final class DeviceListViewModel: ObservableObject {
     @Published private(set) var isScanning = false
     @Published var lastError: String?
 
-    /// Bumped whenever a new reading lands, so screens showing stored
-    /// samples know to re-query without polling.
-    @Published private(set) var latestSampleAt: Date?
+    /// The reading itself rather than a timestamp, so a live view can
+    /// append it instead of re-reading the whole window from storage.
+    @Published private(set) var lastHeartRateSample: HeartRateSample?
+
+    /// HRV arrives about once a minute, so re-reading that series is cheap.
+    @Published private(set) var lastHRVAt: Date?
 
     /// Skin-contact state from the last measurement, when the sensor
     /// reports it. A slipped strap emits plausible-looking nonsense, so
@@ -59,6 +62,11 @@ final class DeviceListViewModel: ObservableObject {
         Task { await manager.connect(device) }
     }
 
+    func reconnectKnownDevices() async {
+        await manager.reconnectKnownDevices()
+        pairedDevices = manager.pairedDevices
+    }
+
     func disconnect(_ device: Device) {
         manager.disconnect(device)
         pairedDevices = manager.pairedDevices
@@ -98,12 +106,11 @@ extension DeviceListViewModel: DeviceManagerDelegate {
     }
 
     func deviceManager(_ manager: DeviceManager, didReceiveHeartRate sample: HeartRateSample) {
-        // HomeViewModel reads the stored samples; this just tells it when.
-        latestSampleAt = sample.timestamp
+        lastHeartRateSample = sample
     }
 
     func deviceManager(_ manager: DeviceManager, didComputeHRV sample: HRVSample) {
-        latestSampleAt = sample.timestamp
+        lastHRVAt = sample.timestamp
     }
 
     func deviceManager(

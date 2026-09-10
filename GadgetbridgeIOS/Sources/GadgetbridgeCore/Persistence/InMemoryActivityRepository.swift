@@ -45,6 +45,15 @@ public final class InMemoryActivityRepository: ActivityRepository {
         }
     }
 
+    public func prune(before date: Date) throws {
+        lock.withLock {
+            activitySamples.removeAll { $0.timestamp < date }
+            heartRateSamples.removeAll { $0.timestamp < date }
+            hrvSamples.removeAll { $0.timestamp < date }
+            sleepSessions.removeAll { $0.end < date }
+        }
+    }
+
     public func sleepSessions(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [SleepSession] {
         lock.withLock {
             sleepSessions.filter { $0.deviceId == deviceId && range.overlaps($0.start...$0.end) }

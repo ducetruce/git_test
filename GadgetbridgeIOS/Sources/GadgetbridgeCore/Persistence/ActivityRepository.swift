@@ -13,4 +13,8 @@ public protocol ActivityRepository: AnyObject {
     func heartRateSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HeartRateSample]
     func hrvSamples(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [HRVSample]
     func sleepSessions(for deviceId: UUID, in range: ClosedRange<Date>) throws -> [SleepSession]
+
+    /// Discards everything recorded before `date`. Without this a device
+    /// streaming readings all day grows the store without bound.
+    func prune(before date: Date) throws
 }

@@ -4,6 +4,7 @@ import GadgetbridgeCore
 @main
 struct GadgetbridgeApp: App {
     @StateObject private var deviceListViewModel: DeviceListViewModel
+    @StateObject private var settings = UserSettings()
     private let repository: ActivityRepository
 
     init() {
@@ -41,7 +42,15 @@ struct GadgetbridgeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(deviceList: deviceListViewModel, repository: repository)
+            RootView(
+                deviceList: deviceListViewModel,
+                settings: settings,
+                repository: repository
+            )
+            // Re-link devices that were connected when the app last stopped,
+            // so collection resumes without the user opening the app and
+            // tapping anything.
+            .task { await deviceListViewModel.reconnectKnownDevices() }
         }
     }
 }

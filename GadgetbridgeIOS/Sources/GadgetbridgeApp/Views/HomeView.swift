@@ -10,10 +10,10 @@ struct HomeView: View {
     let repository: ActivityRepository
     @StateObject private var viewModel: HomeViewModel
 
-    init(deviceList: DeviceListViewModel, repository: ActivityRepository) {
+    init(deviceList: DeviceListViewModel, repository: ActivityRepository, settings: UserSettings) {
         self.deviceList = deviceList
         self.repository = repository
-        _viewModel = StateObject(wrappedValue: HomeViewModel(repository: repository))
+        _viewModel = StateObject(wrappedValue: HomeViewModel(repository: repository, settings: settings))
     }
 
     /// The device the screen is about: whichever is connected, else the
@@ -41,8 +41,14 @@ struct HomeView: View {
         .onChange(of: deviceList.pairedDevices) { _ in
             viewModel.refresh(for: activeDevice)
         }
-        .onReceive(deviceList.$latestSampleAt) { _ in
-            viewModel.refresh(for: activeDevice)
+        // Live readings are appended rather than triggering a re-read of
+        // the whole window — at 1 Hz that would mean decoding the entire
+        // range on every heartbeat.
+        .onReceive(deviceList.$lastHeartRateSample.compactMap { $0 }) { sample in
+            viewModel.append(sample)
+        }
+        .onReceive(deviceList.$lastHRVAt.compactMap { $0 }) { _ in
+            viewModel.refreshHRV()
         }
     }
 
@@ -58,7 +64,8 @@ struct HomeView: View {
             HeroReadout(
                 value: viewModel.latest,
                 minimum: viewModel.minimum,
-                maximum: viewModel.maximum
+                maximum: viewModel.maximum,
+                zone: viewModel.zone
             )
 
             HeartRateTrace(samples: viewModel.samples)
@@ -133,6 +140,7 @@ private struct HeroReadout: View {
     let value: Int?
     let minimum: Int?
     let maximum: Int?
+    let zone: HeartRateZone?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -149,11 +157,23 @@ private struct HeroReadout: View {
 
             Spacer()
 
-            if let minimum, let maximum {
-                Text("min \(minimum) · max \(maximum)")
-                    .font(Instrument.mono(10))
-                    .monospacedDigit()
-                    .foregroundStyle(Instrument.faint)
+            VStack(alignment: .trailing, spacing: 4) {
+                // Only shown once a maximum heart rate is configured —
+                // otherwise there's nothing to compute a zone against.
+                if let zone {
+                    Text("Z\(zone.rawValue) \(zone.name)")
+                        .font(Instrument.mono(10))
+                        .foregroundStyle(Instrument.amber)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Instrument.amberSoft))
+                }
+                if let minimum, let maximum {
+                    Text("min \(minimum) · max \(maximum)")
+                        .font(Instrument.mono(10))
+                        .monospacedDigit()
+                        .foregroundStyle(Instrument.faint)
+                }
             }
         }
     }

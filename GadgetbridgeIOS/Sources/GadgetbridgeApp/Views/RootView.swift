@@ -3,18 +3,19 @@ import GadgetbridgeCore
 
 struct RootView: View {
     @ObservedObject var deviceList: DeviceListViewModel
+    @ObservedObject var settings: UserSettings
     let repository: ActivityRepository
 
     var body: some View {
         TabView {
             NavigationStack {
-                HomeView(deviceList: deviceList, repository: repository)
+                HomeView(deviceList: deviceList, repository: repository, settings: settings)
                     .toolbar(.hidden, for: .navigationBar)
             }
             .tabItem { Label("Data", systemImage: "waveform.path.ecg") }
 
             NavigationStack {
-                DevicesView(viewModel: deviceList, repository: repository)
+                DevicesView(viewModel: deviceList, repository: repository, settings: settings)
             }
             .tabItem { Label("Devices", systemImage: "dot.radiowaves.left.and.right") }
 
