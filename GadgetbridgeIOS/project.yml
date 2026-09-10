@@ -1,0 +1,49 @@
+name: Gadgetbridge
+options:
+  bundleIdPrefix: com.example.gadgetbridge
+  deploymentTarget:
+    iOS: "16.0"
+
+packages:
+  GadgetbridgeCore:
+    path: .
+
+targets:
+  Gadgetbridge:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/GadgetbridgeApp
+    dependencies:
+      - package: GadgetbridgeCore
+    info:
+      path: Sources/GadgetbridgeApp/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Gadgetbridge
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSBluetoothAlwaysUsageDescription: "Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device."
+        NSBluetoothPeripheralUsageDescription: "Gadgetbridge uses Bluetooth to find, pair with, and sync data from your wearable device."
+        UIBackgroundModes:
+          - bluetooth-central
+    entitlements:
+      path: Sources/GadgetbridgeApp/Resources/Gadgetbridge.entitlements
+      properties: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.gadgetbridge
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  Gadgetbridge:
+    build:
+      targets:
+        Gadgetbridge: all
+    run:
+      config: Debug
+    test:
+      config: Debug
