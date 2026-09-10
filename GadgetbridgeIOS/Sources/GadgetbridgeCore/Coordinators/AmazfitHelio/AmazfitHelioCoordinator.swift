@@ -8,11 +8,17 @@ public final class AmazfitHelioCoordinator: DeviceCoordinator {
     public let family: DeviceFamily = .amazfit
     public let displayName = "Amazfit Helio Strap"
 
-    /// Zepp OS devices authenticate with a per-device secret provisioned by
-    /// Huami's servers during first pairing through the official Zepp app —
-    /// there's no way to derive or generate this locally. See
-    /// `HuamiAuthKey`.
-    public let requiresPairingSecret = true
+    /// Zepp OS devices normally authenticate with a per-device secret
+    /// provisioned by Huami's servers during first pairing through the
+    /// official Zepp app, which can't be derived locally (see `HuamiAuthKey`).
+    ///
+    /// The exception is heart-rate broadcast mode: the strap then advertises
+    /// the standard Heart Rate service and behaves like any other
+    /// standard-profile sensor, with no handshake and no key. Demanding a key
+    /// in that case would block pairing for no reason.
+    public func requiresPairingSecret(for peripheral: DiscoveredPeripheral) -> Bool {
+        !peripheral.advertisedServiceUUIDs.contains(StandardBLEService.heartRate)
+    }
 
     private let logger: ProtocolLogging
 

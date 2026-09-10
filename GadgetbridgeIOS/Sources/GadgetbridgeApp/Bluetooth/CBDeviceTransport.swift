@@ -30,6 +30,10 @@ final class CBDeviceTransport: NSObject, DeviceTransport {
 
     // MARK: - DeviceTransport
 
+    func hasCharacteristic(service: ServiceUUID, characteristic: ServiceUUID) -> Bool {
+        discoveredCharacteristics[key(service, characteristic)] != nil
+    }
+
     func readValue(service: ServiceUUID, characteristic: ServiceUUID) async throws -> Data {
         guard let ch = discoveredCharacteristics[key(service, characteristic)] else {
             throw DeviceTransportError.characteristicNotFound(characteristic)

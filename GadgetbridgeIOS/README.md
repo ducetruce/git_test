@@ -88,7 +88,34 @@ registered for them yet. Peripherals matching those families show up in
 the pairing screen as "Unsupported" until someone implements and registers
 a coordinator for that protocol.
 
-## Amazfit Helio Strap support: what's real and what isn't
+## Amazfit Helio Strap: start with broadcast mode
+
+**Try this before anything else.** The Helio Strap has a heart-rate
+broadcast mode which, per Amazfit's own documentation, "uses the standard
+Bluetooth protocol and supports connection with all third-party devices
+that also use the standard Bluetooth protocol." That means plain GATT
+`0x180D` — no vendor handshake, no pairing key, and none of the
+reconstructed protocol constants below.
+
+So: enable heart-rate broadcast on the strap, then pair it here. The app
+detects the standard Heart Rate service and takes that path automatically,
+skipping the vendor authentication entirely (`AmazfitHelioSession.start`).
+The pairing screen labels such a device `broadcast · no key` and won't ask
+for a pairing key it doesn't need.
+
+What you get: live heart rate, and — if the strap includes beat-to-beat
+intervals in its broadcast — HRV, which the Zepp app itself historically
+does not export to Apple Health. What you don't get: history, steps, or
+sleep. Those are recorded passively and only leave the strap through the
+proprietary sync protocol.
+
+Whether the broadcast carries RR intervals is device-specific and not
+documented, so the app answers it empirically: the first heart-rate
+notification of every connection is logged with its raw bytes and a plain
+verdict — `N RR interval(s) — HRV available`, or `no RR intervals — HRV
+unavailable from this sensor`. Check the Protocol log after connecting.
+
+## Amazfit Helio Strap: the proprietary protocol
 
 Zepp OS devices (the Helio Strap included) authenticate with an
 ECDH-over-**NIST-B163** handshake — a *binary-field* elliptic curve, not
@@ -148,7 +175,8 @@ derive the per-device secret Zepp OS devices need — it's generated and
 signed by Huami's servers the first time you pair through the official
 Zepp app (see Gadgetbridge's "Huami/Xiaomi server pairing" docs for how
 that key gets extracted from your own paired account). The pairing screen
-prompts for it as 32 hex characters when you pair an Amazfit device.
+prompts for it as 32 hex characters — but only when the device isn't
+broadcasting, since broadcast mode needs no key.
 
 **Bottom line:** treat this as a serious, tested attempt at the hardest
 part (the crypto primitives) plus an honest placeholder for the part that

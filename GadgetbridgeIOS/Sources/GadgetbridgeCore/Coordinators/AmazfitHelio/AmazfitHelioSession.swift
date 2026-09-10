@@ -52,6 +52,10 @@ public final class AmazfitHelioSession: DeviceSession {
     private let pendingLock = NSLock()
     private var pendingEcho: UInt8?
     private var continuation: CheckedContinuation<[UInt8], Error>?
+    /// Readings arrive about once a second; the interesting part is the
+    /// shape of the payload, which doesn't change within a connection. Log
+    /// it once rather than flooding the transcript.
+    private var hasLoggedMeasurementShape = false
 
     /// Reconstructed from a summarized read of Gadgetbridge's
     /// `InitOperation2021` — see the confidence breakdown above.
@@ -72,14 +76,30 @@ public final class AmazfitHelioSession: DeviceSession {
     }
 
     public func start(transport: DeviceTransport, delegate: DeviceSessionDelegate) async throws {
-        guard let authKey else {
-            throw DeviceTransportError.underlying(
-                "Amazfit Helio requires a 16-byte pairing key extracted from your Zepp app account; none was provided or it wasn't valid 32-character hex"
-            )
-        }
-
         self.transport = transport
         self.delegate = delegate
+
+        // Heart-rate broadcast mode: the strap presents itself as an
+        // ordinary standard-profile sensor, so there's no vendor handshake
+        // to do and no pairing key involved. Prefer it whenever it's on —
+        // it's the one path here that doesn't depend on reconstructed
+        // protocol constants.
+        if transport.hasCharacteristic(
+            service: StandardBLEService.heartRate,
+            characteristic: StandardBLECharacteristic.heartRateMeasurement
+        ) {
+            logger.log("=== \(device.name): standard Heart Rate service present ===")
+            logger.log("Using broadcast mode — no vendor authentication needed, no pairing key used")
+            await readBatteryIfAvailable()
+            try subscribeToHeartRateIfAvailable()
+            return
+        }
+
+        guard let authKey else {
+            throw DeviceTransportError.underlying(
+                "This device isn't broadcasting heart rate, so it needs the vendor handshake — which requires the 16-byte pairing key from your Zepp account. Either enable heart-rate broadcast on the strap, or supply the key."
+            )
+        }
 
         logger.log("=== Amazfit Helio handshake starting (device: \(device.name)) ===")
         logger.log("Auth characteristic: \(HuamiGATT.authCharacteristic) under service \(HuamiGATT.service)")
@@ -291,6 +311,13 @@ public final class AmazfitHelioSession: DeviceSession {
         delegate?.session(self, didUpdateBattery: battery)
     }
 
+    private func logMeasurementShapeOnce(_ measurement: HeartRateMeasurement, raw: Data) {
+        guard !hasLoggedMeasurementShape else { return }
+        hasLoggedMeasurementShape = true
+        logger.log("First heart rate notification (\(raw.count) bytes): \([UInt8](raw).hexDump)")
+        logger.log("  \(measurement.diagnosticSummary)")
+    }
+
     private func subscribeToHeartRateIfAvailable() throws {
         guard let transport else { return }
         try transport.subscribe(
@@ -298,10 +325,7 @@ public final class AmazfitHelioSession: DeviceSession {
             characteristic: StandardBLECharacteristic.heartRateMeasurement
         ) { [weak self] data in
             guard let self, let measurement = HeartRateMeasurementParser.parse(data) else { return }
-            self.logger.log(
-                "Heart rate via standard GATT: \(measurement.beatsPerMinute) BPM"
-                + (measurement.rrIntervals.isEmpty ? "" : ", \(measurement.rrIntervals.count) RR interval(s)")
-            )
+            self.logMeasurementShapeOnce(measurement, raw: data)
             self.delegate?.session(self, didReceive: measurement)
         }
     }

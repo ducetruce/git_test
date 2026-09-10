@@ -27,8 +27,10 @@ public struct Device: Identifiable, Codable, Hashable, Sendable {
     /// Opaque, family-specific pairing secret, hex-encoded. Some vendor
     /// protocols (e.g. `AmazfitHelioCoordinator`'s Zepp OS auth) can't
     /// authenticate without a per-device key the user extracts from the
-    /// vendor's own app/account; `DeviceCoordinator.requiresPairingSecret`
-    /// signals when a family needs this. Unused by families that don't.
+    /// vendor's own app/account;
+    /// `DeviceCoordinator.requiresPairingSecret(for:)` signals when a given
+    /// peripheral needs one. Unused otherwise — including by an Amazfit
+    /// strap in heart-rate broadcast mode, which needs no key at all.
     public var pairingSecretHex: String?
 
     public init(

@@ -20,8 +20,23 @@ final class AmazfitHelioCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.canSupport(peripheral))
     }
 
-    func testRequiresPairingSecret() {
-        XCTAssertTrue(AmazfitHelioCoordinator().requiresPairingSecret)
+    func testRequiresPairingSecretWhenNotBroadcasting() {
+        let peripheral = DiscoveredPeripheral(id: "4", name: "Helio Strap", rssi: -40, advertisedServiceUUIDs: [HuamiGATT.service])
+        XCTAssertTrue(AmazfitHelioCoordinator().requiresPairingSecret(for: peripheral))
+    }
+
+    /// In heart-rate broadcast mode the strap is a plain standard-profile
+    /// sensor. Demanding the Zepp pairing key there would block pairing for
+    /// no reason.
+    func testDoesNotRequirePairingSecretWhenBroadcasting() {
+        let peripheral = DiscoveredPeripheral(
+            id: "5",
+            name: "Helio Strap",
+            rssi: -40,
+            advertisedServiceUUIDs: [StandardBLEService.heartRate]
+        )
+        XCTAssertTrue(AmazfitHelioCoordinator().canSupport(peripheral))
+        XCTAssertFalse(AmazfitHelioCoordinator().requiresPairingSecret(for: peripheral))
     }
 
     func testSessionStartFailsWithoutAValidAuthKey() async {
@@ -29,6 +44,7 @@ final class AmazfitHelioCoordinatorTests: XCTestCase {
         let session = AmazfitHelioSession(device: device, authKey: nil)
 
         final class NoopTransport: DeviceTransport {
+            func hasCharacteristic(service: ServiceUUID, characteristic: ServiceUUID) -> Bool { false }
             func readValue(service: ServiceUUID, characteristic: ServiceUUID) async throws -> Data { Data() }
             func writeValue(_ data: Data, service: ServiceUUID, characteristic: ServiceUUID, withResponse: Bool) async throws {}
             func subscribe(service: ServiceUUID, characteristic: ServiceUUID, onUpdate: @escaping (Data) -> Void) throws {}

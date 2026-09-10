@@ -8,15 +8,21 @@ public final class GenericBLESession: DeviceSession {
     public private(set) var device: Device
     private weak var transport: DeviceTransport?
     private weak var delegate: DeviceSessionDelegate?
+    private let logger: ProtocolLogging
+    /// The payload's shape doesn't change within a connection, so report it
+    /// once rather than logging every reading.
+    private var hasLoggedMeasurementShape = false
 
-    public init(device: Device) {
+    public init(device: Device, logger: ProtocolLogging = ProtocolLogger.shared) {
         self.device = device
+        self.logger = logger
     }
 
     public func start(transport: DeviceTransport, delegate: DeviceSessionDelegate) async throws {
         self.transport = transport
         self.delegate = delegate
 
+        logger.log("=== \(device.name): standard-profile session starting ===")
         await readDeviceInfoIfAvailable()
         await readBatteryIfAvailable()
         try? subscribeToHeartRateIfAvailable()
@@ -93,6 +99,11 @@ public final class GenericBLESession: DeviceSession {
             characteristic: StandardBLECharacteristic.heartRateMeasurement
         ) { [weak self] data in
             guard let self, let measurement = HeartRateMeasurementParser.parse(data) else { return }
+            if !self.hasLoggedMeasurementShape {
+                self.hasLoggedMeasurementShape = true
+                self.logger.log("First heart rate notification (\(data.count) bytes): \([UInt8](data).hexDump)")
+                self.logger.log("  \(measurement.diagnosticSummary)")
+            }
             self.delegate?.session(self, didReceive: measurement)
         }
     }

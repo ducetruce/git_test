@@ -8,11 +8,16 @@ public protocol DeviceCoordinator: AnyObject {
     var family: DeviceFamily { get }
     var displayName: String { get }
 
-    /// Whether pairing this device family requires a user-supplied secret
-    /// (e.g. a per-device key extracted from the vendor's own app/account,
-    /// as with `AmazfitHelioCoordinator`) before a connection can be
-    /// authenticated. Defaults to `false`.
-    var requiresPairingSecret: Bool { get }
+    /// Whether pairing *this particular peripheral* requires a user-supplied
+    /// secret (e.g. a per-device key from the vendor's own account) before a
+    /// connection can be authenticated.
+    ///
+    /// It takes the peripheral rather than being a fixed property of the
+    /// family because the same hardware can need a key or not depending on
+    /// how it's presenting itself: an Amazfit strap in heart-rate broadcast
+    /// mode is a plain standard-profile sensor with no handshake at all.
+    /// Defaults to `false`.
+    func requiresPairingSecret(for peripheral: DiscoveredPeripheral) -> Bool
 
     func canSupport(_ peripheral: DiscoveredPeripheral) -> Bool
 
@@ -20,7 +25,7 @@ public protocol DeviceCoordinator: AnyObject {
 }
 
 public extension DeviceCoordinator {
-    var requiresPairingSecret: Bool { false }
+    func requiresPairingSecret(for peripheral: DiscoveredPeripheral) -> Bool { false }
 }
 
 /// An active protocol session for one connected device. `start` is called

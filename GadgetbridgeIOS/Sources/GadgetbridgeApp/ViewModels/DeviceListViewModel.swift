@@ -46,7 +46,13 @@ final class DeviceListViewModel: ObservableObject {
     }
 
     func requiresPairingSecret(_ peripheral: DiscoveredPeripheral) -> Bool {
-        discoverySupport[peripheral.id]?.requiresPairingSecret ?? false
+        discoverySupport[peripheral.id]?.requiresPairingSecret(for: peripheral) ?? false
+    }
+
+    /// An Amazfit device advertising the standard Heart Rate service is in
+    /// broadcast mode: it pairs like any plain sensor, no key needed.
+    func isBroadcasting(_ peripheral: DiscoveredPeripheral) -> Bool {
+        peripheral.advertisedServiceUUIDs.contains(StandardBLEService.heartRate)
     }
 
     func connect(_ device: Device) {

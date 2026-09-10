@@ -17,6 +17,13 @@ private final class ReplayingTransport: DeviceTransport {
 
     init(reply: [UInt8]) { self.reply = reply }
 
+    /// Only the vendor auth characteristic exists here — no standard Heart
+    /// Rate service, so the session takes the handshake path rather than
+    /// broadcast mode.
+    func hasCharacteristic(service: ServiceUUID, characteristic: ServiceUUID) -> Bool {
+        characteristic == HuamiGATT.authCharacteristic
+    }
+
     func readValue(service: ServiceUUID, characteristic: ServiceUUID) async throws -> Data {
         throw DeviceTransportError.characteristicNotFound(characteristic)
     }

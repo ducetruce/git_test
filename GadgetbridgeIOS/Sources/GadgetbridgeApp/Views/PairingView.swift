@@ -93,8 +93,17 @@ struct PairingView: View {
 
     private func metaLine(for peripheral: DiscoveredPeripheral, supported: Bool) -> String {
         let service = peripheral.advertisedServiceUUIDs.first.map { "0x\($0.uuidString.prefix(4))" } ?? "no service"
-        let family = supported ? (viewModel.requiresPairingSecret(peripheral) ? "Zepp OS" : "standard GATT") : "unknown"
-        return "\(peripheral.rssi) dBm · \(service) · \(family)"
+        let mode: String
+        if !supported {
+            mode = "unknown"
+        } else if viewModel.isBroadcasting(peripheral) {
+            mode = "broadcast · no key"
+        } else if viewModel.requiresPairingSecret(peripheral) {
+            mode = "Zepp OS"
+        } else {
+            mode = "standard GATT"
+        }
+        return "\(peripheral.rssi) dBm · \(service) · \(mode)"
     }
 
     private func keyEntry(for peripheral: DiscoveredPeripheral) -> some View {

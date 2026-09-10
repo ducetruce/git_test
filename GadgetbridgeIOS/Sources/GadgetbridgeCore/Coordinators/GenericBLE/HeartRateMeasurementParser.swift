@@ -34,6 +34,32 @@ public struct HeartRateMeasurement: Hashable, Sendable {
         self.energyExpendedKilojoules = energyExpendedKilojoules
         self.rrIntervals = rrIntervals
     }
+
+    /// One line for the protocol log describing what this sensor is
+    /// actually sending — in particular whether the beat-to-beat intervals
+    /// HRV depends on are present, which varies by device and by mode and
+    /// is otherwise invisible.
+    public var diagnosticSummary: String {
+        var parts = ["\(beatsPerMinute) bpm"]
+
+        switch sensorContact {
+        case .detected: parts.append("skin contact ok")
+        case .notDetected: parts.append("NO SKIN CONTACT — readings unreliable")
+        case .notSupported: break
+        }
+
+        if let energyExpendedKilojoules {
+            parts.append("\(energyExpendedKilojoules) kJ")
+        }
+
+        if rrIntervals.isEmpty {
+            parts.append("no RR intervals — HRV unavailable from this sensor")
+        } else {
+            parts.append("\(rrIntervals.count) RR interval(s) — HRV available")
+        }
+
+        return parts.joined(separator: " · ")
+    }
 }
 
 /// Decodes `0x2A37` per the Heart Rate Service spec. Byte 0 is a flags

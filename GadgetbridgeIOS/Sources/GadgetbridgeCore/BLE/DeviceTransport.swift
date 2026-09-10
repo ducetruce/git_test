@@ -26,6 +26,15 @@ extension DeviceTransportError: LocalizedError {
 /// directly. This is what makes coordinators unit-testable with a mock
 /// transport, and keeps the door open for a non-Apple transport later.
 public protocol DeviceTransport: AnyObject {
+    /// Whether the connected peripheral actually exposes a characteristic.
+    ///
+    /// Lets a session branch on what a device is offering *right now* rather
+    /// than discovering it by attempting a read and handling the failure —
+    /// which matters for devices that change shape between connections, like
+    /// an Amazfit strap that presents the standard Heart Rate service only
+    /// while heart-rate broadcast mode is switched on.
+    func hasCharacteristic(service: ServiceUUID, characteristic: ServiceUUID) -> Bool
+
     func readValue(service: ServiceUUID, characteristic: ServiceUUID) async throws -> Data
 
     func writeValue(
