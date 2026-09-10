@@ -14,7 +14,11 @@ public final class AmazfitHelioCoordinator: DeviceCoordinator {
     /// `HuamiAuthKey`.
     public let requiresPairingSecret = true
 
-    public init() {}
+    private let logger: ProtocolLogging
+
+    public init(logger: ProtocolLogging = ProtocolLogger.shared) {
+        self.logger = logger
+    }
 
     public func canSupport(_ peripheral: DiscoveredPeripheral) -> Bool {
         if peripheral.advertisedServiceUUIDs.contains(HuamiGATT.service) {
@@ -28,6 +32,6 @@ public final class AmazfitHelioCoordinator: DeviceCoordinator {
 
     public func makeSession(for device: Device) -> DeviceSession {
         let authKey = device.pairingSecretHex.flatMap { HuamiAuthKey(hexString: $0) }
-        return AmazfitHelioSession(device: device, authKey: authKey)
+        return AmazfitHelioSession(device: device, authKey: authKey, logger: logger)
     }
 }

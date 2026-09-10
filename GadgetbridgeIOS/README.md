@@ -116,6 +116,47 @@ can only be nailed down with a BLE capture from a real device — exactly
 how Gadgetbridge's own contributors originally reverse-engineered this
 protocol in the first place.
 
+### Capturing what the device actually sends
+
+Because the low-confidence pieces above are guesses, the handshake is
+fully instrumented. Every byte written and every notification received is
+logged — **including notifications the code decides to ignore**, which is
+the important part: if the echo-byte convention is wrong, the device's
+real answer gets discarded, and that discarded response is precisely what's
+needed to fix the constants. Ignored responses are tagged `IGNORED` with
+the mismatch spelled out, and each handshake phase times out after 15s
+rather than hanging, so a wrong assumption surfaces as a clear failure.
+
+To collect a transcript:
+
+1. Pair the Helio Strap and let the connection attempt run.
+2. Read the log either from Xcode's console (it's echoed to stdout) or,
+   if running untethered, from **Protocol log** at the bottom of the
+   device list screen — it has a Copy button.
+
+A failing run looks roughly like:
+
+```
+[14:02:11.204] === Amazfit Helio handshake starting (device: Helio Strap) ===
+[14:02:11.210] -> phase 1/2 key exchange: writing 52 bytes: 04 02 00 02 1F 3C …
+[14:02:11.210]    waiting for a notification whose byte[1] == 0x04 (assumption, unverified)
+[14:02:11.318] <- auth notify (68 bytes): 10 82 01 A3 9C …
+[14:02:11.318]    ...IGNORED: byte[1] is 0x82 but this code expected 0x04. This is a prime
+                  suspect — the echo convention is a guess.
+[14:02:26.211] !! phase 1/2 key exchange timed out after 15.0s. If notifications appear
+                  above marked 'ignored', this code's byte[1] echo assumption is wrong —
+                  those bytes are the device's real answer.
+```
+
+That `<- auth notify` line is the useful part; with it the opcode
+constants in `AmazfitHelioSession` can be corrected against reality.
+
+**On sharing the log:** it contains ephemeral public keys, device nonces,
+and AES ciphertexts — all of which cross the air unencrypted anyway. It
+deliberately never contains your pairing key, the ephemeral private key,
+or the derived session key, so a transcript is safe to paste into an issue
+or a chat.
+
 ## Why this isn't a 1:1 port of Gadgetbridge
 
 Two of Gadgetbridge's core Android features have no direct iOS equivalent,

@@ -33,6 +33,14 @@ struct DeviceListView: View {
                     }
                 }
             }
+
+            Section {
+                NavigationLink("Protocol log") {
+                    ProtocolLogView()
+                }
+            } footer: {
+                Text("Raw bytes exchanged with devices. Useful when a vendor handshake fails — see the README.")
+            }
         }
         .navigationTitle("Gadgetbridge")
         .toolbar {
