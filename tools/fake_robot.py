@@ -5,14 +5,19 @@ small three-room map, broadcasts status while subscribed, and drives a
 robot around during a clean.
 
     pip install websockets
-    python3 tools/fake_robot.py
+    python3 tools/fake_robot.py [--port 9002] [--sleepy]
     # then enter your Mac's IP address in the app (Simulator: 127.0.0.1)
+
+--sleepy starts the robot asleep, like a docked robot: it ignores every
+command until a wake-up (notify_app_event or active_robot_publish) and then
+takes a couple of seconds to come round.
 
 Every frame received is printed, which makes it a handy debugging aid.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import math
 import struct
@@ -159,9 +164,14 @@ class Robot:
             self.battery = min(100.0, self.battery + 0.5)
 
 
+SLEEPY = False
+WAKE_DELAY = 2.0
+
+
 async def serve(ws) -> None:  # type: ignore[no-untyped-def]
     robot = Robot()
-    print("app connected")
+    awake_at = float("inf") if SLEEPY else 0.0
+    print("app connected", flush=True)
 
     async def broadcasts() -> None:
         while True:
@@ -192,6 +202,11 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
             # product key are ignored (the device id may be empty).
             if topic.split("/")[1:2] != [PRODUCT_KEY]:
                 continue
+            if time.time() < awake_at:
+                if short in ("common/notify_app_event", "common/active_robot_publish") and awake_at == float("inf"):
+                    awake_at = time.time() + WAKE_DELAY
+                    print("   (waking up)", flush=True)
+                continue
             reply = robot.handle(short, payload)
             if reply is not None:
                 await ws.send(reply)
@@ -201,8 +216,14 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
 
 
 async def main() -> None:
-    async with websockets.serve(serve, "0.0.0.0", 9002, max_size=None):
-        print("fake Narwal robot on ws://0.0.0.0:9002", flush=True)
+    global SLEEPY
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=9002)
+    parser.add_argument("--sleepy", action="store_true")
+    args = parser.parse_args()
+    SLEEPY = args.sleepy
+    async with websockets.serve(serve, "0.0.0.0", args.port, max_size=None):
+        print(f"fake Narwal robot on ws://0.0.0.0:{args.port}{' (sleepy)' if SLEEPY else ''}", flush=True)
         await asyncio.Future()
 
 

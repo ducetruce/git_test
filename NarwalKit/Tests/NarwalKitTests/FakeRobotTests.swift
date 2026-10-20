@@ -82,4 +82,37 @@ final class FakeRobotTests: XCTestCase {
 
         await connection.stop()
     }
+
+    /// A docked robot is asleep and ignores everything until woken: the
+    /// condition behind a "stuck connecting" report on a real Z10 Ultra.
+    func testWakesSleepingRobot() async throws {
+        guard let port = ProcessInfo.processInfo.environment["NARWAL_FAKE_SLEEPY_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("Set NARWAL_FAKE_SLEEPY_PORT with tools/fake_robot.py --sleepy running")
+        }
+        let connection = NarwalConnection(host: try host(), port: port)
+        let recorder = Recorder()
+        let consumer = Task {
+            for await event in connection.events { await recorder.add(event) }
+        }
+        defer { consumer.cancel() }
+        await connection.start()
+
+        try await waitFor(recorder, timeout: 30, "device info from a sleeping robot") {
+            if case .deviceInfo = $0 { return true }
+            return false
+        }
+        try await waitFor(recorder, timeout: 20, "live status after waking") {
+            if case .connection(.awake) = $0 { return true }
+            return false
+        }
+        let map = try await connection.fetchMap()
+        XCTAssertEqual(map.rooms.count, 3)
+        // No reconnect loop: exactly one connection attempt.
+        let connects = await recorder.events.filter {
+            if case .connection(.connecting) = $0 { return true }
+            return false
+        }.count
+        XCTAssertEqual(connects, 1)
+        await connection.stop()
+    }
 }
