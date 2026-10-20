@@ -21,8 +21,13 @@ struct SettingsView: View {
                     Button("Reconnect") { store.connect() }
                 }
 
-                Section("Diagnostics") {
+                Section {
+                    NavigationLink("Feature lab") { LabView() }
                     NavigationLink("Connection log") { LogView() }
+                } header: {
+                    Text("Diagnostics")
+                } footer: {
+                    Text("The feature lab helps decode settings this app doesn't support yet.")
                 }
 
                 Section {

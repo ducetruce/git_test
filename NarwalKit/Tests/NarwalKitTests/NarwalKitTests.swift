@@ -151,3 +151,59 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(alerts.replaceLabels, ["Side brush", "Station bag"])
     }
 }
+
+final class ZoneTests: XCTestCase {
+    func testZoneCleanMatchesReference() {
+        XCTAssertEqual(hexString(Payloads.zoneClean(mapId: 1742, zones: [.init(x1: -21, y1: -23, x2: 29, y2: -15)])),
+                       GoldenVectors.zoneCleanNegativeCoords)
+        let vacuum = CleanSettings(workMode: .vacuum, fan: .strong, water: .wet, mopStrength: .high, passes: 2)
+        XCTAssertEqual(hexString(Payloads.zoneClean(mapId: 7, zones: [.init(x1: 5, y1: 5, x2: 9, y2: 12),
+                                                                     .init(x1: -3, y1: 4, x2: 0, y2: 1)],
+                                                    settings: vacuum)),
+                       GoldenVectors.zoneCleanTwoZonesVacuum)
+    }
+}
+
+final class ResearchTests: XCTestCase {
+    func testFlattenNamesNestedAndRepeatedFields() throws {
+        let leaves = Research.flatten(try ProtoMessage(bytes: hex(GoldenVectors.consumableInfo)))
+        XCTAssertEqual(leaves, [Research.Leaf(path: "1.1", value: "0x0406080a"),
+                                Research.Leaf(path: "1.2", value: "0x0314")])
+
+        var w = ProtoWriter()
+        w.message(2) { m in m.string(3, "Kitchen"); m.varint(1, 4) }
+        w.message(2) { m in m.varint(1, 5) }
+        w.varint(10, 7)
+        let flat = Research.flatten(try ProtoMessage(bytes: w.bytes))
+        XCTAssertEqual(flat.map(\.path), ["2[0].3", "2[0].1", "2[1].1", "10"])
+        XCTAssertEqual(flat[0].value, "\"Kitchen\"")
+    }
+
+    func testDiffReportsOnlyChanges() {
+        let before = [Research.Leaf(path: "1", value: "5"), Research.Leaf(path: "2", value: "1"),
+                      Research.Leaf(path: "10", value: "x")]
+        let after = [Research.Leaf(path: "1", value: "6"), Research.Leaf(path: "10", value: "x"),
+                     Research.Leaf(path: "3", value: "9")]
+        XCTAssertEqual(Research.diff(before, after), [
+            Research.Change(path: "1", before: "5", after: "6"),
+            Research.Change(path: "2", before: "1", after: nil),
+            Research.Change(path: "3", before: nil, after: "9"),
+        ])
+    }
+
+    func testErrorText() {
+        XCTAssertEqual(RobotErrorText.message(for: 0x01010013), "Base station overflowed")
+        XCTAssertEqual(RobotErrorText.message(for: 255), "Fault 255 (0xFF)")
+    }
+}
+
+final class SafetyTests: XCTestCase {
+    func testLabOnlySendsQueries() {
+        XCTAssertTrue(Research.isSafeQuery("config/get"))
+        XCTAssertTrue(Research.isSafeQuery("info/battery_info"))
+        XCTAssertFalse(Research.isSafeQuery("config/set"))
+        XCTAssertFalse(Research.isSafeQuery("common/reboot"))
+        XCTAssertFalse(Research.isSafeQuery("developer/get_robot_info"), "returns the Wi-Fi password")
+        XCTAssertTrue(Research.probeTopics.allSatisfy(Research.isSafeQuery))
+    }
+}

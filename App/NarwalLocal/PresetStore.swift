@@ -11,6 +11,8 @@ struct CleanPreset: Identifiable, Codable, Equatable {
     var rooms: [Int]
     var settings: CleanSettings
     var perRoom: [Int: CleanSettings] = [:]
+    /// Set for zone routines. Optional so older saved routines still decode.
+    var zones: [Payloads.Zone]?
 }
 
 @MainActor

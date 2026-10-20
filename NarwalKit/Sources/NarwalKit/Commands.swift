@@ -96,6 +96,17 @@ extension NarwalConnection {
         return map
     }
 
+    /// Cleans drawn rectangles (world coordinates). Must start from the dock.
+    @discardableResult
+    public func cleanZones(_ zones: [Payloads.Zone], settings: CleanSettings = CleanSettings()) async throws -> RobotMap {
+        guard !zones.isEmpty else { throw RoomCleanError.noRoomsSelected }
+        let map = try await fetchMap()
+        try await perform(Topic.startClean,
+                          Payloads.zoneClean(mapId: map.mapId, zones: zones, settings: settings),
+                          timeout: 10)
+        return map
+    }
+
     // MARK: Dock
 
     public func washMop() async throws { try await perform(Topic.washMop) }

@@ -96,6 +96,83 @@ public enum Payloads {
         return w.bytes
     }
 
+    /// A rectangle in robot world coordinates (map grid + origin; the same
+    /// units as the live robot position). Corner order doesn't matter.
+    public struct Zone: Equatable, Hashable, Sendable, Codable {
+        public var x1: Int, y1: Int, x2: Int, y2: Int
+
+        public init(x1: Int, y1: Int, x2: Int, y2: Int) {
+            self.x1 = x1; self.y1 = y1; self.x2 = x2; self.y2 = y2
+        }
+
+        var minX: Int { min(x1, x2) }
+        var maxX: Int { max(x1, x2) }
+        var minY: Int { min(y1, y2) }
+        var maxY: Int { max(y1, y2) }
+    }
+
+    /// clean/start_clean for drawn rectangles. Shape copied from the task the
+    /// robot itself reports after an app zone clean (validated on a Flow,
+    /// fw v01.08.03.07):
+    ///
+    ///     CleanItem{1: ZoneOption{1: 2 (zone), 2: index, 3: [4 corners], 4: [coverage path]},
+    ///               2: CleanParam{1: mode, 2: fan, 3: mop strength, 4: water, 7: passes, 8: 1, 9: 1},
+    ///               3: order}
+    ///     TaskOption{1: 1}
+    ///
+    /// The robot requires a coverage path but doesn't check it against its
+    /// own planner, so a serpentine over the interior is sent.
+    public static func zoneClean(mapId: Int, zones: [Zone], settings: CleanSettings = CleanSettings()) -> [UInt8] {
+        var w = ProtoWriter()
+        w.message(1) { task in
+            task.varint(1, mapId)
+            for (index, zone) in zones.enumerated() {
+                task.message(2) { item in
+                    item.message(1) { option in
+                        option.varint(1, 2)
+                        option.varint(2, index + 1)
+                        let corners = [(zone.minX, zone.maxY), (zone.maxX, zone.maxY),
+                                       (zone.maxX, zone.minY), (zone.minX, zone.minY)]
+                        for (x, y) in corners {
+                            option.message(3) { p in p.varint(1, x); p.varint(2, y) }
+                        }
+                        for (x, y) in zoneCoverage(zone) {
+                            option.message(4) { p in p.varint(1, x); p.varint(2, y) }
+                        }
+                    }
+                    item.message(2) { param in
+                        param.varint(1, settings.workMode.cleanParam.mode)
+                        param.varint(2, settings.fan.rawValue)
+                        param.varint(3, settings.mopStrength.rawValue)
+                        param.varint(4, settings.water.rawValue)
+                        param.varint(7, settings.passes)
+                        param.varint(8, 1)
+                        param.varint(9, 1)
+                    }
+                    item.varint(3, index + 1)
+                }
+            }
+            task.message(3) { option in option.varint(1, 1) }
+            task.varint(5, settings.workMode.rawValue)
+        }
+        return w.bytes
+    }
+
+    /// Serpentine over the rectangle's interior, every second row.
+    static func zoneCoverage(_ zone: Zone, step: Int = 2) -> [(Int, Int)] {
+        var points: [(Int, Int)] = []
+        var forward = true
+        var y = zone.minY + 1
+        while y < zone.maxY {
+            let xs = Array(zone.minX + 1 ..< max(zone.minX + 1, zone.maxX))
+            for x in forward ? xs : Array(xs.reversed()) { points.append((x, y)) }
+            forward.toggle()
+            y += step
+        }
+        if points.isEmpty { points.append(((zone.minX + zone.maxX) / 2, (zone.minY + zone.maxY) / 2)) }
+        return points
+    }
+
     static func writeCleanParam(_ w: inout ProtoWriter, _ s: CleanSettings) {
         let (mode, passTags) = s.workMode.cleanParam
         w.varint(1, mode)

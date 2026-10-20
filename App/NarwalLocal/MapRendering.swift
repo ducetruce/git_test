@@ -62,16 +62,22 @@ extension RobotMap {
 }
 
 /// The house map with rooms, dock, live robot and trail. Tap a room to
-/// toggle it when `onTapRoom` is set.
+/// toggle it when `onTapRoom` is set; drag to draw a zone when `onDrawZone`
+/// is set.
 struct MapCanvas: View {
     let map: RobotMap
     var selected: [Int] = []
     var pose: LivePose?
     var trail: [MapPoint] = []
+    /// Zones in world coordinates.
+    var zones: [Payloads.Zone] = []
     var onTapRoom: ((Int) -> Void)?
+    var onDrawZone: ((Payloads.Zone) -> Void)?
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
+    @State private var dragStart: CGPoint?
+    @State private var dragEnd: CGPoint?
 
     var body: some View {
         GeometryReader { geo in
@@ -96,6 +102,25 @@ struct MapCanvas: View {
                     points.dropFirst().forEach { path.addLine(to: $0) }
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+                ForEach(Array(zones.enumerated()), id: \.offset) { index, zone in
+                    let a = toScreen(MapPoint(x: Double(zone.x1 - map.originX), y: Double(zone.y1 - map.originY)))
+                    let b = toScreen(MapPoint(x: Double(zone.x2 - map.originX), y: Double(zone.y2 - map.originY)))
+                    let rect = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+                    Rectangle()
+                        .fill(Color.orange.opacity(0.25))
+                        .overlay(Rectangle().stroke(Color.orange, lineWidth: 2))
+                        .overlay(Text("\(index + 1)").font(.caption.bold()).foregroundStyle(.orange))
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+
+                if let start = dragStart, let end = dragEnd {
+                    Rectangle()
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .frame(width: abs(end.x - start.x), height: abs(end.y - start.y))
+                        .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                }
 
                 ForEach(map.rooms) { room in
                     if let c = centroids[room.id] {
@@ -129,11 +154,33 @@ struct MapCanvas: View {
             .frame(width: size.width, height: size.height)
             .contentShape(Rectangle())
             .onTapGesture { location in
-                guard let onTapRoom else { return }
+                guard let onTapRoom, onDrawZone == nil else { return }
                 let gx = Int(location.x / scale)
                 let gy = Int((size.height - location.y) / scale)
                 if let room = map.roomId(atGridX: gx, y: gy) { onTapRoom(room) }
             }
+            .gesture(
+                DragGesture(minimumDistance: 6)
+                    .onChanged { value in
+                        dragStart = value.startLocation
+                        dragEnd = value.location
+                    }
+                    .onEnded { value in
+                        defer { dragStart = nil; dragEnd = nil }
+                        // Screen -> grid (y up) -> world.
+                        func world(_ p: CGPoint) -> (Int, Int) {
+                            let x = min(max(p.x, 0), size.width) / scale
+                            let y = (size.height - min(max(p.y, 0), size.height)) / scale
+                            return (Int(x.rounded()) + map.originX, Int(y.rounded()) + map.originY)
+                        }
+                        let a = world(value.startLocation)
+                        let b = world(value.location)
+                        // Ignore slivers: at least ~3 cells each way.
+                        guard abs(a.0 - b.0) >= 3, abs(a.1 - b.1) >= 3 else { return }
+                        onDrawZone?(Payloads.Zone(x1: a.0, y1: a.1, x2: b.0, y2: b.1))
+                    },
+                including: onDrawZone == nil ? .subviews : .all
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected)) {

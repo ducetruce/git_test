@@ -208,6 +208,41 @@ final class RobotStore {
         }
     }
 
+    func cleanZones(_ zones: [Payloads.Zone], settings: CleanSettings) async {
+        await run("Starting zone clean") { connection in
+            let used = try await connection.cleanZones(zones, settings: settings)
+            await MainActor.run { self.map = used }
+        }
+    }
+
+    // MARK: Feature lab
+
+    struct ProbeResult: Codable, Identifiable, Equatable {
+        var id: String { topic }
+        let topic: String
+        let outcome: String
+        let leaves: [Research.Leaf]
+    }
+
+    /// Sends one read-only query and decodes whatever comes back.
+    func probe(_ topic: String) async -> ProbeResult {
+        guard Research.isSafeQuery(topic) else {
+            return ProbeResult(topic: topic, outcome: "Not sent: only read-only queries are allowed", leaves: [])
+        }
+        guard let connection else {
+            return ProbeResult(topic: topic, outcome: "Not connected", leaves: [])
+        }
+        do {
+            let response = try await connection.send(topic, timeout: 6)
+            let outcome = response.raw.isEmpty ? "Answered (empty)" : "Answered, \(response.raw.count) bytes"
+            appendLog("Probe \(topic): \(outcome)")
+            return ProbeResult(topic: topic, outcome: outcome, leaves: Research.flatten(response.message))
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return ProbeResult(topic: topic, outcome: message, leaves: [])
+        }
+    }
+
     func cleanAll(settings: CleanSettings) async {
         await run("Starting whole-house clean") { connection in
             let used = try await connection.cleanAll(settings: settings)

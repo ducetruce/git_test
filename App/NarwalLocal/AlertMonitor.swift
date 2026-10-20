@@ -36,8 +36,8 @@ final class AlertMonitor {
 
     func statusChanged(_ status: BaseStatus, previousWasCleaning: Bool, roomName: String?) {
         var current: [Alert] = status.errors.map {
-            Alert(id: "error-\($0.code)", title: "Robot error \($0.code)",
-                  detail: $0.detail.isEmpty ? "Check the robot." : $0.detail)
+            Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
+                  detail: $0.detail.isEmpty ? "Code \($0.code)" : "Code \($0.code): \($0.detail)")
         }
         current += status.station.problems.map { Alert(id: "station-\($0)", title: $0, detail: "") }
 

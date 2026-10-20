@@ -3,21 +3,38 @@ import SwiftUI
 
 struct MapScreen: View {
     @Environment(RobotStore.self) private var store
+    enum Mode: String, CaseIterable { case rooms = "Rooms", zones = "Zones" }
+
+    @State private var mode = Mode.rooms
     /// Selection order is cleaning order.
     @State private var selected: [Int] = []
+    @State private var zones: [Payloads.Zone] = []
     @State private var showingSetup = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 if let map = store.map {
-                    MapCanvas(map: map, selected: selected, pose: store.pose, trail: store.trail) { room in
-                        if let index = selected.firstIndex(of: room) {
-                            selected.remove(at: index)
-                        } else {
-                            selected.append(room)
-                        }
+                    Picker("Mode", selection: $mode) {
+                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }
+                    .pickerStyle(.segmented)
+                    .padding([.horizontal, .top])
+                    MapCanvas(
+                        map: map,
+                        selected: mode == .rooms ? selected : [],
+                        pose: store.pose,
+                        trail: store.trail,
+                        zones: mode == .zones ? zones : [],
+                        onTapRoom: { room in
+                            if let index = selected.firstIndex(of: room) {
+                                selected.remove(at: index)
+                            } else {
+                                selected.append(room)
+                            }
+                        },
+                        onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil
+                    )
                     .padding()
                     if let age = poseAge, store.isCleaning, age > 30 {
                         Label("Live position is \(Int(age)) s old. Reconnecting the feed…", systemImage: "antenna.radiowaves.left.and.right.slash")
@@ -46,14 +63,35 @@ struct MapScreen: View {
             }
             .sheet(isPresented: $showingSetup) {
                 if let map = store.map {
-                    CleanSetupSheet(map: map, rooms: $selected)
+                    CleanSetupSheet(map: map, rooms: $selected, zones: mode == .zones ? zones : [])
                 }
             }
             .onChange(of: store.map?.mapId) { _, _ in
-                // A different map means different room ids.
+                // A different map means different room ids and coordinates.
                 let valid = Set(store.map?.rooms.map(\.id) ?? [])
                 selected.removeAll { !valid.contains($0) }
+                zones = []
             }
+        }
+    }
+
+    private func hint(_ map: RobotMap) -> String {
+        switch mode {
+        case .rooms:
+            return selected.isEmpty
+                ? "Tap rooms to choose them. They'll be cleaned in the order you tap."
+                : selected.compactMap { id in map.rooms.first { $0.id == id }?.displayName }.joined(separator: " → ")
+        case .zones:
+            return zones.isEmpty ? "Drag on the map to draw a rectangle to clean." : "\(zones.count) zone\(zones.count == 1 ? "" : "s"). Drag to add more."
+        }
+    }
+
+    private var buttonTitle: String {
+        switch mode {
+        case .rooms:
+            return selected.isEmpty ? "Clean whole house…" : "Clean \(selected.count) room\(selected.count == 1 ? "" : "s")…"
+        case .zones:
+            return "Clean \(zones.count) zone\(zones.count == 1 ? "" : "s")…"
         }
     }
 
@@ -64,24 +102,27 @@ struct MapScreen: View {
     @ViewBuilder
     private func bottomBar(_ map: RobotMap) -> some View {
         VStack(spacing: 8) {
-            Text(selected.isEmpty
-                 ? "Tap rooms to choose them. They'll be cleaned in the order you tap."
-                 : selected.compactMap { id in map.rooms.first { $0.id == id }?.displayName }.joined(separator: " → "))
+            Text(hint(map))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             HStack {
-                if !selected.isEmpty {
-                    Button("Clear") { selected = [] }.buttonStyle(.bordered)
+                if mode == .rooms ? !selected.isEmpty : !zones.isEmpty {
+                    Button("Clear") {
+                        if mode == .rooms { selected = [] } else { zones = [] }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                if mode == .zones, !zones.isEmpty {
+                    Button("Undo") { zones.removeLast() }.buttonStyle(.bordered)
                 }
                 Button {
                     showingSetup = true
                 } label: {
-                    Text(selected.isEmpty ? "Clean whole house…" : "Clean \(selected.count) room\(selected.count == 1 ? "" : "s")…")
-                        .frame(maxWidth: .infinity)
+                    Text(buttonTitle).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(store.busyAction != nil || store.isCleaning)
+                .disabled(store.busyAction != nil || store.isCleaning || (mode == .zones && zones.isEmpty))
             }
         }
         .padding()
@@ -96,6 +137,8 @@ struct CleanSetupSheet: View {
 
     let map: RobotMap
     @Binding var rooms: [Int]
+    /// Non-empty means a zone clean; rooms are ignored.
+    var zones: [Payloads.Zone] = []
 
     @State private var settings = CleanSettings()
     @State private var perRoom: [Int: CleanSettings] = [:]
@@ -105,6 +148,11 @@ struct CleanSetupSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if !zones.isEmpty {
+                    Section("Zones") {
+                        Text("\(zones.count) drawn zone\(zones.count == 1 ? "" : "s")")
+                    }
+                } else {
                 Section {
                     if rooms.isEmpty {
                         Text("Whole house")
@@ -135,6 +183,7 @@ struct CleanSetupSheet: View {
                         if rooms.count > 1 { EditButton().font(.caption) }
                     }
                 }
+                }
                 SettingsFields(settings: $settings)
                 Section {
                     Button("Save as routine…") { savingPreset = true }
@@ -147,7 +196,9 @@ struct CleanSetupSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Start") {
                         Task {
-                            if rooms.isEmpty {
+                            if !zones.isEmpty {
+                                await store.cleanZones(zones, settings: settings)
+                            } else if rooms.isEmpty {
                                 await store.cleanAll(settings: settings)
                             } else {
                                 await store.cleanRooms(rooms, settings: settings, perRoom: perRoom)
@@ -162,7 +213,9 @@ struct CleanSetupSheet: View {
                 TextField("Name", text: $presetName)
                 Button("Save") {
                     presets.save(CleanPreset(name: presetName.isEmpty ? "Routine" : presetName,
-                                             rooms: rooms, settings: settings, perRoom: perRoom))
+                                             rooms: zones.isEmpty ? rooms : [], settings: settings,
+                                             perRoom: zones.isEmpty ? perRoom : [:],
+                                             zones: zones.isEmpty ? nil : zones))
                     presetName = ""
                 }
                 Button("Cancel", role: .cancel) {}

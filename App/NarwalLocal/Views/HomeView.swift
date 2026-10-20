@@ -79,7 +79,9 @@ struct HomeView: View {
     }
 
     private func start(_ preset: CleanPreset) async {
-        if preset.rooms.isEmpty {
+        if let zones = preset.zones, !zones.isEmpty {
+            await store.cleanZones(zones, settings: preset.settings)
+        } else if preset.rooms.isEmpty {
             await store.cleanAll(settings: preset.settings)
         } else {
             await store.cleanRooms(preset.rooms, settings: preset.settings, perRoom: preset.perRoom)
@@ -88,7 +90,9 @@ struct HomeView: View {
 
     private func summary(_ preset: CleanPreset) -> String {
         let rooms: String
-        if preset.rooms.isEmpty {
+        if let zones = preset.zones, !zones.isEmpty {
+            rooms = "\(zones.count) zone\(zones.count == 1 ? "" : "s")"
+        } else if preset.rooms.isEmpty {
             rooms = "Whole house"
         } else {
             let names = preset.rooms.map { id in store.map?.rooms.first { $0.id == id }?.displayName ?? "Room \(id)" }
