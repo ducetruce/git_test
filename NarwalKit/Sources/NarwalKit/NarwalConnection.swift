@@ -224,19 +224,28 @@ public actor NarwalConnection {
     ]
 
     /// Learns the device id (and product key) the robot expects in topics.
-    /// The robot answers only commands that carry its own product key.
+    /// The robot answers only commands that carry its own product key, and a
+    /// docked robot ignores everything for a few seconds while it wakes. So
+    /// the expected key gets several tries first, and stays interleaved
+    /// between guesses at other models' keys.
     private func identify() async {
         let preferred = productKey
-        let keys = [preferred] + Self.fallbackProductKeys.filter { $0 != preferred }
-        // A robot that is still waking ignores commands, so make several passes.
-        for _ in 0..<3 {
-            for key in keys {
-                // Broadcast topics are authoritative; stop guessing once one arrives.
-                if !identityFromBroadcast { productKey = key }
-                if await requestDeviceInfo() { return }
-                if Task.isCancelled || socket == nil { return }
-                if identityFromBroadcast { break }
+        var order = Array(repeating: preferred, count: 4)
+        for key in Self.fallbackProductKeys where key != preferred {
+            order += [key, preferred]
+        }
+        var lastWoken = preferred
+        for key in order {
+            if Task.isCancelled || socket == nil { return }
+            if !identityFromBroadcast {
+                productKey = key
+                if key != lastWoken {
+                    // Only a wake-up carrying the robot's own key counts.
+                    sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(1))
+                    lastWoken = key
+                }
             }
+            if await requestDeviceInfo() { return }
         }
         if !identityFromBroadcast { productKey = preferred }
         log("Robot did not answer get_device_info")
