@@ -48,8 +48,9 @@ public struct RobotError: Equatable, Sendable, Hashable {
     public var detail: String
 }
 
-/// Station/tank states from robot_base_status. Values 2-4 mean attention
-/// needed (sewage: 2-3). Absent fields are unknown, never "fine".
+/// Station, tank and bag states from robot_base_status, interpreted with the
+/// app's own enums (docs/schema/enums.txt, RobotBaseStatus_*). Absent fields
+/// are unknown, never "fine" or "problem".
 public struct StationState: Equatable, Sendable {
     public var cleanWaterTank: Int?
     public var sewageTank: Int?
@@ -59,14 +60,63 @@ public struct StationState: Equatable, Sendable {
     public var dustBagHealth: Float?
     public var detergentRemaining: Int?
 
-    public var problems: [String] {
-        var out: [String] = []
-        if let v = cleanWaterTank, (2...4).contains(v) { out.append("Clean water tank needs attention") }
-        if let v = sewageTank, (2...3).contains(v) { out.append("Dirty water tank needs emptying") }
-        if let v = dustBox, (2...4).contains(v) { out.append("Dust box needs attention") }
-        if let v = dustBag, (2...4).contains(v) { out.append("Dust bag needs attention") }
-        if let v = stationBag, (2...4).contains(v) { out.append("Station bag needs replacing") }
+    public struct Reading: Equatable, Sendable {
+        public let part: String
+        public let state: String
+        /// Alert text when this state needs the owner, else nil.
+        public let alert: String?
+    }
+
+    /// One reading per field the robot sent, in display order.
+    public var readings: [Reading] {
+        var out: [Reading] = []
+        // field 23, CleanWaterTankState
+        if let v = cleanWaterTank {
+            out.append(Self.reading("Clean water tank", v, [
+                1: ("OK", nil), 2: ("Empty", "Clean water tank is empty"),
+                3: ("Not in place", "Clean water tank is not in place"), 4: ("Fault", "Clean water tank fault"),
+            ]))
+        }
+        // field 24, SewageTankState
+        if let v = sewageTank {
+            out.append(Self.reading("Dirty water tank", v, [
+                1: ("OK", nil), 2: ("Full or removed", "Dirty water tank is full or not in place"),
+                3: ("Fault", "Dirty water tank fault"),
+            ]))
+        }
+        // field 20, DustBoxState
+        if let v = dustBox {
+            out.append(Self.reading("Dust box", v, [
+                1: ("OK", nil), 2: ("Not in place", "Dust box is not in place"),
+                3: ("Fault", "Dust box fault"), 4: ("Needs cleaning", "Dust box needs cleaning"),
+            ]))
+        }
+        // field 21, DustBagState. "Not installed" isn't alerted: setups
+        // without a bag report it permanently.
+        if let v = dustBag {
+            out.append(Self.reading("Dust bag", v, [
+                1: ("OK", nil), 2: ("Not installed", nil),
+                3: ("Replace soon", "Dust bag should be replaced"), 4: ("Fault", "Dust bag fault"),
+            ]))
+        }
+        // field 39, StationBagStatus: 1 installed, 2 uninstalled,
+        // 3 suggest replace, 4 abnormal. Same rule for "not installed".
+        if let v = stationBag {
+            out.append(Self.reading("Station dust bag", v, [
+                1: ("Installed", nil), 2: ("Not installed", nil),
+                3: ("Replace soon", "Station dust bag should be replaced"), 4: ("Fault", "Station dust bag fault"),
+            ]))
+        }
         return out
+    }
+
+    public var problems: [String] { readings.compactMap(\.alert) }
+
+    private static func reading(_ part: String, _ value: Int, _ table: [Int: (String, String?)]) -> Reading {
+        guard let entry = table[value] else {
+            return Reading(part: part, state: value == 0 ? "Unknown" : "State \(value)", alert: nil)
+        }
+        return Reading(part: part, state: entry.0, alert: entry.1)
     }
 }
 

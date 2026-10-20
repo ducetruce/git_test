@@ -242,9 +242,10 @@ public enum AmbientLightMode: Int, Sendable, CaseIterable {
 /// RoomType names from the Narwal app's own strings.
 public enum RoomType {
     public static let names: [Int: String] = [
-        0: "Room", 1: "Master bedroom", 2: "Secondary bedroom", 3: "Living room",
-        4: "Kitchen", 5: "Bathroom", 6: "Toilet", 7: "Balcony", 8: "Dining room",
-        9: "Closet", 10: "Corridor", 11: "Study", 12: "Kids' room",
-        13: "Entertainment room", 14: "Storage room", 15: "Others",
+        // Title case and "Hallway", as the Narwal app shows them.
+        0: "Room", 1: "Primary Bedroom", 2: "Bedroom", 3: "Living Room",
+        4: "Kitchen", 5: "Bathroom", 6: "Toilet", 7: "Balcony", 8: "Dining Room",
+        9: "Closet", 10: "Hallway", 11: "Study", 12: "Kids' Room",
+        13: "Entertainment Room", 14: "Storage Room", 15: "Other",
     ]
 }

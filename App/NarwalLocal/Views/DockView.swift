@@ -23,15 +23,20 @@ struct DockView: View {
                 }
 
                 Section("Tanks & bags") {
-                    let s = store.status?.station
-                    tank("Clean water", s?.cleanWaterTank, bad: 2...4)
-                    tank("Dirty water", s?.sewageTank, bad: 2...3)
-                    tank("Dust bag", s?.dustBag, bad: 2...4)
-                    tank("Station bag", s?.stationBag, bad: 2...4)
-                    if let health = s?.dustBagHealth, health.isFinite {
-                        LabeledContent("Dust bag health", value: "\(Int(health))%")
+                    let station = store.status?.station
+                    if station?.readings.isEmpty ?? true {
+                        Text("Not reported yet").foregroundStyle(.secondary)
                     }
-                    if let detergent = s?.detergentRemaining {
+                    ForEach(station?.readings ?? [], id: \.part) { reading in
+                        LabeledContent(reading.part) {
+                            Text(reading.state)
+                                .foregroundStyle(reading.alert != nil ? Color.orange : reading.state == "Unknown" ? Color.secondary : Color.green)
+                        }
+                    }
+                    if let health = station?.dustBagHealth, health.isFinite {
+                        LabeledContent("Station bag health", value: "\(Int(health))%")
+                    }
+                    if let detergent = station?.detergentRemaining {
                         LabeledContent("Detergent", value: "\(detergent)%")
                     }
                 }
@@ -78,17 +83,6 @@ struct DockView: View {
             Task { await store.run(title, perform) }
         } label: {
             Label(title, systemImage: icon)
-        }
-    }
-
-    @ViewBuilder
-    private func tank(_ name: String, _ value: Int?, bad: ClosedRange<Int>) -> some View {
-        LabeledContent(name) {
-            switch value {
-            case nil: Text("Unknown").foregroundStyle(.secondary)
-            case let v? where bad.contains(v): Text("Check").foregroundStyle(.orange)
-            case _?: Text("OK").foregroundStyle(.green)
-            }
         }
     }
 }

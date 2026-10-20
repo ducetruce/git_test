@@ -44,6 +44,11 @@ private struct EventRow: View {
                 if let date = event.date {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
                         .font(.caption2).foregroundStyle(.secondary)
+                } else if event.rawTime != 0 {
+                    // The robot's time unit isn't known yet; show what it sent.
+                    Text("Time code \(event.rawTime)")
+                        .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
             }
         }

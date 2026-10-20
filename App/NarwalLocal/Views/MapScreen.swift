@@ -10,6 +10,11 @@ struct MapScreen: View {
     @State private var selected: [Int] = []
     @State private var zones: [Payloads.Zone] = []
     @State private var showingSetup = false
+    // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
+    @State private var zoom: CGFloat = 1
+    @State private var zoomAtGestureStart: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var panAtGestureStart: CGSize = .zero
 
     var body: some View {
         NavigationStack {
@@ -33,9 +38,45 @@ struct MapScreen: View {
                                 selected.append(room)
                             }
                         },
-                        onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil
+                        onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil,
+                        zoom: zoom
                     )
                     .padding()
+                    .scaleEffect(zoom)
+                    .offset(pan)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        MagnifyGesture()
+                            .onChanged { value in zoom = min(max(zoomAtGestureStart * value.magnification, 1), 8) }
+                            .onEnded { _ in
+                                zoomAtGestureStart = zoom
+                                if zoom == 1 { resetZoom() }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { value in
+                                guard zoom > 1 else { return }
+                                pan = CGSize(width: panAtGestureStart.width + value.translation.width,
+                                             height: panAtGestureStart.height + value.translation.height)
+                            }
+                            .onEnded { _ in panAtGestureStart = pan },
+                        including: mode == .rooms ? .all : .subviews
+                    )
+                    .clipped()
+                    .overlay(alignment: .topTrailing) {
+                        if zoom > 1 {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.25)) { resetZoom() }
+                            } label: {
+                                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                    .padding(10)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            }
+                            .padding()
+                            .accessibilityLabel("Reset zoom")
+                        }
+                    }
                     if let age = poseAge, store.isCleaning, age > 30 {
                         Label("Live position is \(Int(age)) s old. Reconnecting the feed…", systemImage: "antenna.radiowaves.left.and.right.slash")
                             .font(.footnote)
@@ -93,6 +134,13 @@ struct MapScreen: View {
         case .zones:
             return "Clean \(zones.count) zone\(zones.count == 1 ? "" : "s")…"
         }
+    }
+
+    private func resetZoom() {
+        zoom = 1
+        zoomAtGestureStart = 1
+        pan = .zero
+        panAtGestureStart = .zero
     }
 
     private var poseAge: TimeInterval? {

@@ -116,7 +116,8 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(status.errors, [RobotError(code: 2103, level: 2, detail: "wheel")])
         XCTAssertEqual(status.fanLevel, .strong)
         XCTAssertEqual(status.mopHumidity, .normal)
-        XCTAssertEqual(status.station.problems, ["Clean water tank needs attention"])
+        // 23 = 3 is CLEAN_WATER_TANK_STATE_NOT_INSTALLED, 24 = 1 is NORMAL.
+        XCTAssertEqual(status.station.problems, ["Clean water tank is not in place"])
     }
 
     func testBaseStatusDocked() throws {
@@ -344,10 +345,54 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertEqual(map.virtualWalls, [VirtualWall(id: 21, start: MapPoint(x: 0.5, y: 1), end: MapPoint(x: 4, y: 1))])
     }
 
+    func testFurnitureCarpetsAndDoorways() throws {
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { map in
+                map.varint(1, 7); map.varint(4, 2); map.varint(5, 2)
+                // 11 doors: Door {1 roomIds (packed), 2 doorPts Grid, 3 hasDoorSill}
+                map.message(11) { door in
+                    door.bytesField(1, [3, 4])
+                    door.message(2) { p in p.varint(1, 10); p.varint(2, 20) }
+                    door.message(2) { p in p.varint(1, 10); p.varint(2, 26) }
+                    door.varint(3, 1)
+                }
+                // 26 carpets: Carpet {1 id, 2 polygon Grid, ..., 12 roomId}
+                map.message(26) { carpet in
+                    carpet.varint(1, 9)
+                    for (x, y) in [(1, 1), (5, 1), (5, 3)] { carpet.message(2) { p in p.varint(1, x); p.varint(2, y) } }
+                    carpet.varint(12, 3)
+                }
+                // 32 visionData: VisionData {1 furnitures: Furniture {1 id, 2 type,
+                //   3 box {1 center Point, 2 width, 3 height}, 4 angle}}
+                map.message(32) { vision in
+                    vision.message(1) { f in
+                        f.varint(1, 4)
+                        f.varint(2, 2)   // double bed
+                        f.message(3) { box in
+                            box.message(1) { c in c.float(1, 12.5); c.float(2, -3) }
+                            box.float(2, 20); box.float(3, 16)
+                        }
+                        f.float(4, 90)
+                    }
+                }
+            }
+        }
+        let map = try RobotMap(response: response)
+        XCTAssertEqual(map.doorways, [Doorway(points: [MapPoint(x: 10, y: 20), MapPoint(x: 10, y: 26)],
+                                              roomIds: [3, 4], hasSill: true)])
+        XCTAssertEqual(map.carpets, [CarpetArea(id: 9, polygon: [MapPoint(x: 1, y: 1), MapPoint(x: 5, y: 1),
+                                                                  MapPoint(x: 5, y: 3)], roomId: 3)])
+        XCTAssertEqual(map.furniture, [Furniture(id: 4, type: 2, center: MapPoint(x: 12.5, y: -3),
+                                                 width: 20, height: 16, angle: 90)])
+        XCTAssertEqual(map.furniture.first?.name, "Double bed")
+    }
+
     func testMapWithoutAnnotations() throws {
         let map = try RobotMap(response: ProtoMessage(bytes: hex(GoldenVectors.mapResponse)))
         XCTAssertTrue(map.noGoZones.isEmpty)
         XCTAssertTrue(map.virtualWalls.isEmpty)
+        XCTAssertTrue(map.furniture.isEmpty && map.carpets.isEmpty && map.doorways.isEmpty)
     }
 
     func testCleaningHistory() throws {
@@ -396,6 +441,9 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertFalse(pause.isPrimary)
 
         XCTAssertNil(history.events[2].date, "not an epoch time")
+        // What a Z10 Ultra sent: shown as the year 5,828,963 when read as ms.
+        XCTAssertNil(CleaningEvent.plausibleDate(183_882_200_000_000_000))
+        XCTAssertNil(CleaningEvent.plausibleDate(4_102_444_800), "2100 is in the future")
         XCTAssertEqual(history.events[2].taskLabel, "Self-check")
 
         XCTAssertNil(CleaningHistory(response: try message { $0.varint(1, 1) }), "a bare ack has no timeline")
@@ -456,5 +504,23 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertEqual(Payloads.setVoiceVolume(150), [0x08, 100])
         XCTAssertEqual(Payloads.setVoiceVolume(-5), [0x08, 0x00])
         XCTAssertFalse(Research.isSafeQuery(Topic.setConfig), "the lab must never send config/set")
+    }
+}
+
+final class StationStateTests: XCTestCase {
+    func testStatesFollowTheAppEnums() {
+        // A station with no bag fitted reports "uninstalled" all the time:
+        // that must not raise "replace the bag" (seen on a Z10 Ultra).
+        var station = StationState(cleanWaterTank: 1, sewageTank: 1, dustBox: 1, dustBag: nil, stationBag: 2)
+        XCTAssertEqual(station.problems, [])
+        XCTAssertEqual(station.readings.last, .init(part: "Station dust bag", state: "Not installed", alert: nil))
+
+        station.stationBag = 3
+        XCTAssertEqual(station.problems, ["Station dust bag should be replaced"])
+        station = StationState(cleanWaterTank: 2, sewageTank: 2, dustBox: 4, dustBag: 0, stationBag: 1)
+        XCTAssertEqual(station.problems, ["Clean water tank is empty", "Dirty water tank is full or not in place",
+                                          "Dust box needs cleaning"])
+        XCTAssertEqual(station.readings.map(\.state), ["Empty", "Full or removed", "Needs cleaning", "Unknown", "Installed"])
+        XCTAssertTrue(StationState().readings.isEmpty, "absent fields are unknown and not listed")
     }
 }

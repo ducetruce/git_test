@@ -51,13 +51,16 @@ final class FakeRobotTests: XCTestCase {
 
         let map = try await connection.fetchMap()
         XCTAssertEqual(map.mapId, 1742)
-        XCTAssertEqual(map.rooms.map(\.displayName), ["Kitchen", "Living room", "Ensuite"])
+        XCTAssertEqual(map.rooms.map(\.displayName), ["Kitchen", "Living Room", "Ensuite"])
         XCTAssertEqual(map.width * map.height, map.pixels.count)
         XCTAssertNotNil(map.roomId(atGridX: 10, y: 10))
         XCTAssertEqual(map.noGoZones.count, 1)
         XCTAssertEqual(map.noGoZones.first?.kind, .noVacuumOrMop)
         XCTAssertEqual(map.noGoZones.first?.polygon.count, 4)
         XCTAssertEqual(map.virtualWalls.count, 1)
+        XCTAssertEqual(map.furniture.map(\.name), ["Sofa"])
+        XCTAssertEqual(map.carpets.first?.polygon.count, 4)
+        XCTAssertEqual(map.doorways.first?.roomIds, [1, 2])
 
         let history = try await connection.cleaningHistory()
         XCTAssertEqual(history.events.map(\.taskLabel), ["Cleaning", "Emptying dustbin"])

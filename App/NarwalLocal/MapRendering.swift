@@ -42,7 +42,11 @@ extension RobotMap {
                     if case .wall = pixel(x: x, y: y) { isWall = true } else { isWall = false }
                     let dim = !selected.isEmpty && !selected.contains(room)
                     var r = base.0, g = base.1, b = base.2
-                    if isWall { r /= 2; g /= 2; b /= 2 }
+                    // Flagged pixels get a fine dotted texture, like the
+                    // Narwal app's, rather than reading as solid walls.
+                    if isWall, (x + y) % 2 == 0 {
+                        r = UInt8(Int(r) * 4 / 5); g = UInt8(Int(g) * 4 / 5); b = UInt8(Int(b) * 4 / 5)
+                    }
                     c = (r, g, b, dim ? 90 : 255)
                 }
                 rgba[o] = c.0
@@ -73,6 +77,9 @@ struct MapCanvas: View {
     var zones: [Payloads.Zone] = []
     var onTapRoom: ((Int) -> Void)?
     var onDrawZone: ((Payloads.Zone) -> Void)?
+    /// The surrounding zoom level: labels and icons are counter-scaled so
+    /// they stay readable instead of growing with the map.
+    var zoom: CGFloat = 1
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -102,6 +109,31 @@ struct MapCanvas: View {
                     points.dropFirst().forEach { path.addLine(to: $0) }
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+                // Carpets: light fill with a thin outline.
+                ForEach(Array(map.carpets.enumerated()), id: \.offset) { _, carpet in
+                    let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
+                    polygonPath(points).fill(Color.white.opacity(0.28))
+                    polygonPath(points).stroke(Color.white.opacity(0.7), lineWidth: 1)
+                }
+
+                // Furniture: rotated outlines.
+                ForEach(Array(map.furniture.enumerated()), id: \.offset) { _, item in
+                    let points = furnitureCorners(item).map { toScreen(map.gridPoint(for: $0)) }
+                    polygonPath(points).fill(Color.white.opacity(0.35))
+                    polygonPath(points).stroke(Color.gray, lineWidth: 1)
+                }
+
+                // Doorways: a short dark bar across the opening.
+                ForEach(Array(map.doorways.enumerated()), id: \.offset) { _, door in
+                    if let first = door.points.first, let last = door.points.last, door.points.count > 1 {
+                        Path { path in
+                            path.move(to: toScreen(map.gridPoint(for: first)))
+                            path.addLine(to: toScreen(map.gridPoint(for: last)))
+                        }
+                        .stroke(Color.black.opacity(0.55), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    }
+                }
 
                 // Robot-stored no-go zones and virtual walls (read-only).
                 // Keyed by position: robots may repeat ids (e.g. 0).
@@ -163,6 +195,7 @@ struct MapCanvas: View {
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 4)
                             .background(.ultraThinMaterial, in: Capsule())
+                            .scaleEffect(1 / zoom)
                             .position(toScreen(c))
                     }
                 }
@@ -171,6 +204,7 @@ struct MapCanvas: View {
                     Image(systemName: "bolt.circle.fill")
                         .foregroundStyle(.green, .white)
                         .font(.title3)
+                        .scaleEffect(1 / zoom)
                         .position(toScreen(dock))
                 }
 
@@ -181,6 +215,7 @@ struct MapCanvas: View {
                         // Heading is counter-clockwise from +x with y up;
                         // the symbol points north, i.e. +90°.
                         .rotationEffect(.radians(.pi / 2 - pose.heading))
+                        .scaleEffect(1 / zoom)
                         .position(toScreen(map.gridPoint(for: pose.position)))
                         .animation(.easeInOut(duration: 1.2), value: pose.position.x)
                 }
@@ -220,6 +255,25 @@ struct MapCanvas: View {
         .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected)) {
             image = map.image(selected: Set(selected))
             centroids = map.roomCentroids()
+        }
+    }
+
+    private func polygonPath(_ points: [CGPoint]) -> Path {
+        Path { path in
+            guard let first = points.first else { return }
+            path.move(to: first)
+            points.dropFirst().forEach { path.addLine(to: $0) }
+            path.closeSubpath()
+        }
+    }
+
+    /// Corners of a furniture box in map coordinates (angle in degrees).
+    private func furnitureCorners(_ item: Furniture) -> [MapPoint] {
+        let a = item.angle * .pi / 180
+        let (c, s) = (cos(a), sin(a))
+        let (hw, hh) = (item.width / 2, item.height / 2)
+        return [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)].map { dx, dy in
+            MapPoint(x: item.center.x + dx * c - dy * s, y: item.center.y + dx * s + dy * c)
         }
     }
 

@@ -56,6 +56,12 @@ public struct RobotMap: Equatable, Sendable {
     public var noGoZones: [NoGoZone] = []
     /// StaticMapPayload field 50, in map coordinates.
     public var virtualWalls: [VirtualWall] = []
+    /// StaticMapPayload 32.1 (VisionData.furnitures).
+    public var furniture: [Furniture] = []
+    /// StaticMapPayload field 26.
+    public var carpets: [CarpetArea] = []
+    /// StaticMapPayload field 11.
+    public var doorways: [Doorway] = []
 
     public enum ParseError: Error {
         case noActiveMap
@@ -91,6 +97,9 @@ public struct RobotMap: Equatable, Sendable {
 
         noGoZones = map.messages(9).map(NoGoZone.init)
         virtualWalls = map.messages(50).map(VirtualWall.init)
+        furniture = map.message(32)?.messages(1).map(Furniture.init) ?? []
+        carpets = map.messages(26).map(CarpetArea.init)
+        doorways = map.messages(11).map(Doorway.init)
 
         let count = width * height
         var decoded = Self.decodePixels(Self.inflate(map.bytes(17) ?? []))
