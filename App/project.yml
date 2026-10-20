@@ -19,6 +19,8 @@ targets:
       - NarwalLocal
     dependencies:
       - package: NarwalKit
+    # Shared scheme so command-line builds (CI) can find it.
+    scheme: {}
     settings:
       base:
         # Change to something unique to you, e.g. com.yourname.narwal

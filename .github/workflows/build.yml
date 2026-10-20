@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain versions
+        run: xcodebuild -version && swift --version
+
+      - name: Test NarwalKit
+        working-directory: NarwalKit
+        run: swift test
+
+      - name: Generate Xcode project
+        working-directory: App
+        run: |
+          brew install xcodegen
+          xcodegen
+
+      # Unsigned on purpose: sign the IPA with Signulous (or any signer).
+      - name: Build unsigned app
+        run: |
+          xcodebuild build \
+            -project App/NarwalLocal.xcodeproj \
+            -scheme NarwalLocal \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/NarwalLocal.app Payload/
+          zip -qry NarwalLocal.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NarwalLocal-ipa
+          path: NarwalLocal.ipa
