@@ -27,7 +27,7 @@ Checked against the live robot:
 | Timezone | `config/get` 2.3 `region` | IANA name, UTC offset, country, city. |
 | Do-not-disturb | `config/get` 2.4 `disturbMode` | enabled / begin / end, seconds after midnight. Decoded by `RobotSettings`. |
 | No-go zones | `map/get_map` 2.9 `forbiddens` | Decoded (`NoGoZone`) and drawn on the map; position confirmed against the Narwal app on the owner's map. |
-| Furniture, carpets, doors | `map/get_map` 2.32.1, 2.26, 2.11 | Decoded (`Furniture`, `CarpetArea`, `Doorway`) and drawn. Not yet compared with the Narwal app. |
+| Furniture, carpets, doors | `map/get_map` 2.32.1, 2.26, 2.11 | Decoded and drawn: furniture by type (shape + icon), hatched carpets. Carpet/door `Grid` points accepted as pixels or map coordinates. Map → Layers shows how many the robot sent. |
 | Tank / bag states | `robot_base_status` 20, 21, 23, 24, 39 | Now read with the app's enums. Station bag 2 = not installed (no alert); 3 = replace. |
 | Virtual walls | `map/get_map` 2.50 `virtualWalls` | Decoded (`VirtualWall`) and drawn on the map. |
 | Cleaning history | `info/get_clean_time_line` 2 `timeLineStatus` | Decoded (`CleaningHistory`); Home → Cleaning history. Also broadcast on `status/time_line_status`. **`eventTime` unit unknown**: the Z10 Ultra's values read as the year 5,828,963 in ms, so the app shows the raw "time code" until a capture settles it. |

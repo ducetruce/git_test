@@ -10,7 +10,7 @@ struct MapScreen: View {
     @State private var selected: [Int] = []
     @State private var zones: [Payloads.Zone] = []
     @State private var showingSetup = false
-    @AppStorage("mapShowFurniture") private var showFurniture = false
+    @AppStorage("mapShowFurniture") private var showFurniture = true
     @AppStorage("mapShowCarpets") private var showCarpets = true
     // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
     @State private var zoom: CGFloat = 1
@@ -103,8 +103,12 @@ struct MapScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        Toggle("Carpets", isOn: $showCarpets)
-                        Toggle("Furniture (experimental)", isOn: $showFurniture)
+                        // The counts say whether the robot sent any, which
+                        // tells an empty layer apart from a drawing bug.
+                        Section(store.map.map { "Robot map: \($0.carpets.count) carpets, \($0.furniture.count) furniture" } ?? "Layers") {
+                            Toggle("Carpets", isOn: $showCarpets)
+                            Toggle("Furniture", isOn: $showFurniture)
+                        }
                     } label: {
                         Image(systemName: "square.3.layers.3d")
                     }

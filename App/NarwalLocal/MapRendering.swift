@@ -11,10 +11,42 @@ enum MapPalette {
     static let unknown: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
     static let floor: (UInt8, UInt8, UInt8) = (205, 210, 218)
     static let obstacle: (UInt8, UInt8, UInt8) = (90, 95, 105)
+    static let carpet = Color(red: 0.45, green: 0.33, blue: 0.22)
+    static let furniture = Color(red: 0.55, green: 0.47, blue: 0.40)
 
     static func color(forRoom id: Int) -> Color {
         let c = rooms[(id - 1 + rooms.count) % rooms.count]
         return Color(red: Double(c.0) / 255, green: Double(c.1) / 255, blue: Double(c.2) / 255)
+    }
+}
+
+extension Furniture {
+    /// SF Symbol for the furniture type (see `Furniture.names`).
+    var symbol: String {
+        switch type {
+        case 1, 2, 3: return "bed.double.fill"
+        case 4, 5, 6, 7, 9, 31: return "table.furniture.fill"
+        case 8: return "tv.fill"
+        case 10, 11, 12: return "cabinet.fill"
+        case 13, 16: return "chair.lounge.fill"
+        case 14, 15, 30: return "sofa.fill"
+        case 17, 18: return "chair.fill"
+        case 19, 75: return "cat.fill"
+        case 20, 21: return "pawprint.fill"
+        case 76: return "dog.fill"
+        case 22: return "washer.fill"
+        case 23: return "refrigerator.fill"
+        case 24: return "air.conditioner.horizontal.fill"
+        case 25: return "fan.fill"
+        case 26: return "leaf.fill"
+        case 27: return "rectangle.portrait"
+        case 28: return "toilet.fill"
+        case 29, 32: return "pianokeys"
+        case 33: return "sink.fill"
+        case 34: return "stove.fill"
+        case 78: return "scalemass.fill"
+        default: return "shippingbox.fill"
+        }
     }
 }
 
@@ -80,9 +112,7 @@ struct MapCanvas: View {
     /// The surrounding zoom level: labels and icons are counter-scaled so
     /// they stay readable instead of growing with the map.
     var zoom: CGFloat = 1
-    /// Furniture outlines don't line up with the Narwal app yet, so they're
-    /// opt-in (Map > Layers).
-    var showFurniture = false
+    var showFurniture = true
     var showCarpets = true
 
     @State private var image: CGImage?
@@ -114,18 +144,36 @@ struct MapCanvas: View {
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
-                // Carpets: light fill with a thin outline.
+                // Carpets: diagonal hatching inside a solid outline.
                 ForEach(Array((showCarpets ? map.carpets : []).enumerated()), id: \.offset) { _, carpet in
                     let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
-                    polygonPath(points).fill(Color.white.opacity(0.28))
-                    polygonPath(points).stroke(Color.white.opacity(0.7), lineWidth: 1)
+                    polygonPath(points).fill(MapPalette.carpet.opacity(0.25))
+                    hatching(over: points, spacing: max(3, 4 / zoom))
+                        .stroke(MapPalette.carpet.opacity(0.7), lineWidth: max(0.5, 1 / zoom))
+                        .clipShape(polygonPath(points))
+                    polygonPath(points).stroke(MapPalette.carpet, lineWidth: max(0.75, 1.5 / zoom))
                 }
 
-                // Furniture: rotated outlines.
+                // Furniture: the object's shape and icon, rotated to match.
                 ForEach(Array((showFurniture ? map.furniture : []).enumerated()), id: \.offset) { _, item in
-                    let points = furnitureCorners(item).map { toScreen(map.gridPoint(for: $0)) }
-                    polygonPath(points).fill(Color.white.opacity(0.35))
-                    polygonPath(points).stroke(Color.gray, lineWidth: 1)
+                    let center = toScreen(map.gridPoint(for: item.center))
+                    let w = max(CGFloat(item.width) * scale, 4)
+                    let h = max(CGFloat(item.height) * scale, 4)
+                    let shape = item.isRound ? AnyShape(Ellipse()) : AnyShape(RoundedRectangle(cornerRadius: min(w, h) * 0.2))
+                    ZStack {
+                        shape.fill(MapPalette.furniture.opacity(0.85))
+                        shape.stroke(Color.white.opacity(0.9), lineWidth: max(0.5, 1 / zoom))
+                        Image(systemName: item.symbol)
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(.white)
+                            .padding(min(w, h) * 0.18)
+                    }
+                    .frame(width: w, height: h)
+                    // Map angles are counter-clockwise with y up; screen y is down.
+                    .rotationEffect(.degrees(-item.angle))
+                    .position(center)
+                    .accessibilityLabel(item.name)
                 }
 
                 // Doorways: a short dark bar across the opening.
@@ -271,13 +319,18 @@ struct MapCanvas: View {
         }
     }
 
-    /// Corners of a furniture box in map coordinates (angle in degrees).
-    private func furnitureCorners(_ item: Furniture) -> [MapPoint] {
-        let a = item.angle * .pi / 180
-        let (c, s) = (cos(a), sin(a))
-        let (hw, hh) = (item.width / 2, item.height / 2)
-        return [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)].map { dx, dy in
-            MapPoint(x: item.center.x + dx * c - dy * s, y: item.center.y + dx * s + dy * c)
+    /// Diagonal lines covering a polygon's bounding box.
+    private func hatching(over points: [CGPoint], spacing: CGFloat) -> Path {
+        Path { path in
+            guard let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
+                  let minY = points.map(\.y).min(), let maxY = points.map(\.y).max() else { return }
+            let height = maxY - minY
+            var x = minX - height
+            while x <= maxX {
+                path.move(to: CGPoint(x: x, y: maxY))
+                path.addLine(to: CGPoint(x: x + height, y: minY))
+                x += spacing
+            }
         }
     }
 

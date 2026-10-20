@@ -98,8 +98,17 @@ public struct RobotMap: Equatable, Sendable {
         noGoZones = map.messages(9).map(NoGoZone.init)
         virtualWalls = map.messages(50).map(VirtualWall.init)
         furniture = map.message(32)?.messages(1).map(Furniture.init) ?? []
-        carpets = map.messages(26).map(CarpetArea.init)
-        doorways = map.messages(11).map(Doorway.init)
+        let frame = (width: width, height: height, originX: originX, originY: originY)
+        carpets = map.messages(26).map(CarpetArea.init).map {
+            var carpet = $0
+            carpet.polygon = Self.inMapCoordinates(carpet.polygon, frame)
+            return carpet
+        }
+        doorways = map.messages(11).map(Doorway.init).map {
+            var door = $0
+            door.points = Self.inMapCoordinates(door.points, frame)
+            return door
+        }
 
         let count = width * height
         var decoded = Self.decodePixels(Self.inflate(map.bytes(17) ?? []))
@@ -152,6 +161,21 @@ public struct RobotMap: Equatable, Sendable {
             }
         }
         return sums.mapValues { MapPoint(x: Double($0.x) / Double($0.n), y: Double($0.y) / Double($0.n)) }
+    }
+
+    /// `Grid` polygons (carpets, doors) may be pixel indices rather than map
+    /// coordinates. Keep whichever reading lands on the map, returned in map
+    /// coordinates like everything else.
+    static func inMapCoordinates(
+        _ points: [MapPoint], _ f: (width: Int, height: Int, originX: Int, originY: Int)
+    ) -> [MapPoint] {
+        func onMap(_ p: MapPoint) -> Bool {
+            p.x >= 0 && p.y >= 0 && p.x <= Double(f.width) && p.y <= Double(f.height)
+        }
+        let asMap = points.filter { onMap(MapPoint(x: $0.x - Double(f.originX), y: $0.y - Double(f.originY))) }.count
+        let asPixels = points.filter(onMap).count
+        guard asPixels > asMap else { return points }
+        return points.map { MapPoint(x: $0.x + Double(f.originX), y: $0.y + Double(f.originY)) }
     }
 
     /// The grid is a zlib stream holding a protobuf packed varint field.

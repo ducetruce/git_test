@@ -93,6 +93,9 @@ public struct Furniture: Equatable, Sendable, Identifiable {
 
     public var name: String { Self.names[type] ?? "Object" }
 
+    /// Tables and similar that the Narwal app draws as circles.
+    public var isRound: Bool { [5, 7, 25, 26].contains(type) }
+
     /// Furniture types from the app's map_furniture.json.
     public static let names: [Int: String] = [
         1: "Single bed", 2: "Double bed", 3: "Baby bed", 4: "Dining table", 5: "Round table",
@@ -129,6 +132,8 @@ extension CarpetArea {
     init(_ m: ProtoMessage) {
         id = m.int(1) ?? 0
         polygon = m.messages(2).map(MapCoordinates.point)
+        // User-edited carpets may only carry carpetModifyPolygon (6).
+        if polygon.count < 3 { polygon = m.messages(6).map(MapCoordinates.point) }
         roomId = m.int(12).flatMap { $0 > 0 ? $0 : nil }
     }
 }

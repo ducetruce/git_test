@@ -388,6 +388,39 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertEqual(map.furniture.first?.name, "Double bed")
     }
 
+    func testCarpetsInPixelOrMapCoordinates() throws {
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { map in
+                map.varint(1, 7); map.varint(4, 40); map.varint(5, 30)
+                map.message(6) { border in border.varint(1, -100); border.varint(3, -200) }
+                // Map coordinates: stays as is.
+                map.message(26) { carpet in
+                    carpet.varint(1, 1)
+                    for (x, y) in [(-190, -90), (-180, -90), (-180, -80)] { carpet.message(2) { p in p.varint(1, x); p.varint(2, y) } }
+                }
+                // Pixel indices: moved into map coordinates.
+                map.message(26) { carpet in
+                    carpet.varint(1, 2)
+                    for (x, y) in [(5, 5), (15, 5), (15, 10)] { carpet.message(2) { p in p.varint(1, x); p.varint(2, y) } }
+                }
+                // Only carpetModifyPolygon (6).
+                map.message(26) { carpet in
+                    carpet.varint(1, 3)
+                    for (x, y) in [(-170, -90), (-160, -90), (-160, -80)] { carpet.message(6) { p in p.varint(1, x); p.varint(2, y) } }
+                }
+            }
+        }
+        let map = try RobotMap(response: response)
+        XCTAssertEqual(map.carpets.map(\.polygon), [
+            [MapPoint(x: -190, y: -90), MapPoint(x: -180, y: -90), MapPoint(x: -180, y: -80)],
+            [MapPoint(x: -195, y: -95), MapPoint(x: -185, y: -95), MapPoint(x: -185, y: -90)],
+            [MapPoint(x: -170, y: -90), MapPoint(x: -160, y: -90), MapPoint(x: -160, y: -80)],
+        ])
+        XCTAssertEqual(map.carpets.map { map.gridPoint(for: $0.polygon[0]) },
+                       [MapPoint(x: 10, y: 10), MapPoint(x: 5, y: 5), MapPoint(x: 30, y: 10)])
+    }
+
     func testMapWithoutAnnotations() throws {
         let map = try RobotMap(response: ProtoMessage(bytes: hex(GoldenVectors.mapResponse)))
         XCTAssertTrue(map.noGoZones.isEmpty)
