@@ -1,0 +1,8 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+App/NarwalLocal.xcodeproj/
+App/NarwalLocal/Info.plist
+__pycache__/

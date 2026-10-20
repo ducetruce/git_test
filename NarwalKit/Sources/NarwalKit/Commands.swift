@@ -1,0 +1,113 @@
+import Foundation
+
+public enum RoomCleanError: Error, LocalizedError, Equatable {
+    case noRoomsSelected
+    case unknownRooms([Int])
+
+    public var errorDescription: String? {
+        switch self {
+        case .noRoomsSelected: return "Pick at least one room."
+        case .unknownRooms(let ids):
+            return "Rooms \(ids.map(String.init).joined(separator: ", ")) aren't on the robot's current map. Refresh the map and try again."
+        }
+    }
+}
+
+extension NarwalConnection {
+    // MARK: Queries
+
+    public func deviceInfo() async throws -> DeviceInfo? {
+        DeviceInfo(response: try await send(Topic.getDeviceInfo).message)
+    }
+
+    /// Polled status; the payload sits in field 2 of the response.
+    public func baseStatus() async throws -> BaseStatus? {
+        let response = try await send(Topic.getBaseStatus)
+        return response.message.message(2).map(BaseStatus.init)
+    }
+
+    public func fetchMap() async throws -> RobotMap {
+        let response = try await perform(Topic.getMap, timeout: 15)
+        do {
+            return try RobotMap(response: response.message)
+        } catch {
+            throw NarwalError.noMap
+        }
+    }
+
+    public func consumableAlerts() async throws -> ConsumableAlerts {
+        ConsumableAlerts(response: try await send(Topic.getConsumableInfo, timeout: 15).message)
+    }
+
+    public func currentCleanTask() async throws -> CommandResponse {
+        try await send(Topic.currentCleanTask)
+    }
+
+    // MARK: Task control
+
+    public func locate() async throws { try await perform(Topic.yell) }
+    public func pause() async throws { try await perform(Topic.pause) }
+    public func resume() async throws { try await perform(Topic.resume) }
+    /// force_end answers only after the robot physically stops (10-15 s).
+    public func stopTask() async throws { try await perform(Topic.forceEnd, timeout: 20) }
+    public func returnToDock() async throws { try await perform(Topic.recall) }
+    public func quickClean() async throws { try await perform(Topic.easyClean) }
+
+    public func setFanLevel(_ level: FanLevel) async throws {
+        try await perform(Topic.setFanLevel, Payloads.setFanLevel(level))
+    }
+
+    public func setMopHumidity(_ level: MopHumidity) async throws {
+        try await perform(Topic.setMopHumidity, Payloads.setMopHumidity(level))
+    }
+
+    // MARK: Cleaning
+
+    /// Cleans exactly these rooms, in this order.
+    ///
+    /// Uses clean/start_clean against a freshly fetched map: a stale or
+    /// wrong map id has been seen to abort the job and clear the map
+    /// selection in the Narwal app, and clean/plan/start silently ignores
+    /// the room list. Returns the map the task was built against.
+    @discardableResult
+    public func cleanRooms(_ rooms: [Int], settings: CleanSettings = CleanSettings(),
+                           perRoom: [Int: CleanSettings] = [:]) async throws -> RobotMap {
+        guard !rooms.isEmpty else { throw RoomCleanError.noRoomsSelected }
+        let map = try await fetchMap()
+        let known = Set(map.rooms.map(\.id))
+        let unknown = rooms.filter { !known.contains($0) }
+        guard unknown.isEmpty else { throw RoomCleanError.unknownRooms(unknown) }
+        try await perform(Topic.startClean,
+                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings, perRoom: perRoom),
+                          timeout: 10)
+        return map
+    }
+
+    /// Whole house: every room, through the same verified path as room cleans.
+    @discardableResult
+    public func cleanAll(settings: CleanSettings = CleanSettings(),
+                         perRoom: [Int: CleanSettings] = [:]) async throws -> RobotMap {
+        let map = try await fetchMap()
+        let rooms = map.rooms.map(\.id)
+        guard !rooms.isEmpty else { throw NarwalError.noMap }
+        try await perform(Topic.startClean,
+                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings, perRoom: perRoom),
+                          timeout: 10)
+        return map
+    }
+
+    // MARK: Dock
+
+    public func washMop() async throws { try await perform(Topic.washMop) }
+    public func dryMop() async throws { try await perform(Topic.dryMop) }
+    public func emptyDustbin() async throws { try await perform(Topic.dustGathering) }
+    public func dryDustBag() async throws { try await perform(Topic.dryDustBag) }
+    public func dryStationBag() async throws { try await perform(Topic.dryStationBag) }
+
+    public func setAmbientLight(_ mode: AmbientLightMode) async throws {
+        let response = try await send(Topic.ambientLight, Payloads.singleVarint(mode.rawValue))
+        guard [0, 1, 2, 6].contains(response.resultCode) else {
+            throw NarwalError.rejected(Topic.ambientLight, response.resultCode)
+        }
+    }
+}

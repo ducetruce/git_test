@@ -1,0 +1,44 @@
+# Generate the Xcode project on your Mac:
+#   brew install xcodegen
+#   cd App && xcodegen
+#   open NarwalLocal.xcodeproj
+name: NarwalLocal
+options:
+  bundleIdPrefix: local.narwal
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  NarwalKit:
+    path: ../NarwalKit
+targets:
+  NarwalLocal:
+    type: application
+    platform: iOS
+    sources:
+      - NarwalLocal
+    dependencies:
+      - package: NarwalKit
+    settings:
+      base:
+        # Change to something unique to you, e.g. com.yourname.narwal
+        PRODUCT_BUNDLE_IDENTIFIER: local.narwal.NarwalLocal
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: NarwalLocal/Info.plist
+      properties:
+        CFBundleDisplayName: Narwal Local
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Shown by iOS the first time the app looks for the robot.
+        NSLocalNetworkUsageDescription: Narwal Local talks directly to your robot vacuum on your home network.
+        NSBonjourServices:
+          - _narwal_sweeper._tcp
+        NSAppTransportSecurity:
+          # The robot only speaks plain ws:// on the LAN.
+          NSAllowsLocalNetworking: true

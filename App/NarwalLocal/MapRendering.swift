@@ -1,0 +1,150 @@
+import CoreGraphics
+import NarwalKit
+import SwiftUI
+
+enum MapPalette {
+    static let rooms: [(UInt8, UInt8, UInt8)] = [
+        (130, 177, 255), (255, 183, 130), (149, 214, 164), (240, 160, 200),
+        (196, 170, 255), (255, 220, 120), (128, 214, 220), (230, 150, 140),
+        (180, 200, 120), (170, 190, 230), (250, 200, 170), (160, 220, 200),
+    ]
+    static let unknown: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
+    static let floor: (UInt8, UInt8, UInt8) = (205, 210, 218)
+    static let obstacle: (UInt8, UInt8, UInt8) = (90, 95, 105)
+
+    static func color(forRoom id: Int) -> Color {
+        let c = rooms[(id - 1 + rooms.count) % rooms.count]
+        return Color(red: Double(c.0) / 255, green: Double(c.1) / 255, blue: Double(c.2) / 255)
+    }
+}
+
+extension RobotMap {
+    /// RGBA image, flipped so north is up (map rows grow upward).
+    /// Unselected rooms are dimmed while a selection exists.
+    func image(selected: Set<Int> = []) -> CGImage? {
+        guard width > 0, height > 0 else { return nil }
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        for y in 0..<height {
+            let outRow = height - 1 - y
+            for x in 0..<width {
+                let o = (outRow * width + x) * 4
+                var c: (UInt8, UInt8, UInt8, UInt8)
+                switch pixel(x: x, y: y) {
+                case .unknown:
+                    c = MapPalette.unknown
+                case .unassignedFloor:
+                    c = (MapPalette.floor.0, MapPalette.floor.1, MapPalette.floor.2, 255)
+                case .unassignedObstacle:
+                    c = (MapPalette.obstacle.0, MapPalette.obstacle.1, MapPalette.obstacle.2, 255)
+                case .floor(let room), .wall(let room):
+                    let base = MapPalette.rooms[(max(room, 1) - 1) % MapPalette.rooms.count]
+                    let isWall: Bool
+                    if case .wall = pixel(x: x, y: y) { isWall = true } else { isWall = false }
+                    let dim = !selected.isEmpty && !selected.contains(room)
+                    var r = base.0, g = base.1, b = base.2
+                    if isWall { r /= 2; g /= 2; b /= 2 }
+                    c = (r, g, b, dim ? 90 : 255)
+                }
+                rgba[o] = c.0
+                rgba[o + 1] = c.1
+                rgba[o + 2] = c.2
+                rgba[o + 3] = c.3
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
+        return CGImage(
+            width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+        )
+    }
+}
+
+/// The house map with rooms, dock, live robot and trail. Tap a room to
+/// toggle it when `onTapRoom` is set.
+struct MapCanvas: View {
+    let map: RobotMap
+    var selected: [Int] = []
+    var pose: LivePose?
+    var trail: [MapPoint] = []
+    var onTapRoom: ((Int) -> Void)?
+
+    @State private var image: CGImage?
+    @State private var centroids: [Int: MapPoint] = [:]
+
+    var body: some View {
+        GeometryReader { geo in
+            let scale = min(geo.size.width / CGFloat(map.width), geo.size.height / CGFloat(map.height))
+            let size = CGSize(width: CGFloat(map.width) * scale, height: CGFloat(map.height) * scale)
+            let toScreen = { (p: MapPoint) -> CGPoint in
+                CGPoint(x: CGFloat(p.x) * scale, y: (CGFloat(map.height) - CGFloat(p.y)) * scale)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if let image {
+                    Image(decorative: image, scale: 1)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: size.width, height: size.height)
+                }
+
+                Path { path in
+                    let points = trail.map { toScreen(map.gridPoint(for: $0)) }
+                    guard let first = points.first else { return }
+                    path.move(to: first)
+                    points.dropFirst().forEach { path.addLine(to: $0) }
+                }
+                .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+                ForEach(map.rooms) { room in
+                    if let c = centroids[room.id] {
+                        let order = selected.firstIndex(of: room.id).map { $0 + 1 }
+                        Text(order.map { "\($0). \(room.displayName)" } ?? room.displayName)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 4)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .position(toScreen(c))
+                    }
+                }
+
+                if let dock = map.dock {
+                    Image(systemName: "bolt.circle.fill")
+                        .foregroundStyle(.green, .white)
+                        .font(.title3)
+                        .position(toScreen(dock))
+                }
+
+                if let pose {
+                    Image(systemName: "location.north.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white, .blue)
+                        // Heading is counter-clockwise from +x with y up;
+                        // the symbol points north, i.e. +90°.
+                        .rotationEffect(.radians(.pi / 2 - pose.heading))
+                        .position(toScreen(map.gridPoint(for: pose.position)))
+                        .animation(.easeInOut(duration: 1.2), value: pose.position.x)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .onTapGesture { location in
+                guard let onTapRoom else { return }
+                let gx = Int(location.x / scale)
+                let gy = Int((size.height - location.y) / scale)
+                if let room = map.roomId(atGridX: gx, y: gy) { onTapRoom(room) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected)) {
+            image = map.image(selected: Set(selected))
+            centroids = map.roomCentroids()
+        }
+    }
+
+    private struct RenderKey: Equatable {
+        let mapId: Int
+        let pixels: Int
+        let selected: [Int]
+    }
+}
