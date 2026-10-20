@@ -199,6 +199,13 @@ public struct ProtoWriter {
         bytes += Self.encodeVarint(UInt64(bitPattern: Int64(value)))
     }
 
+    /// A float32 (fixed32) field, as used by `Point`.
+    public mutating func float(_ number: Int, _ value: Float) {
+        bytes += Self.encodeVarint(UInt64(number << 3 | 5))
+        let bits = value.bitPattern
+        bytes += [UInt8(bits & 0xFF), UInt8(bits >> 8 & 0xFF), UInt8(bits >> 16 & 0xFF), UInt8(bits >> 24)]
+    }
+
     public mutating func bytesField(_ number: Int, _ data: [UInt8]) {
         bytes += Self.encodeVarint(UInt64(number << 3 | 2))
         bytes += Self.encodeVarint(UInt64(data.count))

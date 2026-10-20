@@ -103,6 +103,40 @@ struct MapCanvas: View {
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
+                // Robot-stored no-go zones and virtual walls (read-only).
+                // Keyed by position: robots may repeat ids (e.g. 0).
+                ForEach(Array(map.noGoZones.enumerated()), id: \.offset) { _, zone in
+                    let points = zone.polygon.map { toScreen(map.gridPoint(for: $0)) }
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        points.dropFirst().forEach { path.addLine(to: $0) }
+                        path.closeSubpath()
+                    }
+                    .fill(Color.red.opacity(0.18))
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        points.dropFirst().forEach { path.addLine(to: $0) }
+                        path.closeSubpath()
+                    }
+                    .stroke(Color.red, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    if zone.kind != .unspecified, zone.kind != .noVacuumOrMop, !points.isEmpty {
+                        Text(zone.kind.label)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .position(x: points.map(\.x).reduce(0, +) / CGFloat(points.count),
+                                      y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
+                    }
+                }
+                ForEach(Array(map.virtualWalls.enumerated()), id: \.offset) { _, wall in
+                    Path { path in
+                        path.move(to: toScreen(map.gridPoint(for: wall.start)))
+                        path.addLine(to: toScreen(map.gridPoint(for: wall.end)))
+                    }
+                    .stroke(Color.red, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                }
+
                 ForEach(Array(zones.enumerated()), id: \.offset) { index, zone in
                     let a = toScreen(MapPoint(x: Double(zone.x1 - map.originX), y: Double(zone.y1 - map.originY)))
                     let b = toScreen(MapPoint(x: Double(zone.x2 - map.originX), y: Double(zone.y2 - map.originY)))

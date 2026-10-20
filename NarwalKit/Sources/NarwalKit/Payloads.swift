@@ -53,6 +53,14 @@ public enum Payloads {
         singleVarint(level.rawValue)
     }
 
+    /// config/set with SetConfig.Request field 1, `volumePercentage`.
+    /// SetConfig.Request is a oneof (one setting per request), so 0 is still
+    /// sent explicitly. Its field numbers are NOT config/get's: from
+    /// disturbMode on they are one higher (docs/schema/README.md).
+    public static func setVoiceVolume(_ percent: Int) -> [UInt8] {
+        singleVarint(min(max(percent, 0), 100), field: 1)
+    }
+
     /// The app's taskType for a job whose rooms use different work modes.
     static let customTaskType = 6
 

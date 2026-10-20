@@ -80,6 +80,10 @@ public enum Topic {
     public static let getBaseStatus = "status/get_device_base_status"
     public static let getConsumableInfo = "consumable/get_consumable_info"
     public static let getConfig = "config/get"
+    /// Takes SetConfig.Request, whose field numbers differ from config/get's.
+    public static let setConfig = "config/set"
+    public static let getCleanTimeLine = "info/get_clean_time_line"
+    public static let getCleanSchedules = "schedule/clean_schedule/get"
 
     // Task control
     public static let pause = "task/pause"

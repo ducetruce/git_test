@@ -39,6 +39,24 @@ extension NarwalConnection {
         ConsumableAlerts(response: try await send(Topic.getConsumableInfo, timeout: 15).message)
     }
 
+    public func settings() async throws -> RobotSettings? {
+        RobotSettings(response: try await send(Topic.getConfig).message)
+    }
+
+    /// Recent cleaning events. An empty answer means no history.
+    public func cleaningHistory() async throws -> CleaningHistory {
+        let response = try await send(Topic.getCleanTimeLine, timeout: 10)
+        if let history = CleaningHistory(response: response.message) { return history }
+        guard response.accepted else { throw NarwalError.rejected(Topic.getCleanTimeLine, response.resultCode) }
+        return CleaningHistory(events: [])
+    }
+
+    /// Robot-stored schedules. Read-only, but the Z10 Ultra hasn't answered
+    /// this yet, so nothing in the app calls it.
+    public func cleanSchedules() async throws -> [CleanSchedule] {
+        CleanSchedule.list(response: try await send(Topic.getCleanSchedules).message)
+    }
+
     public func currentCleanTask() async throws -> CommandResponse {
         try await send(Topic.currentCleanTask)
     }
@@ -105,6 +123,19 @@ extension NarwalConnection {
                           Payloads.zoneClean(mapId: map.mapId, zones: zones, settings: settings),
                           timeout: 10)
         return map
+    }
+
+    // MARK: Settings (writes)
+
+    /// Sets the robot's voice volume (0-100) via config/set.
+    ///
+    /// NOT YET TRIED ON A ROBOT, and deliberately not wired to any UI: a Mac
+    /// session sends it first and confirms the change in the Narwal app.
+    /// Reads the volume back afterwards so a silently ignored write shows up.
+    @discardableResult
+    public func setVoiceVolume(_ percent: Int) async throws -> RobotSettings? {
+        try await perform(Topic.setConfig, Payloads.setVoiceVolume(percent))
+        return try await settings()
     }
 
     // MARK: Dock

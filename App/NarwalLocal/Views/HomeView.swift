@@ -65,6 +65,14 @@ struct HomeView: View {
                     ControlButtons()
                 }
 
+                Section {
+                    NavigationLink {
+                        HistoryView()
+                    } label: {
+                        Label("Cleaning history", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+
                 Section("Routines") {
                     if presets.presets.isEmpty {
                         Text("Save a routine from the Map tab to start it with one tap.")

@@ -52,6 +52,10 @@ public struct RobotMap: Equatable, Sendable {
     public var dock: MapPoint?
     /// Row-major pixels, row 0 at the BOTTOM (map y grows upward).
     public var pixels: [UInt32]
+    /// StaticMapPayload field 9, in map coordinates (see `gridPoint(for:)`).
+    public var noGoZones: [NoGoZone] = []
+    /// StaticMapPayload field 50, in map coordinates.
+    public var virtualWalls: [VirtualWall] = []
 
     public enum ParseError: Error {
         case noActiveMap
@@ -84,6 +88,9 @@ public struct RobotMap: Equatable, Sendable {
         } else {
             dock = nil
         }
+
+        noGoZones = map.messages(9).map(NoGoZone.init)
+        virtualWalls = map.messages(50).map(VirtualWall.init)
 
         let count = width * height
         var decoded = Self.decodePixels(Self.inflate(map.bytes(17) ?? []))

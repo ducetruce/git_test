@@ -96,6 +96,12 @@ def map_payload() -> bytes:
         + f_bytes(6, f_varint(1, 0) + f_varint(3, 0) + f_varint(4, 60))
         + f_bytes(8, f_bytes(1, f_float(1, 5.0) + f_float(2, 5.0)))
         + rooms + f_bytes(17, grid)
+        # 9: a no-go zone (ForbiddenArea, float polygon), 50: a virtual wall
+        + f_bytes(9, b"".join(f_bytes(1, f_float(1, x) + f_float(2, y))
+                              for x, y in [(25, 10), (35, 10), (35, 18), (25, 18)])
+                  + f_varint(2, 3) + f_varint(3, 1))
+        + f_bytes(50, f_varint(1, 2) + f_bytes(2, f_float(1, 45) + f_float(2, 25))
+                  + f_bytes(3, f_float(1, 45) + f_float(2, 35)))
     )
     return f_varint(1, 1) + f_bytes(2, body)
 
@@ -134,6 +140,13 @@ class Robot:
             return response(f_varint(1, 1) + f_bytes(2, self.base_status()))
         elif short == "map/get_map":
             return response(map_payload())
+        elif short == "info/get_clean_time_line":
+            # GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 RobotEventNode...}}
+            start = int(time.time() * 1000) - 3_600_000
+            clean = (f_varint(1, start) + f_varint(2, 4) + f_bytes(3, f_bytes(2, f_varint(2, 2) + f_varint(4, 4)))
+                     + f_varint(5, 1) + f_varint(7, 1) + f_varint(8, 1))
+            dust = f_varint(1, start + 1_800_000) + f_varint(2, 9) + f_varint(7, 1) + f_varint(8, 2)
+            return response(f_varint(1, 1) + f_bytes(2, f_bytes(1, clean) + f_bytes(1, dust)))
         elif short == "consumable/get_consumable_info":
             return response(f_bytes(1, f_bytes(1, bytes([4])) + f_bytes(2, bytes([3]))))
         elif short == "clean/start_clean":

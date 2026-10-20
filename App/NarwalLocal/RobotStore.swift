@@ -27,6 +27,8 @@ final class RobotStore {
     // Fetched state
     private(set) var map: RobotMap?
     private(set) var consumables: ConsumableAlerts?
+    /// Recent cleaning events: fetched on demand and updated by broadcasts.
+    private(set) var history: CleaningHistory?
 
     // UI
     private(set) var busyAction: String?
@@ -195,6 +197,13 @@ final class RobotStore {
         }
     }
 
+    func reloadHistory() async {
+        await run("Loading history") { connection in
+            let fetched = try await connection.cleaningHistory()
+            await MainActor.run { self.history = fetched }
+        }
+    }
+
     func reloadMap() async {
         await run("Loading map") { connection in
             let fetched = try await connection.fetchMap()
@@ -225,6 +234,9 @@ final class RobotStore {
             applyStatus(status)
         case .progress(let progress):
             self.progress = progress
+        case .history(let history):
+            // Broadcasts can carry only the current task; keep a fuller list.
+            if !history.events.isEmpty || self.history == nil { self.history = history }
         case .pose(let pose):
             self.pose = pose
             poseUpdatedAt = Date()

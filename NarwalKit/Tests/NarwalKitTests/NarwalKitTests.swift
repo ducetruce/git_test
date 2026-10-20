@@ -275,3 +275,186 @@ final class HostTests: XCTestCase {
         await connection.stop()
     }
 }
+
+/// Built from docs/schema/messages.txt field numbers.
+final class SchemaDecoderTests: XCTestCase {
+    private func message(_ build: (inout ProtoWriter) -> Void) throws -> ProtoMessage {
+        var w = ProtoWriter()
+        build(&w)
+        return try ProtoMessage(bytes: w.bytes)
+    }
+
+    func testFloatWriterRoundTrips() throws {
+        let m = try message { $0.float(1, -2.5); $0.float(2, 96.25) }
+        XCTAssertEqual(m.float(1), -2.5)
+        XCTAssertEqual(m.float(2), 96.25)
+    }
+
+    func testNoGoZonesAndVirtualWalls() throws {
+        // map/get_map response {1: result, 2: StaticMapPayload}
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { map in
+                map.varint(1, 7)       // mapId
+                map.varint(3, 60)      // resolution
+                map.varint(4, 2)       // width
+                map.varint(5, 2)       // height
+                // 9 forbiddens: ForbiddenArea {1 polygon, 2 type, 3 id, 4 roomId, 5 mode}
+                map.message(9) { zone in
+                    for (x, y) in [(-1.5, -2.0), (3.0, -2.0), (3.0, 4.5), (-1.5, 4.5)] as [(Float, Float)] {
+                        zone.message(1) { p in p.float(1, x); p.float(2, y) }   // Point (float)
+                    }
+                    zone.varint(2, 3)  // FORBIDDEN_TYPE_SWEEP_MOP
+                    zone.varint(3, 11)
+                }
+                map.message(9) { zone in
+                    zone.message(1) { p in p.varint(1, -3); p.varint(2, 4) }   // Grid (int32)
+                    zone.message(1) { _ in }                                    // (0, 0): zeros omitted
+                    zone.message(1) { p in p.varint(1, 5) }
+                    zone.varint(2, 2)  // FORBIDDEN_TYPE_MOP
+                    zone.varint(3, 12)
+                    zone.varint(4, 5)
+                    zone.varint(5, 1)  // FORBIDDEN_MODE_ROOM
+                }
+                // 50 virtualWalls: VirtualWallData {1 id, 2 startPoint, 3 endPoint}
+                map.message(50) { wall in
+                    wall.varint(1, 21)
+                    wall.message(2) { p in p.float(1, 0.5); p.float(2, 1) }
+                    wall.message(3) { p in p.float(1, 4); p.float(2, 1) }
+                }
+            }
+        }
+        let map = try RobotMap(response: response)
+        XCTAssertEqual(map.noGoZones.count, 2)
+
+        let both = map.noGoZones[0]
+        XCTAssertEqual(both.id, 11)
+        XCTAssertEqual(both.kind, .noVacuumOrMop)
+        XCTAssertNil(both.roomId)
+        XCTAssertFalse(both.coversWholeRoom)
+        XCTAssertEqual(both.polygon, [MapPoint(x: -1.5, y: -2), MapPoint(x: 3, y: -2),
+                                      MapPoint(x: 3, y: 4.5), MapPoint(x: -1.5, y: 4.5)])
+
+        let mop = map.noGoZones[1]
+        XCTAssertEqual(mop.kind, .noMop)
+        XCTAssertEqual(mop.roomId, 5)
+        XCTAssertTrue(mop.coversWholeRoom)
+        XCTAssertEqual(mop.polygon, [MapPoint(x: -3, y: 4), MapPoint(x: 0, y: 0), MapPoint(x: 5, y: 0)])
+
+        XCTAssertEqual(map.virtualWalls, [VirtualWall(id: 21, start: MapPoint(x: 0.5, y: 1), end: MapPoint(x: 4, y: 1))])
+    }
+
+    func testMapWithoutAnnotations() throws {
+        let map = try RobotMap(response: ProtoMessage(bytes: hex(GoldenVectors.mapResponse)))
+        XCTAssertTrue(map.noGoZones.isEmpty)
+        XCTAssertTrue(map.virtualWalls.isEmpty)
+    }
+
+    func testCleaningHistory() throws {
+        // GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 robotEventList}}
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { status in
+                status.message(1) { node in                 // RobotEventNode
+                    node.varint(1, 1_760_000_000_000)       // eventTime (ms)
+                    node.varint(2, 4)                       // PRIMARY_TASK_TYPE_CLEAN
+                    node.message(3) { secondary in          // SecondaryCleanEvent
+                        secondary.message(2) { zone in      // EventZoneInfo
+                            zone.varint(1, 1); zone.varint(2, 3); zone.varint(4, 4)
+                        }
+                    }
+                    node.varint(5, 1)                       // TASK_RESULT_NORMAL_END
+                    node.varint(7, 1)                       // isPrimaryNode
+                    node.varint(8, 99)                      // nodeKey
+                }
+                status.message(1) { node in
+                    node.varint(1, 1_760_000_000)           // eventTime (s)
+                    node.varint(2, 5)                       // UNEXPECTED_PAUSE
+                    node.message(6) { e in e.varint(1, 0x0213_0020); e.varint(2, 2) }
+                }
+                status.message(1) { node in node.varint(1, 42); node.varint(2, 1) }
+            }
+        }
+        let history = try XCTUnwrap(CleaningHistory(response: response))
+        XCTAssertEqual(history.events.count, 3)
+
+        let clean = history.events[0]
+        XCTAssertEqual(clean.id, 99)
+        XCTAssertEqual(clean.date, Date(timeIntervalSince1970: 1_760_000_000))
+        XCTAssertEqual(clean.taskLabel, "Cleaning")
+        XCTAssertEqual(clean.resultLabel, "Completed")
+        XCTAssertTrue(clean.succeeded)
+        XCTAssertTrue(clean.isPrimary)
+        XCTAssertEqual(clean.zoneId, 3)
+        XCTAssertEqual(clean.cleanMode, 4)
+
+        let pause = history.events[1]
+        XCTAssertEqual(pause.id, 1, "no nodeKey: position in the list")
+        XCTAssertEqual(pause.date, Date(timeIntervalSince1970: 1_760_000_000))
+        XCTAssertEqual(pause.errorCode, 0x0213_0020)
+        XCTAssertNil(pause.resultLabel)
+        XCTAssertFalse(pause.isPrimary)
+
+        XCTAssertNil(history.events[2].date, "not an epoch time")
+        XCTAssertEqual(history.events[2].taskLabel, "Self-check")
+
+        XCTAssertNil(CleaningHistory(response: try message { $0.varint(1, 1) }), "a bare ack has no timeline")
+        XCTAssertTrue(CleaningHistory(timeLine: try message { _ in }).events.isEmpty)
+    }
+
+    func testSchedules() throws {
+        // GetCleanSchedules.Response {1 errorCode, 2 cleanSchedules}
+        let response = try message { w in
+            w.message(1) { _ in }
+            w.message(2) { s in                           // CleanSchedule
+                s.varint(1, 3)                            // taskId
+                s.message(2) { p in                       // CleanScheduleParam
+                    p.message(1) { c in c.string(1, "0 30 9 * * 1,3,5"); c.varint(2, 10); c.varint(3, 1) }
+                    p.varint(2, 7)                        // cleanPlanId
+                    p.varint(3, 4)                        // CLEAN_MODE_SWEEP_MOP_SYNC
+                    p.varint(4, 1)
+                    p.string(5, "Weekday mornings")
+                }
+            }
+            w.message(2) { s in
+                s.varint(1, 4)
+                s.message(2) { p in p.message(1) { c in c.string(1, "15 22 * * *") } }
+            }
+        }
+        let schedules = CleanSchedule.list(response: response)
+        XCTAssertEqual(schedules.count, 2)
+        XCTAssertEqual(schedules[0].id, 3)
+        XCTAssertEqual(schedules[0].name, "Weekday mornings")
+        XCTAssertTrue(schedules[0].enabled)
+        XCTAssertEqual(schedules[0].remindingTime, 10)
+        XCTAssertEqual(schedules[0].planId, 7)
+        XCTAssertEqual(schedules[0].cleanMode, 4)
+        XCTAssertTrue(schedules[0].isCustomPlan)
+        XCTAssertEqual(schedules[0].summary, "09:30, Mon Wed Fri")
+        XCTAssertFalse(schedules[1].enabled)
+        XCTAssertEqual(schedules[1].summary, "22:15, every day")
+        XCTAssertTrue(CleanSchedule.list(response: try message { $0.message(1) { _ in } }).isEmpty)
+    }
+
+    func testCronSummaryEdgeCases() throws {
+        func summary(_ cron: String) throws -> String? {
+            try XCTUnwrap(CleanSchedule.list(response: message { w in
+                w.message(2) { s in s.message(2) { p in p.message(1) { c in c.string(1, cron) } } }
+            }).first).summary
+        }
+        XCTAssertEqual(try summary("0 8 * * 1-3"), "08:00, Mon Tue Wed")
+        XCTAssertEqual(try summary("0 8 * * 0,7"), "08:00, Sun Sun")
+        XCTAssertNil(try summary("0 8 * * 5-1"), "reversed range")
+        XCTAssertNil(try summary("0 25 * * *"), "hour out of range")
+        XCTAssertNil(try summary("not a cron line"))
+    }
+
+    func testSetVoiceVolumeUsesSetConfigField1() {
+        // SetConfig.Request field 1 = volumePercentage; one setting per request.
+        XCTAssertEqual(Payloads.setVoiceVolume(42), [0x08, 42])
+        XCTAssertEqual(Payloads.setVoiceVolume(0), [0x08, 0x00], "0 must be sent: it's a oneof")
+        XCTAssertEqual(Payloads.setVoiceVolume(150), [0x08, 100])
+        XCTAssertEqual(Payloads.setVoiceVolume(-5), [0x08, 0x00])
+        XCTAssertFalse(Research.isSafeQuery(Topic.setConfig), "the lab must never send config/set")
+    }
+}

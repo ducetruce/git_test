@@ -26,9 +26,16 @@ Checked against the live robot:
 | Voice volume | `config/get` 2.1 `volumePercentage` | 0–100; seen 0 → 29 → 96 while moving the slider. Decoded by `RobotSettings`. |
 | Timezone | `config/get` 2.3 `region` | IANA name, UTC offset, country, city. |
 | Do-not-disturb | `config/get` 2.4 `disturbMode` | enabled / begin / end, seconds after midnight. Decoded by `RobotSettings`. |
-| No-go zones | `map/get_map` 2.9 `forbiddens` | Present on the owner's map; not yet decoded in the app. |
+| No-go zones | `map/get_map` 2.9 `forbiddens` | Decoded (`NoGoZone`) and drawn on the map. Polygon points accepted as float `Point` or int `Grid`; check one against the Narwal app. |
+| Virtual walls | `map/get_map` 2.50 `virtualWalls` | Decoded (`VirtualWall`) and drawn on the map. |
+| Cleaning history | `info/get_clean_time_line` 2 `timeLineStatus` | Decoded (`CleaningHistory`); Home → Cleaning history. Also broadcast on `status/time_line_status`. `eventTime` unit inferred (ms or s). |
+| Schedules | `schedule/clean_schedule/get` 2 `cleanSchedules` | Decoder only (`CleanSchedule`); the robot hasn't answered this topic. |
 
 Still open: `schedule/clean_schedule/get` gets no answer on the Z10 Ultra.
+
+First write, ready but untried: `NarwalConnection.setVoiceVolume(_:)` sends
+`config/set` with `SetConfig.Request` field 1 (`volumePercentage`). It is not
+wired to any button; see `docs/MAC_SESSION.md` for the bytes to try.
 
 ## Features that need decoding first
 

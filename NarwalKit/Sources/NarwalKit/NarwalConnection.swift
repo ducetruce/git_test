@@ -54,6 +54,8 @@ public enum NarwalEvent: Sendable {
     case identity(productKey: String, deviceId: String)
     case baseStatus(BaseStatus)
     case progress(WorkingProgress)
+    /// status/time_line_status: the robot's event list for recent tasks.
+    case history(CleaningHistory)
     case pose(LivePose)
     case broadcast(NarwalFrame)
     case log(String)
@@ -300,6 +302,8 @@ public actor NarwalConnection {
             continuation.yield(.baseStatus(status))
         case Topic.workingStatus:
             continuation.yield(.progress(WorkingProgress(message)))
+        case Topic.timelineStatus:
+            continuation.yield(.history(CleaningHistory(timeLine: message)))
         case Topic.displayMap:
             lastDisplayMap = Date()
             if let pose = LivePose(message) { continuation.yield(.pose(pose)) }
