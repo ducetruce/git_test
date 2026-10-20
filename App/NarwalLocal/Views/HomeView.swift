@@ -12,6 +12,8 @@ struct HomeView: View {
                     StatusHeader()
                 }
 
+                SilentRobotHint()
+
                 if store.autoConnectPaused {
                     Section {
                         Text("The app closed unexpectedly last time, so it didn't connect automatically. Check the address in Settings, then connect.")
@@ -246,6 +248,29 @@ private struct LiveTuning: View {
                 set: { level in Task { await store.run("Water") { try await $0.setMopHumidity(level) } } }
             )) {
                 ForEach(MopHumidity.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+        }
+    }
+}
+
+/// Shown when the robot accepts the connection but never answers: usually
+/// it's asleep, or it ignores us until it's been told its device ID.
+private struct SilentRobotHint: View {
+    @Environment(RobotStore.self) private var store
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            if store.connectionState == .connecting, store.deviceInfo == nil,
+               let since = store.waitingSince, context.date.timeIntervalSince(since) > 20 {
+                Section("The robot isn't answering yet") {
+                    Text("""
+                    It may be asleep, or it may need its device ID first. Try this once:
+                    1. Open the Narwal app and wait until it shows your robot's status.
+                    2. Switch straight back here (don't close the Narwal app).
+                    This app then reads the device ID from the robot and remembers it.
+                    """)
+                    .font(.callout)
+                }
             }
         }
     }

@@ -50,6 +50,8 @@ public enum ConnectionState: Equatable, Sendable {
 public enum NarwalEvent: Sendable {
     case connection(ConnectionState)
     case deviceInfo(DeviceInfo)
+    /// The robot's product key and device id, read from a broadcast topic.
+    case identity(productKey: String, deviceId: String)
     case baseStatus(BaseStatus)
     case progress(WorkingProgress)
     case pose(LivePose)
@@ -280,10 +282,13 @@ public actor NarwalConnection {
 
         lastBroadcast = Date()
         setState(.awake)
-        if let id = frame.topicDeviceId, let key = frame.topicProductKey {
+        if let id = frame.topicDeviceId, let key = frame.topicProductKey,
+           !identityFromBroadcast || id != deviceId || key != productKey {
+            log("Robot identity from broadcast: \(key) / \(id)")
             deviceId = id
             productKey = key
             identityFromBroadcast = true
+            continuation.yield(.identity(productKey: key, deviceId: id))
         }
         continuation.yield(.broadcast(frame))
 

@@ -11,8 +11,18 @@ final class RobotDiscovery {
     struct Found: Identifiable, Hashable {
         let name: String
         let host: String
+        /// The service's Bonjour TXT record, which may carry the device id.
+        var txt: [String: String] = [:]
         var id: String { host }
+
+        /// A 32-hex-character value in the TXT record: the robot's device id.
+        var deviceIdCandidate: String? {
+            txt.values.first { $0.count == 32 && $0.allSatisfy(\.isHexDigit) }?.lowercased()
+        }
     }
+
+    /// Called for each newly resolved robot.
+    @ObservationIgnored var onFound: ((Found) -> Void)?
 
     private(set) var found: [Found] = []
     private(set) var isSearching = false
@@ -23,7 +33,7 @@ final class RobotDiscovery {
     func start() {
         stop()
         isSearching = true
-        let browser = NWBrowser(for: .bonjour(type: NarwalDefaults.bonjourType, domain: nil), using: .tcp)
+        let browser = NWBrowser(for: .bonjourWithTXTRecord(type: NarwalDefaults.bonjourType, domain: nil), using: .tcp)
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             Task { @MainActor in self?.resolve(results) }
         }
@@ -42,6 +52,8 @@ final class RobotDiscovery {
     private func resolve(_ results: Set<NWBrowser.Result>) {
         for result in results {
             guard case .service(let name, _, _, _) = result.endpoint else { continue }
+            var txt: [String: String] = [:]
+            if case .bonjour(let record) = result.metadata { txt = record.dictionary }
             // Connecting to the service endpoint is the supported way to learn
             // its address; the connection is dropped as soon as it resolves.
             // IPv4 only: an IPv6 link-local address is unusable without its
@@ -58,7 +70,7 @@ final class RobotDiscovery {
                     // interface suffix ("%en0") that breaks URLs.
                     if case .ipv4(let ipv4) = host {
                         let address = ipv4.rawValue.map(String.init).joined(separator: ".")
-                        Task { @MainActor in self?.add(Found(name: name, host: address)) }
+                        Task { @MainActor in self?.add(Found(name: name, host: address, txt: txt)) }
                     }
                 }
                 connection.cancel()
@@ -72,5 +84,6 @@ final class RobotDiscovery {
         guard !found.contains(robot) else { return }
         found.append(robot)
         found.sort { $0.name < $1.name }
+        onFound?(robot)
     }
 }

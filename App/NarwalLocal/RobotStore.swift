@@ -36,6 +36,10 @@ final class RobotStore {
     let alerts = AlertMonitor()
 
     private var connection: NarwalConnection?
+    /// Reads the robot's Bonjour TXT record, which may carry its device id.
+    private var bonjourProbe: RobotDiscovery?
+    /// When the current connection attempt started waiting for its first data.
+    private(set) var waitingSince: Date?
     private var eventTask: Task<Void, Never>?
 
     /// The robot only answers its own model's key, and a Z10 Ultra hangs up
@@ -50,6 +54,14 @@ final class RobotStore {
         model = newModel
         UserDefaults.standard.set(newModel.rawValue, forKey: "robotModel")
         connect()
+    }
+
+    /// Saves a device id learned from the robot without reconnecting.
+    private func rememberDeviceId(_ id: String, source: String) {
+        guard !id.isEmpty, id != deviceIdOverride else { return }
+        deviceIdOverride = id
+        UserDefaults.standard.set(id, forKey: "robotDeviceId")
+        appendLog("Saved device ID from \(source)")
     }
 
     func setDeviceIdOverride(_ id: String) {
@@ -116,6 +128,7 @@ final class RobotStore {
         guard isConfigured else { return }
         autoConnectPaused = false
         disconnect()
+        startBonjourProbe()
         let connection = NarwalConnection(host: host, productKey: model.productKey, deviceId: deviceIdOverride)
         self.connection = connection
         eventTask = Task { [weak self] in
@@ -124,6 +137,23 @@ final class RobotStore {
             }
         }
         Task { await connection.start() }
+    }
+
+    private func startBonjourProbe() {
+        guard bonjourProbe == nil else { return }
+        let probe = RobotDiscovery()
+        probe.onFound = { [weak self] robot in
+            guard let self else { return }
+            let txt = robot.txt.isEmpty ? "none"
+                : robot.txt.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+            self.appendLog("Bonjour: \(robot.name) at \(robot.host), TXT: \(txt)")
+            if robot.host == self.host, self.deviceIdOverride.isEmpty, let id = robot.deviceIdCandidate {
+                self.rememberDeviceId(id, source: "Bonjour")
+                self.connect()
+            }
+        }
+        probe.start()
+        bonjourProbe = probe
     }
 
     func disconnect() {
@@ -176,12 +206,20 @@ final class RobotStore {
         switch event {
         case .connection(let state):
             connectionState = state
+            if state == .connecting {
+                waitingSince = Date()
+            } else if state != .disconnected {
+                waitingSince = nil
+            }
             appendLog("Connection: \(state)")
             if state == .awake || state == .connected {
                 Task { await refreshAll() }
             }
+        case .identity(_, let id):
+            rememberDeviceId(id, source: "the robot's broadcast")
         case .deviceInfo(let info):
             deviceInfo = info
+            rememberDeviceId(info.deviceId, source: "the robot")
             appendLog("Robot \(info.productKey) / fw \(info.firmware)")
         case .baseStatus(let status):
             applyStatus(status)
