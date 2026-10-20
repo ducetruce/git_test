@@ -166,9 +166,18 @@ class Robot:
 
 SLEEPY = False
 WAKE_DELAY = 2.0
+# Like a Z10 Ultra: a command addressed with another model's product key gets
+# the client dropped, and reconnection is refused for ~10 s afterwards.
+REFUSE_FOR = 10.0
+refuse_until = 0.0
 
 
 async def serve(ws) -> None:  # type: ignore[no-untyped-def]
+    global refuse_until
+    if time.time() < refuse_until:
+        print("refusing connection (recently dropped a client)", flush=True)
+        await ws.close()
+        return
     robot = Robot()
     awake_at = float("inf") if SLEEPY else 0.0
     print("app connected", flush=True)
@@ -198,10 +207,13 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
             payload = data[4 + data[3]:]
             short = "/".join(topic.split("/")[3:])
             print(f"<- {topic:50} {payload.hex()}", flush=True)
-            # Like the real robot: commands addressed to another model's
-            # product key are ignored (the device id may be empty).
+            # Like a Z10 Ultra: another model's product key gets the client
+            # dropped (the device id may be empty).
             if topic.split("/")[1:2] != [PRODUCT_KEY]:
-                continue
+                print("wrong product key: dropping client", flush=True)
+                refuse_until = time.time() + REFUSE_FOR
+                await ws.close()
+                return
             if time.time() < awake_at:
                 if short in ("common/notify_app_event", "common/active_robot_publish") and awake_at == float("inf"):
                     awake_at = time.time() + WAKE_DELAY

@@ -151,6 +151,8 @@ public actor NarwalConnection {
         var delay: TimeInterval = 1
         while !Task.isCancelled {
             setState(.connecting)
+            let attemptStarted = Date()
+            var gotData = false
             guard let url = URL(string: "ws://\(hostForURL):\(port)") else {
                 log("Invalid robot address \"\(host)\". Forget the robot and enter its IP address.")
                 setState(.disconnected)
@@ -174,10 +176,11 @@ public actor NarwalConnection {
             do {
                 while !Task.isCancelled {
                     let message = try await ws.receive()
-                    if state == .connecting {
-                        setState(.connected)
+                    if !gotData {
+                        gotData = true
                         log("First data from robot")
                     }
+                    if state == .connecting { setState(.connected) }
                     delay = 1
                     if case .data(let data) = message {
                         handle([UInt8](data))
@@ -200,7 +203,13 @@ public actor NarwalConnection {
             failAllWaiting()
             if Task.isCancelled { break }
             setState(.disconnected)
-            let wait = delay + Double.random(in: 0...1)
+            var wait = delay + Double.random(in: 0...1)
+            if !gotData, Date().timeIntervalSince(attemptStarted) < 20 {
+                // The robot refuses reconnection for ~10 s after dropping a
+                // client, so retrying sooner only extends the outage.
+                wait = max(wait, 12)
+                log("Robot dropped the connection without answering. Usual causes: the Narwal app is open on this phone (the robot allows one connection per device), or the wrong model is selected in Settings. Retrying in \(Int(wait)) s.")
+            }
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             delay = min(delay * 2, 60)
         }
@@ -231,51 +240,31 @@ public actor NarwalConnection {
 
     // MARK: Identity
 
-    private static let fallbackProductKeys = [
-        NarwalDefaults.z10UltraProductKey, "qV6BujoYLz", "QoEsI5qYXO", "QxMSPG6VSO",
-        "iSuVlI1If2", "mkbqaprvrb", "hEA7OEshlx", "fjhpiem4ba", "ulonq49mm1", "CNbforyZWI",
-    ]
-
-    /// Learns the device id (and product key) the robot expects in topics.
-    /// The robot answers only commands that carry its own product key, and a
-    /// docked robot ignores everything for a few seconds while it wakes. So
-    /// the expected key gets several tries first, and stays interleaved
-    /// between guesses at other models' keys.
+    /// Learns the device id the robot expects in topics. Only ever uses the
+    /// configured product key: the Z10 Ultra hangs up on clients that send
+    /// another model's key. A docked robot ignores everything while it wakes,
+    /// so keep asking, and re-send the wake-up now and then.
     private func identify() async {
-        let preferred = productKey
-        var order = Array(repeating: preferred, count: 4)
-        for key in Self.fallbackProductKeys where key != preferred {
-            order += [key, preferred]
-        }
-        var lastWoken = preferred
-        for key in order {
+        for attempt in 1...15 {
             if Task.isCancelled || socket == nil { return }
-            if !identityFromBroadcast {
-                productKey = key
-                if key != lastWoken {
-                    // Only a wake-up carrying the robot's own key counts.
-                    sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(1))
-                    lastWoken = key
-                }
-            }
             if await requestDeviceInfo() { return }
+            if attempt % 3 == 0 { await sendWakeBurst() }
         }
-        if !identityFromBroadcast { productKey = preferred }
-        log("Robot did not answer get_device_info")
+        log("No answer to get_device_info after 45 s. Is the right model selected in Settings?")
     }
 
     private func requestDeviceInfo() async -> Bool {
-        // A wrong product key is ignored outright: no grace for late answers.
+        // Ignored while the robot wakes: no grace for late answers.
         guard let response = try? await send(Topic.getDeviceInfo, timeout: 3, lateGrace: 0),
               let info = DeviceInfo(response: response.message) else { return false }
-        let wakeWentToOtherKey = !identityFromBroadcast
+        let resubscribe = !identityFromBroadcast
         if !info.productKey.isEmpty { productKey = info.productKey }
         deviceId = info.deviceId
         continuation.yield(.deviceInfo(info))
         log("Identified robot \(productKey) / \(deviceId), firmware \(info.firmware)")
-        // The connect-time wake burst may have carried a guessed product key,
-        // which the robot ignores; subscribe again under the real identity.
-        if wakeWentToOtherKey { await sendWakeBurst() }
+        // The connect-time wake burst may have arrived while the robot was
+        // still waking; subscribe again now that it answers.
+        if resubscribe { await sendWakeBurst() }
         return true
     }
 

@@ -29,8 +29,7 @@ final class FakeRobotTests: XCTestCase {
     }
 
     func testFullSession() async throws {
-        // Start from the wrong product key to exercise identification.
-        let connection = NarwalConnection(host: try host(), productKey: "QoEsI5qYXO")
+        let connection = NarwalConnection(host: try host())
         let recorder = Recorder()
         let consumer = Task {
             for await event in connection.events { await recorder.add(event) }
@@ -80,6 +79,13 @@ final class FakeRobotTests: XCTestCase {
         XCTAssertEqual(alerts.maintain, [4])
         XCTAssertEqual(alerts.replace, [3])
 
+        // The fake drops clients that use another model's key, as a Z10
+        // Ultra does: one connection attempt means it never happened.
+        let connects = await recorder.events.filter {
+            if case .connection(.connecting) = $0 { return true }
+            return false
+        }.count
+        XCTAssertEqual(connects, 1)
         await connection.stop()
     }
 

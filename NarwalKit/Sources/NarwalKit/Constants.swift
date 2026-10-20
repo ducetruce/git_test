@@ -24,6 +24,38 @@ public enum NarwalDefaults {
     public static let displayMapDropoutAfter: TimeInterval = 30
 }
 
+/// Models known to speak the local protocol, with the product key the robot
+/// expects in every topic. Sending another model's key gets a Z10 Ultra to
+/// hang up, so the app never guesses.
+public enum NarwalModel: String, CaseIterable, Identifiable, Sendable {
+    case freoZ10Ultra = "DrzDKQ0MU8"
+    case freoZ10Pro = "qV6BujoYLz"
+    case flow = "QoEsI5qYXO"
+    case flow2 = "QxMSPG6VSO"
+    case freoX10Pro = "CNbforyZWI"
+    case freoZUltra = "hEA7OEshlx"
+    case freo20 = "fjhpiem4ba"
+    case freo20Edge = "ulonq49mm1"
+    case jx = "CGjuB6dzq7"
+
+    public var id: String { rawValue }
+    public var productKey: String { rawValue }
+
+    public var name: String {
+        switch self {
+        case .freoZ10Ultra: return "Freo Z10 Ultra"
+        case .freoZ10Pro: return "Freo Z10 Pro / Turbo"
+        case .flow: return "Flow"
+        case .flow2: return "Flow 2"
+        case .freoX10Pro: return "Freo X10 Pro"
+        case .freoZUltra: return "Freo Z Ultra (CX7)"
+        case .freo20: return "Freo 20"
+        case .freo20Edge: return "Freo 20 Edge"
+        case .jx: return "JX"
+        }
+    }
+}
+
 public enum Topic {
     // Robot -> app broadcasts
     public static let workingStatus = "status/working_status"

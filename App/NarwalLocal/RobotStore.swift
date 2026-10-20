@@ -38,6 +38,28 @@ final class RobotStore {
     private var connection: NarwalConnection?
     private var eventTask: Task<Void, Never>?
 
+    /// The robot only answers its own model's key, and a Z10 Ultra hangs up
+    /// on any other, so this is chosen, never guessed.
+    private(set) var model = NarwalModel(rawValue: UserDefaults.standard.string(forKey: "robotModel") ?? "")
+        ?? .freoZ10Ultra
+    /// Optional: normally learned from the robot.
+    private(set) var deviceIdOverride = UserDefaults.standard.string(forKey: "robotDeviceId") ?? ""
+
+    func setModel(_ newModel: NarwalModel) {
+        guard newModel != model else { return }
+        model = newModel
+        UserDefaults.standard.set(newModel.rawValue, forKey: "robotModel")
+        connect()
+    }
+
+    func setDeviceIdOverride(_ id: String) {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != deviceIdOverride else { return }
+        deviceIdOverride = trimmed
+        UserDefaults.standard.set(trimmed, forKey: "robotDeviceId")
+        connect()
+    }
+
     func setHost(_ newHost: String) {
         host = NarwalConnection.normalizedHost(newHost)
         UserDefaults.standard.set(host, forKey: "robotHost")
@@ -94,7 +116,7 @@ final class RobotStore {
         guard isConfigured else { return }
         autoConnectPaused = false
         disconnect()
-        let connection = NarwalConnection(host: host)
+        let connection = NarwalConnection(host: host, productKey: model.productKey, deviceId: deviceIdOverride)
         self.connection = connection
         eventTask = Task { [weak self] in
             for await event in connection.events {

@@ -6,12 +6,21 @@ struct SettingsView: View {
     @State private var confirmForget = false
     @State private var testResult: String?
     @State private var testing = false
+    @State private var deviceIdText = ""
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Robot") {
+                Section {
                     LabeledContent("Address", value: store.host)
+                    Picker("Model", selection: Binding(get: { store.model }, set: { store.setModel($0) })) {
+                        ForEach(NarwalModel.allCases) { Text($0.name).tag($0) }
+                    }
+                    TextField("Device ID (optional)", text: $deviceIdText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onSubmit { store.setDeviceIdOverride(deviceIdText) }
+                        .onAppear { deviceIdText = store.deviceIdOverride }
                     if let info = store.deviceInfo {
                         LabeledContent("Model key", value: info.productKey)
                         LabeledContent("Firmware", value: info.firmware)
@@ -36,6 +45,10 @@ struct SettingsView: View {
                         Text("This is an IPv6 address, which often fails. Tap Forget this robot and pick it again to get its IPv4 address.")
                             .font(.footnote).foregroundStyle(.orange)
                     }
+                } header: {
+                    Text("Robot")
+                } footer: {
+                    Text("The model must match your robot: a Z10 Ultra disconnects apps that address it as another model. Leave Device ID empty unless asked; it's learned from the robot.")
                 }
 
                 Section {
