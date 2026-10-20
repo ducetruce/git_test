@@ -92,6 +92,7 @@ public actor NarwalConnection {
         let id: UInt64
         let topic: String
         let expires: Date
+        let shape: ResponseShape
     }
     private var expected: [Expected] = []
     private var waiting: [UInt64: CheckedContinuation<NarwalFrame, Error>] = [:]
@@ -242,7 +243,8 @@ public actor NarwalConnection {
     }
 
     private func requestDeviceInfo() async -> Bool {
-        guard let response = try? await send(Topic.getDeviceInfo, timeout: 3),
+        // A wrong product key is ignored outright: no grace for late answers.
+        guard let response = try? await send(Topic.getDeviceInfo, timeout: 3, lateGrace: 0),
               let info = DeviceInfo(response: response.message) else { return false }
         let wakeWentToOtherKey = !identityFromBroadcast
         if !info.productKey.isEmpty { productKey = info.productKey }
@@ -290,17 +292,24 @@ public actor NarwalConnection {
         }
     }
 
+    /// Hands a response to the oldest request it fits. Requests queued ahead
+    /// of that one were evidently ignored by the robot (it does that while
+    /// asleep, or for a wrong product key), so they're dropped instead of
+    /// swallowing later answers.
     private func routeResponse(_ frame: NarwalFrame) {
+        let message = (try? ProtoMessage(bytes: frame.payload)) ?? ProtoMessage(fields: [])
         let now = Date()
-        while !expected.isEmpty {
-            let next = expected.removeFirst()
-            if next.expires < now { continue }
-            if let waiter = waiting.removeValue(forKey: next.id) {
-                waiter.resume(returning: frame)
-            }
-            // Otherwise: a fire-and-forget ack or a late answer. Dropped.
-            return
+        expected.removeAll { $0.expires < now }
+        guard let index = expected.firstIndex(where: { $0.shape.accepts(message) }) else {
+            return  // a late answer to something already given up on
         }
+        let match = expected[index]
+        let ignored = expected[..<index]
+        expected.removeFirst(index + 1)
+        for request in ignored {
+            waiting.removeValue(forKey: request.id)?.resume(throwing: NarwalError.timeout(request.topic))
+        }
+        waiting.removeValue(forKey: match.id)?.resume(returning: frame)
     }
 
     private func failAllWaiting() {
@@ -337,15 +346,20 @@ public actor NarwalConnection {
         if !Topic.unacknowledged.contains(short) {
             nextId += 1
             expected.append(Expected(id: nextId, topic: short,
-                                     expires: Date().addingTimeInterval(NarwalDefaults.unawaitedAckWindow)))
+                                     expires: Date().addingTimeInterval(NarwalDefaults.unawaitedAckWindow),
+                                     shape: ResponseShape(topic: short, fireAndForget: true)))
         }
         enqueue(short, payload) { _ in }
     }
 
     /// Sends a command and waits for its response.
     @discardableResult
+    /// `lateGrace` is how long a timed-out request keeps its place so a late
+    /// answer is dropped rather than misrouted; use 0 for probes the robot
+    /// may ignore outright.
     public func send(_ short: String, _ payload: [UInt8] = [],
-                     timeout: TimeInterval = NarwalDefaults.commandTimeout) async throws -> CommandResponse {
+                     timeout: TimeInterval = NarwalDefaults.commandTimeout,
+                     lateGrace: TimeInterval = NarwalDefaults.lateResponseGrace) async throws -> CommandResponse {
         guard socket != nil else { throw NarwalError.notConnected }
         await acquireCommandSlot()
         defer { releaseCommandSlot() }
@@ -361,7 +375,8 @@ public actor NarwalConnection {
         let frame: NarwalFrame = try await withCheckedThrowingContinuation { cont in
             waiting[id] = cont
             expected.append(Expected(id: id, topic: short,
-                                     expires: Date().addingTimeInterval(timeout + NarwalDefaults.lateResponseGrace)))
+                                     expires: Date().addingTimeInterval(timeout + lateGrace),
+                                     shape: ResponseShape(topic: short, fireAndForget: false)))
             enqueue(short, payload) { error in
                 Task { await self.fail(id, error) }
             }
@@ -492,5 +507,55 @@ final class SocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Se
             line += " (handshake HTTP \(http.statusCode))"
         }
         continuation.yield(.log(line))
+    }
+}
+
+/// What a response to a given request must look like. Responses carry no
+/// topic, so this is the only way to tell a skipped request from a slow one.
+struct ResponseShape: Sendable {
+    enum Kind: Sendable {
+        case any
+        /// Only varint fields, e.g. {1: 1}.
+        case ack
+        /// Require their payload in field 2, or an error status.
+        case deviceInfo, map, baseStatus
+    }
+
+    let kind: Kind
+
+    init(topic: String, fireAndForget: Bool) {
+        switch topic {
+        case Topic.getDeviceInfo: kind = .deviceInfo
+        case Topic.getMap: kind = .map
+        case Topic.getBaseStatus: kind = .baseStatus
+        default: kind = fireAndForget ? .ack : .any
+        }
+    }
+
+    /// {1: code} and nothing but varints.
+    static func isStatusOnly(_ m: ProtoMessage) -> Bool {
+        m.has(1) && m.fields.allSatisfy { if case .varint = $0.value { return true } else { return false } }
+    }
+
+    /// A status-only reply that reports failure is a valid answer to any query.
+    static func isErrorStatus(_ m: ProtoMessage) -> Bool {
+        isStatusOnly(m) && m.int(1) != CommandResult.success.rawValue
+    }
+
+    func accepts(_ m: ProtoMessage) -> Bool {
+        switch kind {
+        case .any:
+            return true
+        case .ack:
+            return Self.isStatusOnly(m) || m.fields.isEmpty
+        case .deviceInfo:
+            return !(m.string(2)?.isEmpty ?? true) || Self.isErrorStatus(m)
+        case .map:
+            // Not a bare number in field 2: that's a status reply (#108).
+            return m.message(2) != nil || Self.isErrorStatus(m)
+        case .baseStatus:
+            // Field 2 has been captured as both a message and a bare number.
+            return m.has(2) || Self.isErrorStatus(m)
+        }
     }
 }

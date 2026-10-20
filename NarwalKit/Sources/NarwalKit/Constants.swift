@@ -11,7 +11,8 @@ public enum NarwalDefaults {
     /// A timed-out command keeps its place in the response order this much
     /// longer, so its late answer is dropped instead of misattributed.
     public static let lateResponseGrace: TimeInterval = 10
-    public static let unawaitedAckWindow: TimeInterval = 5
+    /// Acks arrive within ~50 ms on an awake robot.
+    public static let unawaitedAckWindow: TimeInterval = 1.5
     /// The robot closes the socket 60 s after the last command it received.
     public static let keepaliveInterval: TimeInterval = 15
     /// Broadcasts stop when the subscription expires, even on a live socket.

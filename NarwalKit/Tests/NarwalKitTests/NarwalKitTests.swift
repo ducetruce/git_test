@@ -207,3 +207,32 @@ final class SafetyTests: XCTestCase {
         XCTAssertTrue(Research.probeTopics.allSatisfy(Research.isSafeQuery))
     }
 }
+
+final class ResponseShapeTests: XCTestCase {
+    private func message(_ build: (inout ProtoWriter) -> Void) throws -> ProtoMessage {
+        var w = ProtoWriter()
+        build(&w)
+        return try ProtoMessage(bytes: w.bytes)
+    }
+
+    func testDeviceInfoIsNotTakenForAnAck() throws {
+        let info = try message { $0.string(1, "DrzDKQ0MU8"); $0.string(2, "abc"); $0.string(3, "v1") }
+        let ack = try message { $0.varint(1, 1) }
+        let burstAck = ResponseShape(topic: Topic.notifyAppEvent, fireAndForget: true)
+        let deviceInfo = ResponseShape(topic: Topic.getDeviceInfo, fireAndForget: false)
+        XCTAssertFalse(burstAck.accepts(info))
+        XCTAssertTrue(burstAck.accepts(ack))
+        XCTAssertTrue(deviceInfo.accepts(info))
+        XCTAssertFalse(deviceInfo.accepts(ack), "a success ack is not device info")
+        XCTAssertTrue(deviceInfo.accepts(try message { $0.varint(1, 4) }), "an error status answers anything")
+    }
+
+    func testMapRejectsStatusReply() throws {
+        let map = ResponseShape(topic: Topic.getMap, fireAndForget: false)
+        let status = ResponseShape(topic: Topic.getBaseStatus, fireAndForget: false)
+        let bareNumber = try message { $0.varint(2, 1_120_403_456) }  // captured in reference #108
+        XCTAssertFalse(map.accepts(bareNumber))
+        XCTAssertTrue(status.accepts(bareNumber))
+        XCTAssertTrue(map.accepts(try ProtoMessage(bytes: hex(GoldenVectors.mapResponse))))
+    }
+}
