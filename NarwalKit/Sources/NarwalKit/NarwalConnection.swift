@@ -214,8 +214,8 @@ public actor NarwalConnection {
     /// framework addresses carry one, and a "%" makes the URL invalid.
     public static func normalizedHost(_ raw: String) -> String {
         var host = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let percent = host.firstIndex(of: "%") { host = String(host[..<percent]) }
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        if let percent = host.firstIndex(of: "%") { host = String(host[..<percent]) }
         return host
     }
 
