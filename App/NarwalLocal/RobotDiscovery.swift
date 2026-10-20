@@ -44,13 +44,20 @@ final class RobotDiscovery {
             guard case .service(let name, _, _, _) = result.endpoint else { continue }
             // Connecting to the service endpoint is the supported way to learn
             // its address; the connection is dropped as soon as it resolves.
-            let connection = NWConnection(to: result.endpoint, using: .tcp)
+            // IPv4 only: an IPv6 link-local address is unusable without its
+            // interface suffix, and robots' IPv6 addresses change.
+            let parameters = NWParameters.tcp
+            if let ip = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
+                ip.version = .v4
+            }
+            let connection = NWConnection(to: result.endpoint, using: parameters)
             connection.stateUpdateHandler = { [weak self] state in
                 guard case .ready = state else { return }
                 if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
-                    var address = "\(host)"
-                    if let percent = address.firstIndex(of: "%") { address = String(address[..<percent]) }
-                    Task { @MainActor in self?.add(Found(name: name, host: address)) }
+                    if case .ipv4 = host {
+                        let address = "\(host)"
+                        Task { @MainActor in self?.add(Found(name: name, host: address)) }
+                    }
                 }
                 connection.cancel()
             }
@@ -61,9 +68,7 @@ final class RobotDiscovery {
 
     private func add(_ robot: Found) {
         guard !found.contains(robot) else { return }
-        // Prefer IPv4: the reference integration lost robots when discovery
-        // handed back an IPv6 address that later changed.
         found.append(robot)
-        found.sort { ($0.host.contains(":") ? 1 : 0, $0.name) < ($1.host.contains(":") ? 1 : 0, $1.name) }
+        found.sort { $0.name < $1.name }
     }
 }

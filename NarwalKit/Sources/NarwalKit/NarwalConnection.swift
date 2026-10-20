@@ -106,13 +106,17 @@ public actor NarwalConnection {
         self.port = port
         self.productKey = productKey
         self.deviceId = deviceId
-        let config = URLSessionConfiguration.ephemeral
-        config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = 10
-        self.session = URLSession(configuration: config)
         let (stream, continuation) = AsyncStream<NarwalEvent>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.events = stream
         self.continuation = continuation
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        // For WebSocket tasks this is an idle timeout: with a short value the
+        // socket drops whenever a sleeping robot stays quiet. Dead sockets are
+        // detected by the ping/pong check in the keepalive loop instead.
+        config.timeoutIntervalForRequest = 24 * 60 * 60
+        config.timeoutIntervalForResource = 7 * 24 * 60 * 60
+        self.session = URLSession(configuration: config, delegate: SocketDelegate(continuation), delegateQueue: nil)
     }
 
     // MARK: Lifecycle
@@ -131,6 +135,8 @@ public actor NarwalConnection {
         socket = nil
         failAllWaiting()
         setState(.disconnected)
+        // A session holds its delegate until invalidated.
+        session.invalidateAndCancel()
     }
 
     /// Call when the app returns to the foreground: re-wakes the robot and
@@ -145,6 +151,7 @@ public actor NarwalConnection {
         while !Task.isCancelled {
             setState(.connecting)
             let url = URL(string: "ws://\(hostForURL):\(port)")!
+            log("Connecting to \(url.absoluteString) as /\(productKey)/\(deviceId.isEmpty ? "<no id yet>" : deviceId)")
             let ws = session.webSocketTask(with: url)
             ws.maximumMessageSize = 16 * 1024 * 1024
             socket = ws
@@ -162,14 +169,23 @@ public actor NarwalConnection {
             do {
                 while !Task.isCancelled {
                     let message = try await ws.receive()
-                    if state == .connecting { setState(.connected) }
+                    if state == .connecting {
+                        setState(.connected)
+                        log("First data from robot")
+                    }
                     delay = 1
                     if case .data(let data) = message {
                         handle([UInt8](data))
                     }
                 }
             } catch {
-                log("Connection lost: \(error.localizedDescription)")
+                let ns = error as NSError
+                var detail = "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+                if ws.closeCode != .invalid {
+                    let reason = ws.closeReason.map { String(decoding: $0, as: UTF8.self) } ?? ""
+                    detail += "; robot closed with \(ws.closeCode.rawValue) \(reason)"
+                }
+                log("Connection lost after \(state == .connecting ? "no data" : "receiving data"): \(detail)")
             }
 
             keepaliveTask?.cancel()
@@ -440,5 +456,36 @@ public actor NarwalConnection {
                 await sendWakeBurst()
             }
         }
+    }
+}
+
+/// Reports WebSocket handshake and close details to the connection log; the
+/// async receive() API alone only says that something failed.
+final class SocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
+    private let continuation: AsyncStream<NarwalEvent>.Continuation
+
+    init(_ continuation: AsyncStream<NarwalEvent>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
+                    didOpenWithProtocol protocol: String?) {
+        continuation.yield(.log("WebSocket handshake OK"))
+    }
+
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
+                    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        let text = reason.map { String(decoding: $0, as: UTF8.self) } ?? ""
+        continuation.yield(.log("Robot closed the socket: code \(closeCode.rawValue) \(text)"))
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error else { return }
+        let ns = error as NSError
+        var line = "Socket ended: \(ns.domain) \(ns.code) \(ns.localizedDescription)"
+        if let http = task.response as? HTTPURLResponse {
+            line += " (handshake HTTP \(http.statusCode))"
+        }
+        continuation.yield(.log(line))
     }
 }

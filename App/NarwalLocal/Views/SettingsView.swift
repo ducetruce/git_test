@@ -4,6 +4,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RobotStore.self) private var store
     @State private var confirmForget = false
+    @State private var testResult: String?
+    @State private var testing = false
 
     var body: some View {
         NavigationStack {
@@ -19,6 +21,21 @@ struct SettingsView: View {
                         LabeledContent("Map", value: "#\(map.mapId), \(map.rooms.count) rooms")
                     }
                     Button("Reconnect") { store.connect() }
+                    Button(testing ? "Testing…" : "Test connection") {
+                        testing = true
+                        Task {
+                            testResult = await ConnectionTest.tcp(host: store.host)
+                            testing = false
+                        }
+                    }
+                    .disabled(testing)
+                    if let testResult {
+                        Text(testResult).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if store.host.contains(":") {
+                        Text("This is an IPv6 address, which often fails. Tap Forget this robot and pick it again to get its IPv4 address.")
+                            .font(.footnote).foregroundStyle(.orange)
+                    }
                 }
 
                 Section {

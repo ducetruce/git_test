@@ -121,6 +121,10 @@ private struct StatusHeader: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                if store.connectionState == .connecting || store.connectionState == .disconnected,
+                   let last = store.log.last {
+                    Text(last).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(3)
+                }
             }
             Spacer()
             if store.busyAction != nil { ProgressView() }
