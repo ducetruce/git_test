@@ -121,4 +121,31 @@ final class FakeRobotTests: XCTestCase {
         XCTAssertEqual(connects, 1)
         await connection.stop()
     }
+
+    /// A robot that ignores commands without its device id, but is
+    /// broadcasting (woken by the Narwal app): the id comes from a broadcast.
+    func testLearnsDeviceIdFromBroadcast() async throws {
+        guard let port = ProcessInfo.processInfo.environment["NARWAL_FAKE_NEEDS_ID_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("Set NARWAL_FAKE_NEEDS_ID_PORT with tools/fake_robot.py --needs-device-id running")
+        }
+        let connection = NarwalConnection(host: try host(), port: port)
+        let recorder = Recorder()
+        let consumer = Task {
+            for await event in connection.events { await recorder.add(event) }
+        }
+        defer { consumer.cancel() }
+        await connection.start()
+
+        try await waitFor(recorder, timeout: 10, "identity from a broadcast") {
+            if case .identity(_, let id) = $0 { return id == "fakerobot01" }
+            return false
+        }
+        try await waitFor(recorder, timeout: 15, "device info once addressed properly") {
+            if case .deviceInfo = $0 { return true }
+            return false
+        }
+        let map = try await connection.fetchMap()
+        XCTAssertEqual(map.rooms.count, 3)
+        await connection.stop()
+    }
 }

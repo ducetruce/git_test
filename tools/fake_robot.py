@@ -12,6 +12,9 @@ robot around during a clean.
 command until a wake-up (notify_app_event or active_robot_publish) and then
 takes a couple of seconds to come round.
 
+--needs-device-id ignores commands that don't carry the robot's device id,
+but broadcasts status anyway, as if the Narwal app had just woken it.
+
 Every frame received is printed, which makes it a handy debugging aid.
 """
 
@@ -165,6 +168,7 @@ class Robot:
 
 
 SLEEPY = False
+NEEDS_DEVICE_ID = False
 WAKE_DELAY = 2.0
 # Like a Z10 Ultra: a command addressed with another model's product key gets
 # the client dropped, and reconnection is refused for ~10 s afterwards.
@@ -179,6 +183,8 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
         await ws.close()
         return
     robot = Robot()
+    if NEEDS_DEVICE_ID:
+        robot.subscribed_until = float("inf")  # someone else subscribed it
     awake_at = float("inf") if SLEEPY else 0.0
     print("app connected", flush=True)
 
@@ -214,6 +220,8 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
                 refuse_until = time.time() + REFUSE_FOR
                 await ws.close()
                 return
+            if NEEDS_DEVICE_ID and topic.split("/")[2:3] != [DEVICE_ID]:
+                continue
             if time.time() < awake_at:
                 if short in ("common/notify_app_event", "common/active_robot_publish") and awake_at == float("inf"):
                     awake_at = time.time() + WAKE_DELAY
@@ -228,12 +236,14 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
 
 
 async def main() -> None:
-    global SLEEPY
+    global SLEEPY, NEEDS_DEVICE_ID
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=9002)
     parser.add_argument("--sleepy", action="store_true")
+    parser.add_argument("--needs-device-id", action="store_true")
     args = parser.parse_args()
     SLEEPY = args.sleepy
+    NEEDS_DEVICE_ID = args.needs_device_id
     async with websockets.serve(serve, "0.0.0.0", args.port, max_size=None):
         print(f"fake Narwal robot on ws://0.0.0.0:{args.port}{' (sleepy)' if SLEEPY else ''}", flush=True)
         await asyncio.Future()
