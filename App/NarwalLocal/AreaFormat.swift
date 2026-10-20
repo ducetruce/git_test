@@ -18,6 +18,7 @@ enum AreaFormat {
     }
 
     static func string(squareMeters: Double) -> String {
+        guard squareMeters.isFinite, squareMeters >= 0 else { return "–" }
         let chosen = Unit(rawValue: UserDefaults.standard.string(forKey: unitKey) ?? "") ?? .automatic
         let feet: Bool
         switch chosen {

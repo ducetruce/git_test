@@ -114,7 +114,7 @@ struct MapScreen: View {
                             Toggle("Carpets", isOn: $showCarpets)
                             Toggle("Furniture", isOn: $showFurniture)
                         }
-                        Button("Pixel types…") { showingPixelTypes = true }
+                        Button("Map key…") { showingPixelTypes = true }
                     } label: {
                         Image(systemName: "square.3.layers.3d")
                     }
@@ -215,6 +215,20 @@ struct PixelTypesSheet: View {
     @Binding var highlight: Int?
     @Environment(\.dismiss) private var dismiss
 
+    /// What each kind of map square means, as far as it's been worked out.
+    static func meaning(_ type: Int) -> String {
+        switch type {
+        case 0x20: return "Floor outside any room"
+        case 0x28: return "Obstacle"
+        default:
+            var parts: [String] = []
+            parts.append(type & Int(RobotMap.carpetFlag) != 0 ? "Carpet" : "Floor")
+            if type & 0x10 != 0 { parts.append("lighter area") }
+            if type & ~(0x10 | Int(RobotMap.carpetFlag)) != 0 { parts.append("unknown marking") }
+            return parts.joined(separator: ", ")
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List(map.pixelTypeCounts(), id: \.type) { entry in
@@ -222,9 +236,10 @@ struct PixelTypesSheet: View {
                     highlight = highlight == entry.type ? nil : entry.type
                 } label: {
                     HStack {
-                        Text(String(format: "0x%02X", entry.type)).monospaced()
-                        if entry.type & Int(RobotMap.carpetFlag) != 0 {
-                            Text("carpet").font(.caption).foregroundStyle(.secondary)
+                        VStack(alignment: .leading) {
+                            Text(Self.meaning(entry.type))
+                            Text(String(format: "Type 0x%02lX", entry.type))
+                                .font(.caption2.monospaced()).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Text("\(entry.count) cells").foregroundStyle(.secondary)
@@ -235,7 +250,7 @@ struct PixelTypesSheet: View {
                 }
                 .tint(.primary)
             }
-            .navigationTitle("Pixel types")
+            .navigationTitle("Map key")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button("Done") { highlight = nil; dismiss() }

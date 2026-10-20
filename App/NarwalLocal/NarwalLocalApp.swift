@@ -6,6 +6,10 @@ struct NarwalLocalApp: App {
     @State private var presets = PresetStore()
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        CrashReports.shared.start()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

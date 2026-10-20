@@ -24,6 +24,7 @@ struct SettingsView: View {
                     NavigationLink("Connection") { connection }
                     NavigationLink("Feature lab") { LabView() }
                     NavigationLink("Connection log") { LogView() }
+                    NavigationLink("Crash reports") { CrashReportsView() }
                 } header: {
                     Text("Diagnostics")
                 } footer: {
@@ -101,7 +102,10 @@ private struct RobotSettingsSections: View {
 
     var body: some View {
         let settings = store.robotSettings
-        let editable = allowWrites && settings != nil && store.busyAction == nil
+        // Controls stay in place while a write runs (only disabled): swapping
+        // a slider out mid-drag lost the next change.
+        let editable = allowWrites && settings != nil
+        let busy = store.busyAction != nil
 
         Section {
             if editable, let settings {
@@ -115,20 +119,22 @@ private struct RobotSettingsSections: View {
                             self.volume = nil
                         }
                     })
+                    .disabled(busy)
                 }
             } else {
                 LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
             }
-            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { row($0, settings, editable) }
+            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { row($0, settings, editable).disabled(busy) }
         } header: {
             Text(RobotSettingKey.Group.sound.rawValue)
         }
 
         QuietHoursSection(settings: settings, editable: editable)
+            .disabled(busy)
 
         ForEach(RobotSettingKey.Group.allCases.filter { $0 != .sound }, id: \.self) { group in
             Section {
-                ForEach(RobotSettingKey.all.filter { $0.group == group }) { row($0, settings, editable) }
+                ForEach(RobotSettingKey.all.filter { $0.group == group }) { row($0, settings, editable).disabled(busy) }
             } header: {
                 Text(group.rawValue)
             } footer: {
@@ -235,7 +241,27 @@ private struct QuietHoursSection: View {
 
     /// Seconds after midnight -> "22:00".
     private func clock(_ seconds: Int) -> String {
-        String(format: "%02d:%02d", seconds / 3600 % 24, seconds / 60 % 60)
+        String(format: "%02ld:%02ld", seconds / 3600 % 24, seconds / 60 % 60)
+    }
+}
+
+private struct CrashReportsView: View {
+    @State private var files = CrashReports.all()
+
+    var body: some View {
+        List {
+            if files.isEmpty {
+                Text("No crashes recorded. iOS hands a crash over the next time the app opens, so open it once after a crash.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(files, id: \.self) { file in
+                ShareLink(item: file) {
+                    Label(file.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
+                }
+            }
+        }
+        .navigationTitle("Crash reports")
+        .onAppear { files = CrashReports.all() }
     }
 }
 

@@ -10,6 +10,9 @@ struct FurnitureArt {
     var detail = Path()
 
     init(_ item: Furniture, in r: CGRect) {
+        // Canvas can be laid out at (near) zero size; ratios below would be
+        // NaN and Int(NaN) traps.
+        guard !r.isNull, !r.isInfinite, r.width >= 1, r.height >= 1 else { return }
         let w = r.width, h = r.height, m = min(w, h)
         switch item.type {
         case 1, 2, 3: bed(r, pillows: item.type == 2 ? 2 : 1, cot: item.type == 3)

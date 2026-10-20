@@ -20,6 +20,13 @@ enum MapPalette {
     }
 }
 
+extension Furniture {
+    /// Robot floats can be NaN or absurd; such a piece is skipped, not drawn.
+    var isDrawable: Bool {
+        [center.x, center.y, width, height, angle].allSatisfy(\.isFinite) && width > 0 && height > 0
+    }
+}
+
 extension RobotMap {
     /// RGBA image, flipped so north is up (map rows grow upward).
     /// Unselected rooms are dimmed while a selection exists. Carpet cells
@@ -50,8 +57,10 @@ extension RobotMap {
                     if isWall {
                         r = UInt8((Int(r) * 3 + 255) / 4); g = UInt8((Int(g) * 3 + 255) / 4); b = UInt8((Int(b) * 3 + 255) / 4)
                     }
-                    if carpets, isCarpet(x: x, y: y), (x + y) % 2 == 0 {
-                        r = UInt8(Int(r) * 7 / 10); g = UInt8(Int(g) * 7 / 10); b = UInt8(Int(b) * 7 / 10)
+                    if carpets, isCarpet(x: x, y: y) {
+                        // Carpet: darker overall with a fine checked weave.
+                        let k = (x + y) % 2 == 0 ? 55 : 80
+                        r = UInt8(Int(r) * k / 100); g = UInt8(Int(g) * k / 100); b = UInt8(Int(b) * k / 100)
                     }
                     c = (r, g, b, dim ? 90 : 255)
                 }
@@ -134,7 +143,7 @@ struct MapCanvas: View {
                 }
 
                 // Furniture: a floor-plan drawing of each piece, rotated into place.
-                ForEach(Array((showFurniture ? map.furniture : []).enumerated()), id: \.offset) { _, item in
+                ForEach(Array((showFurniture ? map.furniture.filter(\.isDrawable) : []).enumerated()), id: \.offset) { _, item in
                     FurnitureView(item: item, lineWidth: max(0.5, 1 / zoom))
                         .frame(width: max(CGFloat(item.width) * scale, 4), height: max(CGFloat(item.height) * scale, 4))
                         // Map angles are counter-clockwise with y up; screen y is down.
