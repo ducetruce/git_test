@@ -6,3 +6,4 @@ xcuserdata/
 App/NarwalLocal.xcodeproj/
 App/NarwalLocal/Info.plist
 __pycache__/
+tools/lab_snapshots/
