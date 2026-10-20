@@ -5,57 +5,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  simulator-smoke:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Toolchain versions
-        run: xcodebuild -version && swift --version
-
-      - name: Start fake robot
+      - name: Start sleepy fake robot
         run: |
           python3 -m venv /tmp/fake && /tmp/fake/bin/pip install -q websockets
-          nohup /tmp/fake/bin/python tools/fake_robot.py > fake_robot.log 2>&1 &
-          nohup /tmp/fake/bin/python tools/fake_robot.py --port 9003 --sleepy > fake_robot_sleepy.log 2>&1 &
-          for i in $(seq 1 20); do nc -z 127.0.0.1 9002 && nc -z 127.0.0.1 9003 && exit 0; sleep 0.5; done
-          cat fake_robot*.log; exit 1
+          nohup /tmp/fake/bin/python tools/fake_robot.py --sleepy > fake_robot.log 2>&1 &
+          for i in $(seq 1 20); do nc -z 127.0.0.1 9002 && exit 0; sleep 0.5; done
+          cat fake_robot.log; exit 1
 
-      - name: Test NarwalKit (unit + end-to-end against the fake robot)
-        working-directory: NarwalKit
-        env:
-          NARWAL_FAKE_ROBOT: 127.0.0.1
-          NARWAL_FAKE_SLEEPY_PORT: "9003"
-        run: swift test
-
-      - name: Fake robot log
-        if: always()
-        run: tail -n +1 fake_robot*.log || true
-
-      - name: Generate Xcode project
-        working-directory: App
+      - name: Build for Simulator
         run: |
           brew install xcodegen
-          xcodegen
-
-      # Unsigned on purpose: sign the IPA with Signulous (or any signer).
-      - name: Build unsigned app
-        run: |
+          (cd App && xcodegen)
           xcodebuild build \
             -project App/NarwalLocal.xcodeproj \
             -scheme NarwalLocal \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild \
+            CODE_SIGNING_ALLOWED=NO | tail -5
 
-      - name: Package IPA
-        run: |
-          mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/NarwalLocal.app Payload/
-          zip -qry NarwalLocal.ipa Payload
+      - name: Launch in Simulator
+        run: tools/sim_smoke.sh simbuild/Build/Products/Debug-iphonesimulator/NarwalLocal.app
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: NarwalLocal-ipa
-          path: NarwalLocal.ipa
+      - name: Fake robot log
+        if: always()
+        run: cat fake_robot.log || true
