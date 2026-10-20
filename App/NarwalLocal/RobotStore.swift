@@ -1,6 +1,7 @@
 import Foundation
 import NarwalKit
 import Observation
+import os
 
 /// App-wide robot state. Owns the connection and turns its events into
 /// UI state; every command goes through `run` so failures are shown, never
@@ -188,7 +189,12 @@ final class RobotStore {
         alerts.statusChanged(new, previousWasCleaning: wasCleaning, roomName: currentRoomName)
     }
 
+    private static let systemLog = Logger(subsystem: "local.narwal", category: "connection")
+
     private func appendLog(_ line: String) {
+        // Mirrored to the system log so Simulator smoke tests (and Console)
+        // can follow the connection.
+        Self.systemLog.log("\(line, privacy: .public)")
         let stamp = Date().formatted(date: .omitted, time: .standard)
         log.append("\(stamp)  \(line)")
         if log.count > 300 { log.removeFirst(log.count - 300) }

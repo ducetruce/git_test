@@ -59,3 +59,36 @@ jobs:
         with:
           name: NarwalLocal-ipa
           path: NarwalLocal.ipa
+
+  # Runs the real app in an iOS Simulator against the sleepy fake robot and
+  # fails if it crashes, printing its connection log and any crash report.
+  simulator-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start sleepy fake robot
+        run: |
+          python3 -m venv /tmp/fake && /tmp/fake/bin/pip install -q websockets
+          nohup /tmp/fake/bin/python tools/fake_robot.py --sleepy > fake_robot.log 2>&1 &
+          for i in $(seq 1 20); do nc -z 127.0.0.1 9002 && exit 0; sleep 0.5; done
+          cat fake_robot.log; exit 1
+
+      - name: Build for Simulator
+        run: |
+          brew install xcodegen
+          (cd App && xcodegen)
+          xcodebuild build \
+            -project App/NarwalLocal.xcodeproj \
+            -scheme NarwalLocal \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild \
+            CODE_SIGNING_ALLOWED=NO | tail -5
+
+      - name: Launch in Simulator
+        run: tools/sim_smoke.sh simbuild/Build/Products/Debug-iphonesimulator/NarwalLocal.app
+
+      - name: Fake robot log
+        if: always()
+        run: cat fake_robot.log || true
