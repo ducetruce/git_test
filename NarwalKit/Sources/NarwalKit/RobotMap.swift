@@ -131,6 +131,28 @@ public struct RobotMap: Equatable, Sendable {
         self.pixels = pixels
     }
 
+    /// Low-byte bit the robot sets on carpet cells (as the sytchi
+    /// NarwalIntegration found for lidar cells; assumed to hold for the
+    /// saved map too until checked against the Narwal app).
+    public static let carpetFlag: UInt32 = 0x04
+
+    /// Whether the cell is marked as carpet.
+    public func isCarpet(x: Int, y: Int) -> Bool {
+        guard x >= 0, y >= 0, x < width, y < height else { return false }
+        return pixels[y * width + x] & Self.carpetFlag != 0
+    }
+
+    /// Cells per low-byte pixel type, for working out what each type means.
+    public func pixelTypeCounts() -> [(type: Int, count: Int)] {
+        var counts: [Int: Int] = [:]
+        for raw in pixels where raw != 0 { counts[Int(raw & 0xFF), default: 0] += 1 }
+        return counts.sorted { $0.key < $1.key }.map { (type: $0.key, count: $0.value) }
+    }
+
+    public var carpetCellCount: Int {
+        pixels.reduce(0) { $0 + ($1 & Self.carpetFlag != 0 ? 1 : 0) }
+    }
+
     public func pixel(x: Int, y: Int) -> MapPixel {
         guard x >= 0, y >= 0, x < width, y < height else { return .unknown }
         return MapPixel(raw: pixels[y * width + x])

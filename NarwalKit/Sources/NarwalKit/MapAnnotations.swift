@@ -90,6 +90,8 @@ public struct Furniture: Equatable, Sendable, Identifiable {
     public var height: Double
     /// Degrees, counter-clockwise in map coordinates.
     public var angle: Double
+    /// Field 5: drawn mirrored (e.g. which end an L-shaped sofa's chaise is).
+    public var isMirrored = false
 
     public var name: String { Self.names[type] ?? "Object" }
 
@@ -118,6 +120,7 @@ extension Furniture {
         width = Double(box?.float(2) ?? 0)
         height = Double(box?.float(3) ?? 0)
         angle = Double(m.float(4) ?? 0)
+        isMirrored = m.int(5) == 1
     }
 }
 

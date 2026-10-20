@@ -12,7 +12,7 @@ enum MapPalette {
     static let floor: (UInt8, UInt8, UInt8) = (205, 210, 218)
     static let obstacle: (UInt8, UInt8, UInt8) = (90, 95, 105)
     static let carpet = Color(red: 0.45, green: 0.33, blue: 0.22)
-    static let furniture = Color(red: 0.55, green: 0.47, blue: 0.40)
+    static let furnitureLine = Color(red: 0.28, green: 0.30, blue: 0.36)
 
     static func color(forRoom id: Int) -> Color {
         let c = rooms[(id - 1 + rooms.count) % rooms.count]
@@ -20,40 +20,12 @@ enum MapPalette {
     }
 }
 
-extension Furniture {
-    /// SF Symbol for the furniture type (see `Furniture.names`).
-    var symbol: String {
-        switch type {
-        case 1, 2, 3: return "bed.double.fill"
-        case 4, 5, 6, 7, 9, 31: return "table.furniture.fill"
-        case 8: return "tv.fill"
-        case 10, 11, 12: return "cabinet.fill"
-        case 13, 16: return "chair.lounge.fill"
-        case 14, 15, 30: return "sofa.fill"
-        case 17, 18: return "chair.fill"
-        case 19, 75: return "cat.fill"
-        case 20, 21: return "pawprint.fill"
-        case 76: return "dog.fill"
-        case 22: return "washer.fill"
-        case 23: return "refrigerator.fill"
-        case 24: return "air.conditioner.horizontal.fill"
-        case 25: return "fan.fill"
-        case 26: return "leaf.fill"
-        case 27: return "rectangle.portrait"
-        case 28: return "toilet.fill"
-        case 29, 32: return "pianokeys"
-        case 33: return "sink.fill"
-        case 34: return "stove.fill"
-        case 78: return "scalemass.fill"
-        default: return "shippingbox.fill"
-        }
-    }
-}
-
 extension RobotMap {
     /// RGBA image, flipped so north is up (map rows grow upward).
-    /// Unselected rooms are dimmed while a selection exists.
-    func image(selected: Set<Int> = []) -> CGImage? {
+    /// Unselected rooms are dimmed while a selection exists. Carpet cells
+    /// get the Narwal app's fine checked texture; `highlight` paints one
+    /// low-byte pixel type magenta (Map > Layers > Pixel types).
+    func image(selected: Set<Int> = [], carpets: Bool = true, highlight: Int? = nil) -> CGImage? {
         guard width > 0, height > 0 else { return nil }
         var rgba = [UInt8](repeating: 0, count: width * height * 4)
         for y in 0..<height {
@@ -74,12 +46,17 @@ extension RobotMap {
                     if case .wall = pixel(x: x, y: y) { isWall = true } else { isWall = false }
                     let dim = !selected.isEmpty && !selected.contains(room)
                     var r = base.0, g = base.1, b = base.2
-                    // Flagged pixels get a fine dotted texture, like the
-                    // Narwal app's, rather than reading as solid walls.
-                    if isWall, (x + y) % 2 == 0 {
-                        r = UInt8(Int(r) * 4 / 5); g = UInt8(Int(g) * 4 / 5); b = UInt8(Int(b) * 4 / 5)
+                    // 0x10 cells are a lighter shade in the Narwal app.
+                    if isWall {
+                        r = UInt8((Int(r) * 3 + 255) / 4); g = UInt8((Int(g) * 3 + 255) / 4); b = UInt8((Int(b) * 3 + 255) / 4)
+                    }
+                    if carpets, isCarpet(x: x, y: y), (x + y) % 2 == 0 {
+                        r = UInt8(Int(r) * 7 / 10); g = UInt8(Int(g) * 7 / 10); b = UInt8(Int(b) * 7 / 10)
                     }
                     c = (r, g, b, dim ? 90 : 255)
+                }
+                if let highlight, Int(pixels[y * width + x] & 0xFF) == highlight, c.3 > 0 {
+                    c = (255, 0, 200, 255)
                 }
                 rgba[o] = c.0
                 rgba[o + 1] = c.1
@@ -114,6 +91,8 @@ struct MapCanvas: View {
     var zoom: CGFloat = 1
     var showFurniture = true
     var showCarpets = true
+    /// Low-byte pixel type to paint magenta, for diagnosis.
+    var highlightPixelType: Int?
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -154,26 +133,13 @@ struct MapCanvas: View {
                     polygonPath(points).stroke(MapPalette.carpet, lineWidth: max(0.75, 1.5 / zoom))
                 }
 
-                // Furniture: the object's shape and icon, rotated to match.
+                // Furniture: a floor-plan drawing of each piece, rotated into place.
                 ForEach(Array((showFurniture ? map.furniture : []).enumerated()), id: \.offset) { _, item in
-                    let center = toScreen(map.gridPoint(for: item.center))
-                    let w = max(CGFloat(item.width) * scale, 4)
-                    let h = max(CGFloat(item.height) * scale, 4)
-                    let shape = item.isRound ? AnyShape(Ellipse()) : AnyShape(RoundedRectangle(cornerRadius: min(w, h) * 0.2))
-                    ZStack {
-                        shape.fill(MapPalette.furniture.opacity(0.85))
-                        shape.stroke(Color.white.opacity(0.9), lineWidth: max(0.5, 1 / zoom))
-                        Image(systemName: item.symbol)
-                            .resizable()
-                            .scaledToFit()
-                            .foregroundStyle(.white)
-                            .padding(min(w, h) * 0.18)
-                    }
-                    .frame(width: w, height: h)
-                    // Map angles are counter-clockwise with y up; screen y is down.
-                    .rotationEffect(.degrees(-item.angle))
-                    .position(center)
-                    .accessibilityLabel(item.name)
+                    FurnitureView(item: item, lineWidth: max(0.5, 1 / zoom))
+                        .frame(width: max(CGFloat(item.width) * scale, 4), height: max(CGFloat(item.height) * scale, 4))
+                        // Map angles are counter-clockwise with y up; screen y is down.
+                        .rotationEffect(.degrees(-item.angle))
+                        .position(toScreen(map.gridPoint(for: item.center)))
                 }
 
                 // Doorways: a short dark bar across the opening.
@@ -304,8 +270,9 @@ struct MapCanvas: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected)) {
-            image = map.image(selected: Set(selected))
+        .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected,
+                            carpets: showCarpets, highlight: highlightPixelType)) {
+            image = map.image(selected: Set(selected), carpets: showCarpets, highlight: highlightPixelType)
             centroids = map.roomCentroids()
         }
     }
@@ -338,5 +305,7 @@ struct MapCanvas: View {
         let mapId: Int
         let pixels: Int
         let selected: [Int]
+        let carpets: Bool
+        let highlight: Int?
     }
 }

@@ -12,6 +12,8 @@ struct MapScreen: View {
     @State private var showingSetup = false
     @AppStorage("mapShowFurniture") private var showFurniture = true
     @AppStorage("mapShowCarpets") private var showCarpets = true
+    @State private var showingPixelTypes = false
+    @State private var highlightPixelType: Int?
     // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
     @State private var zoom: CGFloat = 1
     @State private var zoomAtGestureStart: CGFloat = 1
@@ -43,7 +45,8 @@ struct MapScreen: View {
                         onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil,
                         zoom: zoom,
                         showFurniture: showFurniture,
-                        showCarpets: showCarpets
+                        showCarpets: showCarpets,
+                        highlightPixelType: highlightPixelType
                     )
                     .padding()
                     .scaleEffect(zoom)
@@ -105,10 +108,13 @@ struct MapScreen: View {
                     Menu {
                         // The counts say whether the robot sent any, which
                         // tells an empty layer apart from a drawing bug.
-                        Section(store.map.map { "Robot map: \($0.carpets.count) carpets, \($0.furniture.count) furniture" } ?? "Layers") {
+                        Section(store.map.map {
+                            "Robot map: \($0.carpetCellCount) carpet cells, \($0.carpets.count) carpet shapes, \($0.furniture.count) furniture"
+                        } ?? "Layers") {
                             Toggle("Carpets", isOn: $showCarpets)
                             Toggle("Furniture", isOn: $showFurniture)
                         }
+                        Button("Pixel types…") { showingPixelTypes = true }
                     } label: {
                         Image(systemName: "square.3.layers.3d")
                     }
@@ -117,6 +123,13 @@ struct MapScreen: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await store.reloadMap() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(store.busyAction != nil)
+                }
+            }
+            .sheet(isPresented: $showingPixelTypes) {
+                if let map = store.map {
+                    PixelTypesSheet(map: map, highlight: $highlightPixelType)
+                        .presentationDetents([.medium])
+                        .presentationBackgroundInteraction(.enabled)
                 }
             }
             .sheet(isPresented: $showingSetup) {
@@ -192,6 +205,42 @@ struct MapScreen: View {
         }
         .padding()
         .background(.bar)
+    }
+}
+
+/// Lists the map's pixel types; tapping one paints it magenta on the map,
+/// to match types against what the Narwal app shows (carpets, etc.).
+struct PixelTypesSheet: View {
+    let map: RobotMap
+    @Binding var highlight: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(map.pixelTypeCounts(), id: \.type) { entry in
+                Button {
+                    highlight = highlight == entry.type ? nil : entry.type
+                } label: {
+                    HStack {
+                        Text(String(format: "0x%02X", entry.type)).monospaced()
+                        if entry.type & Int(RobotMap.carpetFlag) != 0 {
+                            Text("carpet").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("\(entry.count) cells").foregroundStyle(.secondary)
+                        if highlight == entry.type {
+                            Image(systemName: "checkmark").foregroundStyle(Color.pink)
+                        }
+                    }
+                }
+                .tint(.primary)
+            }
+            .navigationTitle("Pixel types")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                Button("Done") { highlight = nil; dismiss() }
+            }
+        }
     }
 }
 

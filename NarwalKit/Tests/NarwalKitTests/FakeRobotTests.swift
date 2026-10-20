@@ -60,6 +60,7 @@ final class FakeRobotTests: XCTestCase {
         XCTAssertEqual(map.virtualWalls.count, 1)
         XCTAssertEqual(map.furniture.map(\.name), ["Sofa"])
         XCTAssertEqual(map.carpets.first?.polygon.count, 4)
+        XCTAssertEqual(map.carpetCellCount, 80)
         XCTAssertEqual(map.doorways.first?.roomIds, [1, 2])
 
         let history = try await connection.cleaningHistory()

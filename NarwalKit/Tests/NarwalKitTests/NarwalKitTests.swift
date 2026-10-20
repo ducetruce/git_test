@@ -421,6 +421,16 @@ final class SchemaDecoderTests: XCTestCase {
                        [MapPoint(x: 10, y: 10), MapPoint(x: 5, y: 5), MapPoint(x: 30, y: 10)])
     }
 
+    func testCarpetPixelsAndTypeCounts() {
+        // Row 0: plain floor, carpet floor, flagged (0x10) carpet, obstacle 0x28.
+        let map = RobotMap(mapId: 1, width: 4, height: 1, resolution: 60, rooms: [],
+                           pixels: [0x100, 0x104, 0x114, 0x28])
+        XCTAssertEqual((0..<4).map { map.isCarpet(x: $0, y: 0) }, [false, true, true, false])
+        XCTAssertEqual(map.carpetCellCount, 2)
+        XCTAssertEqual(map.pixelTypeCounts().map(\.type), [0x00, 0x04, 0x14, 0x28])
+        XCTAssertEqual(map.pixel(x: 1, y: 0), .floor(room: 1))
+    }
+
     func testMapWithoutAnnotations() throws {
         let map = try RobotMap(response: ProtoMessage(bytes: hex(GoldenVectors.mapResponse)))
         XCTAssertTrue(map.noGoZones.isEmpty)

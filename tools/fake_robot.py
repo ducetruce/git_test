@@ -83,7 +83,8 @@ def map_payload() -> bytes:
             for rid, _, _, x0, x1 in ROOMS:
                 if x0 <= x < x1:
                     wall = x in (x0, x1 - 1) and not (15 <= y <= 22)
-                    pixels.append(rid << 8 | (0x10 if wall else 0))
+                    rug = 0x04 if 25 <= x < 35 and 26 <= y < 34 else 0  # a carpet patch
+                    pixels.append(rid << 8 | (0x10 if wall else 0) | rug)
                     break
     grid = zlib.compress(f_bytes(1, b"".join(varint(p) for p in pixels)))
     rooms = b"".join(
