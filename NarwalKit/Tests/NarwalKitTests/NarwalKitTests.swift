@@ -518,8 +518,14 @@ final class StationStateTests: XCTestCase {
         XCTAssertEqual(station.problems, [])
         XCTAssertEqual(station.readings.last, .init(part: "Station dust bag", state: "Not installed", alert: nil))
 
+        // "Suggest replace" is informational: the Narwal app shows it as a
+        // countdown, not a warning (seen on a Z10 Ultra, 12 days left).
         station.stationBag = 3
-        XCTAssertEqual(station.problems, ["Station dust bag should be replaced"])
+        XCTAssertEqual(station.problems, [])
+        XCTAssertEqual(station.readings.last?.state, "Replace soon")
+        XCTAssertEqual(station.readings.last?.needsCare, true, "still highlighted on the Station tab")
+        station.stationBag = 4
+        XCTAssertEqual(station.problems, ["Station dust bag fault"])
         station = StationState(cleanWaterTank: 2, sewageTank: 2, dustBox: 4, dustBag: 0, stationBag: 1)
         XCTAssertEqual(station.problems, ["Clean water tank is empty", "Dirty water tank is full or not in place",
                                           "Dust box needs cleaning"])

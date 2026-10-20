@@ -30,7 +30,7 @@ struct DockView: View {
                     ForEach(station?.readings ?? [], id: \.part) { reading in
                         LabeledContent(reading.part) {
                             Text(reading.state)
-                                .foregroundStyle(reading.alert != nil ? Color.orange : reading.state == "Unknown" ? Color.secondary : Color.green)
+                                .foregroundStyle(reading.needsCare ? Color.orange : reading.state == "Unknown" ? Color.secondary : Color.green)
                         }
                     }
                     if let health = station?.dustBagHealth, health.isFinite {

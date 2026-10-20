@@ -55,6 +55,8 @@ jobs:
         run: |
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/NarwalLocal.app Payload/
+          # The app icon must have been compiled into the bundle.
+          ls Payload/NarwalLocal.app | grep -i appicon || { echo "::error::no app icon in the bundle"; exit 1; }
           zip -qry NarwalLocal.ipa Payload
 
       - uses: actions/upload-artifact@v4

@@ -65,6 +65,9 @@ public struct StationState: Equatable, Sendable {
         public let state: String
         /// Alert text when this state needs the owner, else nil.
         public let alert: String?
+
+        /// Worth highlighting even without an alert (e.g. "Replace soon").
+        public var needsCare: Bool { alert != nil || state.hasPrefix("Replace") }
     }
 
     /// One reading per field the robot sent, in display order.
@@ -91,20 +94,22 @@ public struct StationState: Equatable, Sendable {
                 3: ("Fault", "Dust box fault"), 4: ("Needs cleaning", "Dust box needs cleaning"),
             ]))
         }
-        // field 21, DustBagState. "Not installed" isn't alerted: setups
-        // without a bag report it permanently.
+        // field 21, DustBagState. Neither "not installed" (setups without a
+        // bag report it permanently) nor "suggest replace" is alerted: on a
+        // Z10 Ultra the Narwal app shows the latter as a calm countdown
+        // ("replacement countdown: 12 days"), not a warning.
         if let v = dustBag {
             out.append(Self.reading("Dust bag", v, [
                 1: ("OK", nil), 2: ("Not installed", nil),
-                3: ("Replace soon", "Dust bag should be replaced"), 4: ("Fault", "Dust bag fault"),
+                3: ("Replace soon", nil), 4: ("Fault", "Dust bag fault"),
             ]))
         }
         // field 39, StationBagStatus: 1 installed, 2 uninstalled,
-        // 3 suggest replace, 4 abnormal. Same rule for "not installed".
+        // 3 suggest replace, 4 abnormal. Same rules as the dust bag.
         if let v = stationBag {
             out.append(Self.reading("Station dust bag", v, [
                 1: ("Installed", nil), 2: ("Not installed", nil),
-                3: ("Replace soon", "Station dust bag should be replaced" + healthNote), 4: ("Fault", "Station dust bag fault"),
+                3: ("Replace soon" + healthNote, nil), 4: ("Fault", "Station dust bag fault"),
             ]))
         }
         return out
