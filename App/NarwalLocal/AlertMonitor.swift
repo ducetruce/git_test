@@ -19,6 +19,8 @@ final class AlertMonitor {
         let id: String
         let title: String
         let detail: String
+        /// Fault code for support, shown small.
+        var code: String?
     }
 
     private(set) var active: [Alert] = []
@@ -40,8 +42,11 @@ final class AlertMonitor {
     func statusChanged(_ status: BaseStatus, previousWasCleaning: Bool, roomName: String?) {
         let docked = status.isDocked ?? status.workingStatus.isOnDock
         var current: [Alert] = dockErrors.filter(status.errors, docked: docked).map {
+            // Known faults get advice; unknown ones the robot's English cause.
+            // Its Chinese debug text never reaches the screen.
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
-                  detail: $0.detail.isEmpty ? "Code \($0.code)" : "Code \($0.code): \($0.detail)")
+                  detail: RobotErrorText.advice(for: $0.code) ?? RobotErrorText.reason(fromDetail: $0.detail) ?? "",
+                  code: RobotErrorText.hexCode($0.code))
         }
         // Keyed by part, not text: the text can include a changing health %.
         current += status.station.readings.compactMap { reading in
@@ -80,9 +85,9 @@ final class AlertMonitor {
         let fresh = current.subtracting(notified)
         if !fresh.isEmpty {
             let names = alerts.maintain.filter { fresh.contains("maintain-\($0)") }
-                .map { ConsumableAlerts.maintainNames[$0] ?? "Part \($0)" }
+                .map { ConsumableAlerts.maintainNames[$0] ?? "Another part" }
                 + alerts.replace.filter { fresh.contains("replace-\($0)") }
-                .map { ConsumableAlerts.replaceNames[$0] ?? "Part \($0)" }
+                .map { ConsumableAlerts.replaceNames[$0] ?? "Another part" }
             notify("Maintenance due", names.joined(separator: ", "))
         }
         notified = notified.filter { !($0.hasPrefix("maintain-") || $0.hasPrefix("replace-")) || current.contains($0) }

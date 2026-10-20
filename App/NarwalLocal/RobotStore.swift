@@ -117,7 +117,7 @@ final class RobotStore {
         case .charged: return "Docked"
         case .docked, .dockedV2: return status.battery == 100 ? "Docked" : "Charging"
         case .standby: return status.isDocked == true ? "Docked" : "Idle"
-        case .unknown: return "Unknown state (\(status.rawWorkingStatus.map(String.init) ?? "-"))"
+        case .unknown: return "Status unknown"
         }
     }
 

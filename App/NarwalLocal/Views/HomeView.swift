@@ -4,6 +4,14 @@ import SwiftUI
 struct HomeView: View {
     @Environment(RobotStore.self) private var store
     @Environment(PresetStore.self) private var presets
+    @State private var now = Date()
+
+    /// The robot accepted the connection but has said nothing for 20 s.
+    private var showSilentHint: Bool {
+        guard store.connectionState == .connecting, store.deviceInfo == nil,
+              let since = store.waitingSince else { return false }
+        return now.timeIntervalSince(since) > 20
+    }
 
     var body: some View {
         NavigationStack {
@@ -12,7 +20,9 @@ struct HomeView: View {
                     StatusHeader()
                 }
 
-                SilentRobotHint()
+                if showSilentHint {
+                    SilentRobotHint()
+                }
 
                 if store.autoConnectPaused {
                     Section {
@@ -30,7 +40,10 @@ struct HomeView: View {
                                 VStack(alignment: .leading) {
                                     Text(alert.title)
                                     if !alert.detail.isEmpty {
-                                        Text(alert.detail).font(.caption).foregroundStyle(.secondary)
+                                        Text(alert.detail).font(.callout).foregroundStyle(.secondary)
+                                    }
+                                    if let code = alert.code {
+                                        Text("Error \(code)").font(.caption2.monospaced()).foregroundStyle(.tertiary)
                                     }
                                 }
                             } icon: {
@@ -49,7 +62,7 @@ struct HomeView: View {
                             LabeledContent("Current room", value: room)
                         }
                         if let area = progress.areaSquareMeters {
-                            LabeledContent("Area", value: String(format: "%.1f m²", area))
+                            LabeledContent("Area", value: AreaFormat.string(squareMeters: area))
                         }
                         if let elapsed = progress.elapsedSeconds {
                             LabeledContent("Elapsed", value: Duration.seconds(elapsed).formatted(.units(allowed: [.hours, .minutes])))
@@ -94,6 +107,12 @@ struct HomeView: View {
             }
             .navigationTitle(store.deviceInfo == nil ? "Narwal" : "Freo Z10 Ultra")
             .refreshable { await store.refreshAll() }
+            .task {
+                while !Task.isCancelled {
+                    now = Date()
+                    try? await Task.sleep(for: .seconds(5))
+                }
+            }
         }
     }
 
@@ -264,22 +283,15 @@ private struct LiveTuning: View {
 /// Shown when the robot accepts the connection but never answers: usually
 /// it's asleep, or it ignores us until it's been told its device ID.
 private struct SilentRobotHint: View {
-    @Environment(RobotStore.self) private var store
-
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { context in
-            if store.connectionState == .connecting, store.deviceInfo == nil,
-               let since = store.waitingSince, context.date.timeIntervalSince(since) > 20 {
-                Section("The robot isn't answering yet") {
-                    Text("""
-                    It may be asleep, or it may need its device ID first. Try this once:
-                    1. Open the Narwal app and wait until it shows your robot's status.
-                    2. Switch straight back here (don't close the Narwal app).
-                    This app then reads the device ID from the robot and remembers it.
-                    """)
-                    .font(.callout)
-                }
-            }
+        Section("The robot isn't answering yet") {
+            Text("""
+            It may be asleep, or it may need its device ID first. Try this once:
+            1. Open the Narwal app and wait until it shows your robot's status.
+            2. Switch straight back here (don't close the Narwal app).
+            This app then reads the device ID from the robot and remembers it.
+            """)
+            .font(.callout)
         }
     }
 }

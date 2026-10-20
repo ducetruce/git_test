@@ -194,7 +194,16 @@ final class ResearchTests: XCTestCase {
 
     func testErrorText() {
         XCTAssertEqual(RobotErrorText.message(for: 0x01010013), "Base station overflowed")
-        XCTAssertEqual(RobotErrorText.message(for: 255), "Fault 255 (0xFF)")
+        XCTAssertEqual(RobotErrorText.message(for: 255), "Robot fault")
+        XCTAssertEqual(RobotErrorText.hexCode(0x02020031), "0x02020031")
+        XCTAssertEqual(RobotErrorText.hexCode(255), "0x000000FF")
+        XCTAssertEqual(RobotErrorText.advice(for: 0x02020031)?.hasPrefix("Turn the robot over"), true)
+        XCTAssertNil(RobotErrorText.advice(for: 255))
+        // As sent by a Z10 Ultra.
+        let detail = "错误码:0x02020031\n等级:Error 级别\n域:机器人-嵌入式系统\n节点:主控板 hal node\n原因:robot roll brush is over current when sweeping\n是否会触发自动召回基站:否"
+        XCTAssertEqual(RobotErrorText.reason(fromDetail: detail), "Robot roll brush is over current when sweeping")
+        XCTAssertNil(RobotErrorText.reason(fromDetail: "原因:滚刷电流过大"))
+        XCTAssertNil(RobotErrorText.reason(fromDetail: ""))
     }
 }
 

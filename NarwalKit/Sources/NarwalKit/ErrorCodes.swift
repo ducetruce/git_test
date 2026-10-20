@@ -60,6 +60,47 @@ public enum RobotErrorText {
     ]
 
     public static func message(for code: Int) -> String {
-        messages[code] ?? "Fault \(code) (0x\(String(code, radix: 16, uppercase: true)))"
+        messages[code] ?? "Robot fault"
+    }
+
+    /// "0x02020031", the form Narwal support uses.
+    public static func hexCode(_ code: Int) -> String {
+        let digits = String(code, radix: 16, uppercase: true)
+        return "0x" + String(repeating: "0", count: max(0, 8 - digits.count)) + digits
+    }
+
+    /// What to do about a fault, from the kind of part it names.
+    public static func advice(for code: Int) -> String? {
+        guard let text = messages[code]?.lowercased() else { return nil }
+        let rules: [(keys: [String], advice: String)] = [
+            (["roller brush", "side brush"], "Turn the robot over and clear hair or debris from the brush, then resume."),
+            (["dirty water"], "Empty the dirty water tank and seat it firmly."),
+            (["clean water"], "Fill the clean water tank and seat it firmly."),
+            (["dust bin", "dust bag"], "Empty the dust bin and check it clicks into place."),
+            (["tray"], "Reseat the cleaning tray in the station."),
+            (["overflowed"], "Empty the dirty water tank and wipe out the station's tray."),
+            (["base station", "dock"], "Check nothing blocks the station and it has power, then send the robot back to the dock."),
+            (["trapped"], "Move the robot to open floor, then resume."),
+            (["lifted"], "Put the robot back on the floor."),
+            (["no-go"], "Move the robot out of the no-go zone, then resume."),
+            (["wheel"], "Check the wheels for hair or debris. Restart the robot if it keeps happening."),
+            (["cooling"], "Wait a few minutes, then try again."),
+            (["sensor", "lidar", "bumper", "imu"], "Wipe the sensors and LiDAR cover with a dry cloth. Restart the robot if it keeps happening."),
+            (["mop"], "Check the mops are attached and the station has water."),
+            (["repositioning"], "Move the robot near the dock or a familiar spot, then resume."),
+        ]
+        return rules.first { rule in rule.keys.contains { text.contains($0) } }?.advice
+    }
+
+    /// The robot's own note is mostly Chinese debug text; keep only its
+    /// English cause line ("原因:robot roll brush is over current…").
+    public static func reason(fromDetail detail: String) -> String? {
+        for line in detail.split(whereSeparator: \.isNewline) {
+            guard let marker = line.range(of: "原因:") ?? line.range(of: "原因：") else { continue }
+            let text = line[marker.upperBound...].trimmingCharacters(in: .whitespaces)
+            guard !text.isEmpty, text.unicodeScalars.allSatisfy(\.isASCII) else { return nil }
+            return text.prefix(1).uppercased() + text.dropFirst()
+        }
+        return nil
     }
 }

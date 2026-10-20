@@ -125,7 +125,7 @@ public struct StationState: Equatable, Sendable {
 
     private static func reading(_ part: String, _ value: Int, _ table: [Int: (String, String?)]) -> Reading {
         guard let entry = table[value] else {
-            return Reading(part: part, state: value == 0 ? "Unknown" : "State \(value)", alert: nil)
+            return Reading(part: part, state: "Unknown", alert: nil)
         }
         return Reading(part: part, state: entry.0, alert: entry.1)
     }

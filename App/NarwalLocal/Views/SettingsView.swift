@@ -7,11 +7,18 @@ struct SettingsView: View {
     @State private var testResult: String?
     @State private var testing = false
     @State private var deviceIdText = ""
+    @AppStorage(AreaFormat.unitKey) private var areaUnit = AreaFormat.Unit.automatic
 
     var body: some View {
         NavigationStack {
             List {
                 RobotSettingsSections()
+
+                Section("This app") {
+                    Picker("Area units", selection: $areaUnit) {
+                        ForEach(AreaFormat.Unit.allCases) { Text($0.label).tag($0) }
+                    }
+                }
 
                 Section {
                     NavigationLink("Connection") { connection }
