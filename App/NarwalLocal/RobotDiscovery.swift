@@ -54,8 +54,10 @@ final class RobotDiscovery {
             connection.stateUpdateHandler = { [weak self] state in
                 guard case .ready = state else { return }
                 if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
-                    if case .ipv4 = host {
-                        let address = "\(host)"
+                    // From the raw bytes: the host's description carries an
+                    // interface suffix ("%en0") that breaks URLs.
+                    if case .ipv4(let ipv4) = host {
+                        let address = ipv4.rawValue.map(String.init).joined(separator: ".")
                         Task { @MainActor in self?.add(Found(name: name, host: address)) }
                     }
                 }

@@ -12,6 +12,15 @@ struct HomeView: View {
                     StatusHeader()
                 }
 
+                if store.autoConnectPaused {
+                    Section {
+                        Text("The app closed unexpectedly last time, so it didn't connect automatically. Check the address in Settings, then connect.")
+                            .font(.callout)
+                        Button("Connect now") { store.resumeAutoConnect() }
+                        Button("Pick the robot again", role: .destructive) { store.forgetRobot() }
+                    }
+                }
+
                 if !store.alerts.active.isEmpty {
                     Section("Needs attention") {
                         ForEach(store.alerts.active) { alert in

@@ -103,7 +103,7 @@ public actor NarwalConnection {
 
     public init(host: String, port: Int = NarwalDefaults.port,
                 productKey: String = NarwalDefaults.z10UltraProductKey, deviceId: String = "") {
-        self.host = host
+        self.host = Self.normalizedHost(host)
         self.port = port
         self.productKey = productKey
         self.deviceId = deviceId
@@ -151,7 +151,11 @@ public actor NarwalConnection {
         var delay: TimeInterval = 1
         while !Task.isCancelled {
             setState(.connecting)
-            let url = URL(string: "ws://\(hostForURL):\(port)")!
+            guard let url = URL(string: "ws://\(hostForURL):\(port)") else {
+                log("Invalid robot address \"\(host)\". Forget the robot and enter its IP address.")
+                setState(.disconnected)
+                return
+            }
             log("Connecting to \(url.absoluteString) as /\(productKey)/\(deviceId.isEmpty ? "<no id yet>" : deviceId)")
             let ws = session.webSocketTask(with: url)
             ws.maximumMessageSize = 16 * 1024 * 1024
@@ -204,6 +208,15 @@ public actor NarwalConnection {
 
     private var hostForURL: String {
         host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+    }
+
+    /// Trims whitespace and any interface scope ("192.168.1.5%en0"): Network
+    /// framework addresses carry one, and a "%" makes the URL invalid.
+    public static func normalizedHost(_ raw: String) -> String {
+        var host = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let percent = host.firstIndex(of: "%") { host = String(host[..<percent]) }
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        return host
     }
 
     private func setState(_ new: ConnectionState) {

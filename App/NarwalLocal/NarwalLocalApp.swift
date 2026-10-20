@@ -13,10 +13,15 @@ struct NarwalLocalApp: App {
                 .environment(presets)
                 .onAppear {
                     store.alerts.requestPermission()
-                    store.connect()
+                    if LaunchGuard.begin() {
+                        store.pauseAutoConnect()
+                    } else {
+                        store.connect()
+                    }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { store.appBecameActive() }
+                    if phase == .background { LaunchGuard.markStable() }
                 }
         }
     }

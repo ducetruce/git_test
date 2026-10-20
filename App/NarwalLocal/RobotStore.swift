@@ -11,7 +11,8 @@ final class RobotStore {
     // Connection
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var deviceInfo: DeviceInfo?
-    private(set) var host = UserDefaults.standard.string(forKey: "robotHost") ?? ""
+    // Normalized on load too: an earlier build could save "a.b.c.d%en0".
+    private(set) var host = NarwalConnection.normalizedHost(UserDefaults.standard.string(forKey: "robotHost") ?? "")
 
     // Live state
     private(set) var status: BaseStatus?
@@ -37,11 +38,23 @@ final class RobotStore {
     private var eventTask: Task<Void, Never>?
 
     func setHost(_ newHost: String) {
-        host = newHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        host = NarwalConnection.normalizedHost(newHost)
         UserDefaults.standard.set(host, forKey: "robotHost")
     }
 
     var isConfigured: Bool { !host.isEmpty }
+
+    /// Set after a crash during the previous launch: wait for the user.
+    private(set) var autoConnectPaused = false
+
+    func pauseAutoConnect() {
+        autoConnectPaused = true
+        appendLog("The app closed unexpectedly last time; not connecting automatically.")
+    }
+
+    func resumeAutoConnect() {
+        connect()
+    }
 
     var workingStatus: WorkingStatus { status?.workingStatus ?? .unknown }
     var isCleaning: Bool { workingStatus.isActiveCleaning }
@@ -78,6 +91,7 @@ final class RobotStore {
 
     func connect() {
         guard isConfigured else { return }
+        autoConnectPaused = false
         disconnect()
         let connection = NarwalConnection(host: host)
         self.connection = connection
@@ -109,10 +123,9 @@ final class RobotStore {
 
     /// Foreground: re-wake immediately instead of waiting for the keepalive.
     func appBecameActive() {
-        guard let connection else {
-            connect()
-            return
-        }
+        // Only refreshes: the initial connect happens at launch, behind the
+        // crash-loop guard.
+        guard !autoConnectPaused, let connection else { return }
         Task {
             await connection.refresh()
             await refreshAll()

@@ -236,3 +236,21 @@ final class ResponseShapeTests: XCTestCase {
         XCTAssertTrue(map.accepts(try ProtoMessage(bytes: hex(GoldenVectors.mapResponse))))
     }
 }
+
+final class HostTests: XCTestCase {
+    func testInterfaceScopeIsStripped() {
+        // Network framework hands back addresses like this; the "%" made the
+        // WebSocket URL invalid and crashed the app at launch.
+        XCTAssertEqual(NarwalConnection.normalizedHost("192.168.1.50%en0"), "192.168.1.50")
+        XCTAssertEqual(NarwalConnection.normalizedHost(" 10.0.0.7 \n"), "10.0.0.7")
+        XCTAssertEqual(NarwalConnection.normalizedHost("[fe80::1%en0]"), "fe80::1")
+        XCTAssertEqual(NarwalConnection.normalizedHost("robot.local"), "robot.local")
+    }
+
+    func testBadAddressDoesNotCrash() async {
+        let connection = NarwalConnection(host: "bad host name with spaces")
+        await connection.start()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        await connection.stop()
+    }
+}
