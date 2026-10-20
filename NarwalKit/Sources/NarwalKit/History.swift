@@ -41,17 +41,17 @@ public struct CleaningEvent: Equatable, Sendable, Identifiable {
     /// CleanMode of that zone (2 vacuum, 3 mop, 4 both, 5 vacuum then mop).
     public var cleanMode: Int?
 
-    /// eventTime read as epoch milliseconds or seconds, if either gives a
-    /// date between 2015 and tomorrow; nil otherwise. A Z10 Ultra sent values
-    /// that fit neither (they read as the year 5,828,963), so the unit is
-    /// still unknown and the app shows the raw value instead.
+    /// eventTime is nanoseconds since 1970: a Z10 Ultra sent
+    /// 1_792_473_254_734_706_034 for a clean on 2026-10-20 05:14:14 UTC.
+    /// Coarser units are accepted too, as long as the date is plausible
+    /// (2015 to tomorrow).
     public var date: Date? { Self.plausibleDate(rawTime) }
 
     static func plausibleDate(_ raw: Int, now: Date = Date()) -> Date? {
         let earliest = Date(timeIntervalSince1970: 1_420_070_400)   // 2015-01-01
         let latest = now.addingTimeInterval(86_400)
-        for seconds in [Double(raw) / 1000, Double(raw)] {
-            let date = Date(timeIntervalSince1970: seconds)
+        for divisor in [1e9, 1e6, 1e3, 1] {
+            let date = Date(timeIntervalSince1970: Double(raw) / divisor)
             if date >= earliest, date <= latest { return date }
         }
         return nil

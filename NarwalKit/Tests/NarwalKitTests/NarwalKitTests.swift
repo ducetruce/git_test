@@ -441,8 +441,11 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertFalse(pause.isPrimary)
 
         XCTAssertNil(history.events[2].date, "not an epoch time")
-        // What a Z10 Ultra sent: shown as the year 5,828,963 when read as ms.
-        XCTAssertNil(CleaningEvent.plausibleDate(183_882_200_000_000_000))
+        // A Z10 Ultra sends nanoseconds since 1970.
+        let now = Date(timeIntervalSince1970: 1_792_480_000)
+        XCTAssertEqual(CleaningEvent.plausibleDate(1_792_473_254_734_706_034, now: now)?.timeIntervalSince1970 ?? 0,
+                       1_792_473_254.734706, accuracy: 0.001)
+        XCTAssertEqual(CleaningEvent.plausibleDate(1_792_473_254, now: now)?.timeIntervalSince1970, 1_792_473_254)
         XCTAssertNil(CleaningEvent.plausibleDate(4_102_444_800), "2100 is in the future")
         XCTAssertEqual(history.events[2].taskLabel, "Self-check")
 

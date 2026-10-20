@@ -104,13 +104,19 @@ public struct StationState: Equatable, Sendable {
         if let v = stationBag {
             out.append(Self.reading("Station dust bag", v, [
                 1: ("Installed", nil), 2: ("Not installed", nil),
-                3: ("Replace soon", "Station dust bag should be replaced"), 4: ("Fault", "Station dust bag fault"),
+                3: ("Replace soon", "Station dust bag should be replaced" + healthNote), 4: ("Fault", "Station dust bag fault"),
             ]))
         }
         return out
     }
 
     public var problems: [String] { readings.compactMap(\.alert) }
+
+    /// " (health 12%)" when the robot reports stationBagHealthScore (35).
+    private var healthNote: String {
+        guard let health = dustBagHealth, health.isFinite else { return "" }
+        return " (health \(Int(health.rounded()))%)"
+    }
 
     private static func reading(_ part: String, _ value: Int, _ table: [Int: (String, String?)]) -> Reading {
         guard let entry = table[value] else {

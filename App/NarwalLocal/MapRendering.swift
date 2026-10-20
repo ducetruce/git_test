@@ -80,6 +80,10 @@ struct MapCanvas: View {
     /// The surrounding zoom level: labels and icons are counter-scaled so
     /// they stay readable instead of growing with the map.
     var zoom: CGFloat = 1
+    /// Furniture outlines don't line up with the Narwal app yet, so they're
+    /// opt-in (Map > Layers).
+    var showFurniture = false
+    var showCarpets = true
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -111,14 +115,14 @@ struct MapCanvas: View {
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
                 // Carpets: light fill with a thin outline.
-                ForEach(Array(map.carpets.enumerated()), id: \.offset) { _, carpet in
+                ForEach(Array((showCarpets ? map.carpets : []).enumerated()), id: \.offset) { _, carpet in
                     let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
                     polygonPath(points).fill(Color.white.opacity(0.28))
                     polygonPath(points).stroke(Color.white.opacity(0.7), lineWidth: 1)
                 }
 
                 // Furniture: rotated outlines.
-                ForEach(Array(map.furniture.enumerated()), id: \.offset) { _, item in
+                ForEach(Array((showFurniture ? map.furniture : []).enumerated()), id: \.offset) { _, item in
                     let points = furnitureCorners(item).map { toScreen(map.gridPoint(for: $0)) }
                     polygonPath(points).fill(Color.white.opacity(0.35))
                     polygonPath(points).stroke(Color.gray, lineWidth: 1)

@@ -10,6 +10,8 @@ struct MapScreen: View {
     @State private var selected: [Int] = []
     @State private var zones: [Payloads.Zone] = []
     @State private var showingSetup = false
+    @AppStorage("mapShowFurniture") private var showFurniture = false
+    @AppStorage("mapShowCarpets") private var showCarpets = true
     // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
     @State private var zoom: CGFloat = 1
     @State private var zoomAtGestureStart: CGFloat = 1
@@ -39,7 +41,9 @@ struct MapScreen: View {
                             }
                         },
                         onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil,
-                        zoom: zoom
+                        zoom: zoom,
+                        showFurniture: showFurniture,
+                        showCarpets: showCarpets
                     )
                     .padding()
                     .scaleEffect(zoom)
@@ -97,6 +101,15 @@ struct MapScreen: View {
             }
             .navigationTitle("Map")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Toggle("Carpets", isOn: $showCarpets)
+                        Toggle("Furniture (experimental)", isOn: $showFurniture)
+                    } label: {
+                        Image(systemName: "square.3.layers.3d")
+                    }
+                    .accessibilityLabel("Map layers")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await store.reloadMap() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(store.busyAction != nil)

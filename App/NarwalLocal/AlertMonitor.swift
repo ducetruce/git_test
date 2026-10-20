@@ -39,7 +39,10 @@ final class AlertMonitor {
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
                   detail: $0.detail.isEmpty ? "Code \($0.code)" : "Code \($0.code): \($0.detail)")
         }
-        current += status.station.problems.map { Alert(id: "station-\($0)", title: $0, detail: "") }
+        // Keyed by part, not text: the text can include a changing health %.
+        current += status.station.readings.compactMap { reading in
+            reading.alert.map { Alert(id: "station-\(reading.part)-\(reading.state)", title: $0, detail: "") }
+        }
 
         let ids = Set(current.map(\.id))
         let confirmed = ids.intersection(pending)
