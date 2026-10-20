@@ -116,6 +116,37 @@ def map_payload() -> bytes:
     return f_varint(1, 1) + f_bytes(2, body)
 
 
+def set_to_get(field: int) -> int | None:
+    """SetConfig.Request field -> GetConfig.Response.Config field."""
+    if 1 <= field <= 3 or 15 <= field <= 44:
+        return field
+    if 5 <= field <= 14:
+        return field - 1
+    if field in (45, 46):
+        return field + 1
+    if 47 <= field <= 54:
+        return field + 2
+    return None
+
+
+def parse_single_field(data: bytes) -> tuple[int, int, int | bytes]:
+    def read_varint(pos: int) -> tuple[int, int]:
+        value = shift = 0
+        while True:
+            b = data[pos]
+            pos += 1
+            value |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                return value, pos
+    tag, pos = read_varint(0)
+    if tag & 7 == 2:
+        length, pos = read_varint(pos)
+        return tag >> 3, 2, data[pos:pos + length]
+    value, _ = read_varint(pos)
+    return tag >> 3, tag & 7, value
+
+
 class Robot:
     def __init__(self) -> None:
         self.status = 14  # charged on dock
@@ -126,6 +157,9 @@ class Robot:
         self.rooms: list[int] = []
         self.started = 0.0
         self.x, self.y, self.heading = 5.0, 5.0, 0.0
+        # config/get varint fields by get number, plus DisturbMode bytes.
+        self.config: dict[int, int] = {1: 29, 6: 1}
+        self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
 
     @property
     def cleaning(self) -> bool:
@@ -157,6 +191,18 @@ class Robot:
                      + f_varint(5, 1) + f_varint(7, 1) + f_varint(8, 1))
             dust = f_varint(1, start + 1_800_000) + f_varint(2, 9) + f_varint(7, 1) + f_varint(8, 2)
             return response(f_varint(1, 1) + f_bytes(2, f_bytes(1, clean) + f_bytes(1, dust)))
+        elif short == "config/get":
+            body = b"".join(f_varint(k, v) for k, v in sorted(self.config.items()) if v)
+            return response(f_varint(1, 1) + f_bytes(2, body + f_bytes(4, self.disturb)))
+        elif short == "config/set":
+            # SetConfig.Request: one field, numbered differently from config/get.
+            field, wire, value = parse_single_field(payload)
+            if field == 5 and wire == 2:
+                self.disturb = value
+            elif wire == 0 and (get := set_to_get(field)) is not None:
+                self.config[get] = value
+            else:
+                return response(f_varint(1, 2))
         elif short == "consumable/get_consumable_info":
             return response(f_bytes(1, f_bytes(1, bytes([4])) + f_bytes(2, bytes([3]))))
         elif short == "clean/start_clean":

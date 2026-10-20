@@ -213,6 +213,44 @@ final class RobotStore {
         if let fetched = try? await connection.settings() { robotSettings = fetched }
     }
 
+    /// Off until the owner turns on Settings > Change robot settings:
+    /// writes haven't been tried on a real robot yet.
+    var allowsWrites: Bool { UserDefaults.standard.bool(forKey: "allowRobotWrites") }
+
+    func changeSetting(_ key: RobotSettingKey, to value: Int) async {
+        await write(key.title, expecting: { $0.value(key) == value }) { try await $0.setSetting(key, value) }
+    }
+
+    func changeVolume(to percent: Int) async {
+        await write("Voice volume", expecting: { $0.voiceVolume == percent }) { try await $0.setVoiceVolume(percent) }
+    }
+
+    func changeDoNotDisturb(to dnd: RobotSettings.DoNotDisturb) async {
+        await write("Quiet hours", expecting: { $0.doNotDisturb == dnd }) { try await $0.setDoNotDisturb(dnd) }
+    }
+
+    func confirmWarning() async {
+        await run("Mark resolved") { try await $0.confirmWarning() }
+        await refreshAll()
+    }
+
+    /// Sends a write, then checks the read-back: the robot can accept a
+    /// request without applying it.
+    private func write(_ title: String, expecting applied: @escaping (RobotSettings) -> Bool,
+                       _ send: @escaping (NarwalConnection) async throws -> RobotSettings?) async {
+        guard allowsWrites else { return }
+        await run(title) { connection in
+            let after = try await send(connection)
+            await MainActor.run {
+                if let after { self.robotSettings = after }
+                if after.map(applied) != true {
+                    self.lastError = "The robot didn't apply the change to \(title)."
+                    self.appendLog("\(title): not applied after write")
+                }
+            }
+        }
+    }
+
     func reloadMap() async {
         await run("Loading map") { connection in
             let fetched = try await connection.fetchMap()

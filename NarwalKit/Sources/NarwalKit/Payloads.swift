@@ -55,10 +55,27 @@ public enum Payloads {
 
     /// config/set with SetConfig.Request field 1, `volumePercentage`.
     /// SetConfig.Request is a oneof (one setting per request), so 0 is still
-    /// sent explicitly. Its field numbers are NOT config/get's: from
-    /// disturbMode on they are one higher (docs/schema/README.md).
+    /// sent explicitly.
     public static func setVoiceVolume(_ percent: Int) -> [UInt8] {
         singleVarint(min(max(percent, 0), 100), field: 1)
+    }
+
+    /// config/set for one catalog setting. Off (0) is sent explicitly, or
+    /// the request would be empty.
+    public static func setConfig(_ key: RobotSettingKey, _ value: Int) -> [UInt8] {
+        singleVarint(value, field: key.setField)
+    }
+
+    /// config/set field 5, DisturbMode {1 enabled, 2 beginTime, 3 endTime},
+    /// times in seconds after midnight.
+    public static func setDoNotDisturb(_ dnd: RobotSettings.DoNotDisturb) -> [UInt8] {
+        var w = ProtoWriter()
+        w.message(5) { m in
+            m.varint(1, dnd.enabled ? 1 : 0)
+            m.varint(2, dnd.begin)
+            m.varint(3, dnd.end)
+        }
+        return w.bytes
     }
 
     /// The app's taskType for a job whose rooms use different work modes.

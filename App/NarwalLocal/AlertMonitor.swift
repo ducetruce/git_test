@@ -21,6 +21,9 @@ final class AlertMonitor {
         let detail: String
         /// Fault code for support, shown small.
         var code: String?
+        /// A "can't find the base station" fault, which the robot sits on
+        /// until it's acknowledged.
+        var isDockSearch = false
     }
 
     private(set) var active: [Alert] = []
@@ -46,7 +49,8 @@ final class AlertMonitor {
             // Its Chinese debug text never reaches the screen.
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
                   detail: RobotErrorText.advice(for: $0.code) ?? RobotErrorText.reason(fromDetail: $0.detail) ?? "",
-                  code: RobotErrorText.hexCode($0.code))
+                  code: RobotErrorText.hexCode($0.code),
+                  isDockSearch: DockErrorFilter.dockSearchCodes.contains($0.code))
         }
         // Keyed by part, not text: the text can include a changing health %.
         current += status.station.readings.compactMap { reading in

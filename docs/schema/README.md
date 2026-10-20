@@ -17,11 +17,12 @@ field name in the same file.
 
 ## Things the schema settles
 
-- **`config/set` is not `config/get`.** `SetConfig.Request` skips field 4,
-  so from `disturbMode` on each set field is one higher than in
-  `GetConfig.Response.Config` (get 4 = set 5, get 5 = set 6, …), and it lacks
-  `buildDateTime` and `wakeVoiceWords`, so the gap grows further down. It is
-  a `oneof`: one setting per request.
+- **`config/set` is not `config/get`.** The two number their fields
+  differently: get 1–3 = set 1–3; get 4–13 = set 5–14 (set skips 4); get 14
+  has no setter; get 15–44 = set 15–44; get 46–47 = set 45–46; get 49–56 =
+  set 47–54. `RobotSettingKey.all` (NarwalKit) holds the mapping for every
+  setting the app shows, and a unit test restates the rule. `SetConfig` is a
+  `oneof`: one setting per request.
 - Voice volume is `volumePercentage` (0–100). The app also has a `config/volume/set`
   topic; its payload message wasn't found.
 - Do-not-disturb is `DisturbMode {1 enabled, 2 beginTime, 3 endTime}`, times in

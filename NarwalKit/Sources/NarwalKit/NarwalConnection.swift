@@ -546,7 +546,8 @@ struct ResponseShape: Sendable {
     init(topic: String, fireAndForget: Bool) {
         switch topic {
         case Topic.getDeviceInfo: kind = .deviceInfo
-        case Topic.getMap: kind = .map
+        // Both answer with their payload in field 2.
+        case Topic.getMap, Topic.getConfig: kind = .map
         case Topic.getBaseStatus: kind = .baseStatus
         default: kind = fireAndForget ? .ack : .any
         }

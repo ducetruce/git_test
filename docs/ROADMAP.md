@@ -23,7 +23,8 @@ From the owner's list of Narwal app frustrations, in order:
    resolved" button probably sends `clean_system/confirm_warning` (payload
    unknown); worth capturing so the app can do it automatically.
 2. **Done (read-only):** one flat Settings screen instead of nested menus.
-3. Volume write test, then settings switches.
+3. **Built, untested:** every setting as switches behind a beta toggle;
+   test volume first.
 4. Carpets: never mop carpets (`Carpet.carpetCleanOption` AVOID), remove a
    detected carpet (`StaticMapPayload.noCarpetAreas`, `NoCarpetAreaOperation`),
    mark a whole room as carpet (`isFullRoomCarpet`).
@@ -52,9 +53,13 @@ Checked against the live robot:
 
 Still open: `schedule/clean_schedule/get` gets no answer on the Z10 Ultra.
 
-First write, ready but untried: `NarwalConnection.setVoiceVolume(_:)` sends
-`config/set` with `SetConfig.Request` field 1 (`volumePercentage`). It is not
-wired to any button; see `docs/MAC_SESSION.md` for the bytes to try.
+Settings writes (untried on a robot): Settings shows every setting in
+`RobotSettingKey.all` plus volume and quiet hours. They stay read-only until
+the owner turns on **Change robot settings** (off by default). Each write
+reads `config/get` back and reports a change the robot didn't apply. Try
+voice volume first and confirm it in the Narwal app. With writes on, a
+"can't find the base station" alert also offers **Mark resolved**, which
+sends an empty `clean_system/confirm_warning` (payload a guess).
 
 ## Features that need decoding first
 

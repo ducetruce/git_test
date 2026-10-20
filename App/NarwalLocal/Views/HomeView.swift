@@ -45,6 +45,14 @@ struct HomeView: View {
                                     if let code = alert.code {
                                         Text("Error \(code)").font(.caption2.monospaced()).foregroundStyle(.tertiary)
                                     }
+                                    // Beta, with the other writes: the Narwal app's
+                                    // "issue resolved" makes the robot look again.
+                                    if alert.isDockSearch, store.allowsWrites {
+                                        Button("Mark resolved") { Task { await store.confirmWarning() } }
+                                            .buttonStyle(.bordered)
+                                            .disabled(store.busyAction != nil)
+                                            .padding(.top, 4)
+                                    }
                                 }
                             } icon: {
                                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)

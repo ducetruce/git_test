@@ -68,6 +68,20 @@ final class FakeRobotTests: XCTestCase {
         XCTAssertEqual(history.events.first?.resultLabel, "Completed")
         XCTAssertNotNil(history.events.first?.date)
 
+        // Settings: each write is read back.
+        let before = try await connection.settings()
+        XCTAssertEqual(before?.voiceVolume, 29)
+        let louder = try await connection.setVoiceVolume(40)
+        XCTAssertEqual(louder?.voiceVolume, 40)
+        let childLock = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "childLockEnabled" })
+        let locked = try await connection.setSetting(childLock, 1)
+        XCTAssertEqual(locked?.value(childLock), 1)
+        let unlocked = try await connection.setSetting(childLock, 0)
+        XCTAssertEqual(unlocked?.value(childLock), 0)
+        let quiet = RobotSettings.DoNotDisturb(enabled: true, begin: 75_600, end: 25_200)
+        let withQuiet = try await connection.setDoNotDisturb(quiet)
+        XCTAssertEqual(withQuiet?.doNotDisturb, quiet)
+
         do {
             try await connection.cleanRooms([42])
             XCTFail("unknown room accepted")

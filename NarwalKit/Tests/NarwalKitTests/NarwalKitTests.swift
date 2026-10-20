@@ -246,6 +246,40 @@ final class ResponseShapeTests: XCTestCase {
         XCTAssertNil(RobotSettings(response: try message { $0.varint(1, 1) }), "a bare ack is not settings")
     }
 
+    func testSettingsCatalogFieldNumbers() throws {
+        // Independent restatement of the get -> set numbering in the schema.
+        func setField(forGet get: Int) -> Int? {
+            switch get {
+            case 1...3, 15...44: return get
+            case 4...13: return get + 1
+            case 46, 47: return get - 1
+            case 49...56: return get - 2
+            default: return nil
+            }
+        }
+        for key in RobotSettingKey.all {
+            XCTAssertEqual(key.setField, setField(forGet: key.getField), key.id)
+        }
+        XCTAssertEqual(Set(RobotSettingKey.all.map(\.id)).count, RobotSettingKey.all.count)
+
+        let childLock = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "childLockEnabled" })
+        XCTAssertEqual(Payloads.setConfig(childLock, 1), [0x40, 0x01])
+        XCTAssertEqual(Payloads.setConfig(childLock, 0), [0x40, 0x00], "off must still be sent")
+        XCTAssertEqual(Payloads.setDoNotDisturb(.init(enabled: true, begin: 79_200, end: 28_800)),
+                       [0x2A, 0x0A, 0x08, 0x01, 0x10, 0xE0, 0xEA, 0x04, 0x18, 0x80, 0xE1, 0x01])
+
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in m.varint(7, 1); m.varint(15, 4) }
+        }
+        let settings = try XCTUnwrap(RobotSettings(response: response))
+        XCTAssertEqual(settings.value(childLock), 1)
+        let carpets = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "carpetCleanOption" })
+        XCTAssertEqual(carpets.label(for: settings.value(carpets)), "Avoid")
+        let petMode = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "petMode" })
+        XCTAssertEqual(petMode.label(for: settings.value(petMode)), "Off", "absent is off")
+    }
+
     func testDeviceInfoIsNotTakenForAnAck() throws {
         let info = try message { $0.string(1, "DrzDKQ0MU8"); $0.string(2, "abc"); $0.string(3, "v1") }
         let ack = try message { $0.varint(1, 1) }

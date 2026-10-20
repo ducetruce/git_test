@@ -30,10 +30,25 @@ public struct RobotSettings: Equatable, Sendable {
         public var enabled: Bool
         public var begin: Int
         public var end: Int
+
+        public init(enabled: Bool, begin: Int, end: Int) {
+            self.enabled = enabled
+            self.begin = begin
+            self.end = end
+        }
     }
+
+    /// Every varint field of the config, by config/get field number.
+    /// Absent means 0 (off / not set): proto3 omits zeros.
+    public var values: [Int: Int] = [:]
+
+    public func value(_ key: RobotSettingKey) -> Int { values[key.getField] ?? 0 }
 
     public init?(response: ProtoMessage) {
         guard let settings = response.message(2) else { return nil }
+        for field in settings.fields {
+            if case .varint(let v) = field.value { values[field.number] = Int(truncatingIfNeeded: v) }
+        }
         voiceVolume = settings.int(1) ?? 0
         timeZone = settings.message(3)?.string(1)
         doNotDisturb = settings.message(4).map {

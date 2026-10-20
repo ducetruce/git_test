@@ -92,34 +92,145 @@ struct SettingsView: View {
 }
 
 /// The robot's own settings on one flat screen, grouped the way people look
-/// for them. Read-only until changing settings has been tried safely.
+/// for them. Read-only until the owner turns on "Change robot settings".
 private struct RobotSettingsSections: View {
     @Environment(RobotStore.self) private var store
+    @AppStorage("allowRobotWrites") private var allowWrites = false
+    @State private var volume: Double?
+    @State private var confirmWrites = false
 
     var body: some View {
         let settings = store.robotSettings
+        let editable = allowWrites && settings != nil && store.busyAction == nil
+
         Section {
-            LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
+            if editable, let settings {
+                VStack(alignment: .leading) {
+                    LabeledContent("Voice volume", value: "\(Int(volume ?? Double(settings.voiceVolume)))%")
+                    Slider(value: Binding(get: { volume ?? Double(settings.voiceVolume) }, set: { volume = $0 }),
+                           in: 0...100, step: 1, onEditingChanged: { editing in
+                        guard !editing, let volume else { return }
+                        Task {
+                            await store.changeVolume(to: Int(volume))
+                            self.volume = nil
+                        }
+                    })
+                }
+            } else {
+                LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
+            }
+            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { row($0, settings, editable) }
         } header: {
-            Text("Sound")
+            Text(RobotSettingKey.Group.sound.rawValue)
+        }
+
+        QuietHoursSection(settings: settings, editable: editable)
+
+        ForEach(RobotSettingKey.Group.allCases.filter { $0 != .sound }, id: \.self) { group in
+            Section {
+                ForEach(RobotSettingKey.all.filter { $0.group == group }) { row($0, settings, editable) }
+            } header: {
+                Text(group.rawValue)
+            } footer: {
+                let notes = RobotSettingKey.all.filter { $0.group == group }.compactMap(\.footnote)
+                if !notes.isEmpty { Text(notes.joined(separator: " ")) }
+            }
         }
 
         Section {
-            if let dnd = settings?.doNotDisturb {
-                LabeledContent("Quiet hours", value: dnd.enabled ? "\(clock(dnd.begin)) – \(clock(dnd.end))" : "Off")
+            Toggle("Change robot settings", isOn: Binding(
+                get: { allowWrites },
+                set: { on in if on { confirmWrites = true } else { allowWrites = false } }
+            ))
+        } footer: {
+            Text(settings == nil
+                 ? "Pull down to load the robot's settings."
+                 : "Beta. After each change the app reads the setting back and tells you if the robot didn't apply it.")
+        }
+        .alert("Change robot settings?", isPresented: $confirmWrites) {
+            Button("Turn on") { allowWrites = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This app hasn't changed settings on a real robot before. Start with voice volume and check the Narwal app shows the same value. Any setting can be changed back in the Narwal app.")
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ key: RobotSettingKey, _ settings: RobotSettings?, _ editable: Bool) -> some View {
+        let value = settings?.value(key)
+        if editable, let value {
+            if key.isToggle {
+                Toggle(key.title, isOn: Binding(
+                    get: { value != 0 },
+                    set: { on in Task { await store.changeSetting(key, to: on ? 1 : 0) } }
+                ))
             } else {
-                LabeledContent("Quiet hours", value: settings == nil ? "–" : "Off")
+                Picker(key.title, selection: Binding(
+                    get: { value },
+                    set: { new in Task { await store.changeSetting(key, to: new) } }
+                )) {
+                    if !key.options.contains(where: { $0.value == value }) {
+                        Text("Not set").tag(value)
+                    }
+                    ForEach(key.options, id: \.value) { Text($0.label).tag($0.value) }
+                }
+            }
+        } else {
+            LabeledContent(key.title, value: value.map { key.label(for: $0) } ?? "–")
+        }
+    }
+}
+
+private struct QuietHoursSection: View {
+    @Environment(RobotStore.self) private var store
+    let settings: RobotSettings?
+    let editable: Bool
+
+    var body: some View {
+        let dnd = settings?.doNotDisturb ?? .init(enabled: false, begin: 22 * 3600, end: 8 * 3600)
+        Section {
+            if editable {
+                Toggle("Quiet hours", isOn: Binding(
+                    get: { dnd.enabled },
+                    set: { on in change(dnd, enabled: on) }
+                ))
+                if dnd.enabled {
+                    DatePicker("From", selection: time(dnd.begin) { change(dnd, begin: $0) },
+                               displayedComponents: .hourAndMinute)
+                    DatePicker("Until", selection: time(dnd.end) { change(dnd, end: $0) },
+                               displayedComponents: .hourAndMinute)
+                }
+            } else {
+                LabeledContent("Quiet hours", value: settings == nil ? "–"
+                               : dnd.enabled ? "\(clock(dnd.begin)) – \(clock(dnd.end))" : "Off")
             }
             if let zone = settings?.timeZone {
                 LabeledContent("Time zone", value: zone)
             }
         } header: {
-            Text("Schedule & quiet hours")
+            Text("Quiet hours")
         } footer: {
-            Text(settings == nil
-                 ? "Pull down to load the robot's settings."
-                 : "Shown read-only for now. Switches arrive once changing a setting has been tested safely on your robot.")
+            Text("No cleaning, emptying or voice prompts during quiet hours.")
         }
+    }
+
+    private func change(_ dnd: RobotSettings.DoNotDisturb, enabled: Bool? = nil, begin: Int? = nil, end: Int? = nil) {
+        var new = dnd
+        new.enabled = enabled ?? dnd.enabled
+        new.begin = begin ?? dnd.begin
+        new.end = end ?? dnd.end
+        Task { await store.changeDoNotDisturb(to: new) }
+    }
+
+    /// Seconds after midnight <-> a Date today; committed on each change.
+    private func time(_ seconds: Int, _ commit: @escaping (Int) -> Void) -> Binding<Date> {
+        Binding(
+            get: { Calendar.current.startOfDay(for: Date()).addingTimeInterval(TimeInterval(seconds)) },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                commit((parts.hour ?? 0) * 3600 + (parts.minute ?? 0) * 60)
+            }
+        )
     }
 
     /// Seconds after midnight -> "22:00".

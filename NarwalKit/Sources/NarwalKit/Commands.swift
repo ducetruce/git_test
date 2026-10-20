@@ -127,15 +127,33 @@ extension NarwalConnection {
 
     // MARK: Settings (writes)
 
+    // Each write reads the settings back, so a silently ignored write shows
+    // up. Not yet tried on a robot: the app only sends these once the owner
+    // turns on Settings > Change robot settings.
+
     /// Sets the robot's voice volume (0-100) via config/set.
-    ///
-    /// NOT YET TRIED ON A ROBOT, and deliberately not wired to any UI: a Mac
-    /// session sends it first and confirms the change in the Narwal app.
-    /// Reads the volume back afterwards so a silently ignored write shows up.
     @discardableResult
     public func setVoiceVolume(_ percent: Int) async throws -> RobotSettings? {
         try await perform(Topic.setConfig, Payloads.setVoiceVolume(percent))
         return try await settings()
+    }
+
+    @discardableResult
+    public func setSetting(_ key: RobotSettingKey, _ value: Int) async throws -> RobotSettings? {
+        try await perform(Topic.setConfig, Payloads.setConfig(key, value))
+        return try await settings()
+    }
+
+    @discardableResult
+    public func setDoNotDisturb(_ dnd: RobotSettings.DoNotDisturb) async throws -> RobotSettings? {
+        try await perform(Topic.setConfig, Payloads.setDoNotDisturb(dnd))
+        return try await settings()
+    }
+
+    /// Acknowledges the robot's current warning, as the Narwal app's
+    /// "issue resolved" button seems to. Untried; the payload is a guess.
+    public func confirmWarning() async throws {
+        try await perform(Topic.confirmWarning)
     }
 
     // MARK: Dock
