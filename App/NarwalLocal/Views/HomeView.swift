@@ -70,7 +70,7 @@ struct HomeView: View {
                             LabeledContent("Current room", value: room)
                         }
                         if let area = progress.areaSquareMeters {
-                            LabeledContent("Area", value: AreaFormat.string(squareMeters: area))
+                            LabeledContent("Area", value: AreaFormat.string(squareMeters: Double(area)))
                         }
                         if let elapsed = progress.elapsedSeconds {
                             LabeledContent("Elapsed", value: Duration.seconds(elapsed).formatted(.units(allowed: [.hours, .minutes])))
