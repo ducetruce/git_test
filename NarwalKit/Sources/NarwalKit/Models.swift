@@ -14,6 +14,34 @@ public struct DeviceInfo: Equatable, Sendable {
     }
 }
 
+/// config/get response: {1: result, 2: GetConfig.Response.Config}. Field
+/// numbers are from the app schema (docs/schema/messages.txt), checked on a
+/// Z10 Ultra. Don't reuse them for config/set: SetConfig.Request numbers differ.
+public struct RobotSettings: Equatable, Sendable {
+    /// volumePercentage, 0...100. 0 is omitted on the wire, so absent means 0.
+    public var voiceVolume: Int
+    /// region.timeZone, an IANA name such as "Europe/Berlin".
+    public var timeZone: String?
+    public var doNotDisturb: DoNotDisturb?
+
+    /// DisturbMode {1: enabled, 2: beginTime, 3: endTime}, times in seconds
+    /// after local midnight.
+    public struct DoNotDisturb: Equatable, Sendable {
+        public var enabled: Bool
+        public var begin: Int
+        public var end: Int
+    }
+
+    public init?(response: ProtoMessage) {
+        guard let settings = response.message(2) else { return nil }
+        voiceVolume = settings.int(1) ?? 0
+        timeZone = settings.message(3)?.string(1)
+        doNotDisturb = settings.message(4).map {
+            DoNotDisturb(enabled: ($0.int(1) ?? 0) != 0, begin: $0.int(2) ?? 0, end: $0.int(3) ?? 0)
+        }
+    }
+}
+
 public struct RobotError: Equatable, Sendable, Hashable {
     public var code: Int
     public var level: Int

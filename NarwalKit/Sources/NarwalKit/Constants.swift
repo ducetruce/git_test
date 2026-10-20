@@ -79,6 +79,7 @@ public enum Topic {
     public static let appHeartbeat = "status/app_status_heartbeat"
     public static let getBaseStatus = "status/get_device_base_status"
     public static let getConsumableInfo = "consumable/get_consumable_info"
+    public static let getConfig = "config/get"
 
     // Task control
     public static let pause = "task/pause"

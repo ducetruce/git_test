@@ -14,13 +14,29 @@ order of risk:
 Settings → Diagnostics → Connection log has a share button for sending
 logs back.
 
+## Decoded so far (Z10 Ultra)
+
+The full message schema, recovered from the Narwal Android app, is in
+[docs/schema/](schema/README.md): field names and numbers for settings,
+schedules, no-go zones, virtual walls, room edits and cleaning history.
+Checked against the live robot:
+
+| Setting | Where | Notes |
+|---|---|---|
+| Voice volume | `config/get` 2.1 `volumePercentage` | 0–100; seen 0 → 29 → 96 while moving the slider. Decoded by `RobotSettings`. |
+| Timezone | `config/get` 2.3 `region` | IANA name, UTC offset, country, city. |
+| Do-not-disturb | `config/get` 2.4 `disturbMode` | enabled / begin / end, seconds after midnight. Decoded by `RobotSettings`. |
+| No-go zones | `map/get_map` 2.9 `forbiddens` | Present on the owner's map; not yet decoded in the app. |
+
+Still open: `schedule/clean_schedule/get` gets no answer on the Z10 Ultra.
+
 ## Features that need decoding first
 
 These exist on the robot but their payloads are unknown:
 
 | Feature | Where it probably lives | Lab experiment |
 |---|---|---|
-| Voice volume, do-not-disturb, carpet boost, child lock… | `config/get` | Change each setting once, one at a time |
+| Do-not-disturb, carpet boost, child lock… | `config/get` | Change each setting once, one at a time |
 | Schedules | `schedule/clean_schedule/get` | Add a schedule, then change its time, then delete it |
 | No-go zones / virtual walls | `map/get_map` | Add one no-go zone, then add one wall |
 | Room rename / split / merge | `map/get_map` | Rename one room |
@@ -46,10 +62,12 @@ query the lab doesn't send yet. You can type extra query topics in the lab.
 
 ### Step 2: write side
 
-Reading a setting isn't the same as changing it. For most settings the
-`…/set` command is expected to take the same message `…/get` returns. That
-will be tested one harmless setting at a time (volume first), with the
-result confirmed in the Narwal app before anything else is attempted.
+Reading a setting isn't the same as changing it, and `config/set` does
+**not** take the message `config/get` returns: `SetConfig.Request` numbers its
+fields differently and accepts one setting per request (see
+[docs/schema/](schema/README.md)). Writes will be tried one harmless setting at
+a time (volume first), with the result confirmed in the Narwal app before
+anything else is attempted.
 
 ### Optional: exact capture of the Narwal app (needs any PC with USB, no Mac)
 

@@ -10,8 +10,10 @@ Wi-Fi as the robot (a cloud session can't reach it). Read the README first.
   device ID (shown in the app under Settings, also in its connection log);
   another model's product key makes it hang up; it accepts one connection
   per source IP and refuses reconnects for ~10 s after dropping one.
-- Read-side decoding is the next job: settings, schedules, no-go zones,
-  room edits, cleaning history (table in `docs/ROADMAP.md`).
+- The message schema is decoded from the Narwal Android app
+  (`docs/schema/`), so field meanings no longer need one diff per setting.
+  Next: decoders for no-go zones, schedules and cleaning history, then the
+  first write (volume via `config/set` field 1).
 
 ## 1. Snapshot and diff from the Mac
 

@@ -215,6 +215,27 @@ final class ResponseShapeTests: XCTestCase {
         return try ProtoMessage(bytes: w.bytes)
     }
 
+    func testRobotSettings() throws {
+        // Shapes seen on a Z10 Ultra as the volume slider was moved.
+        let loud = try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in
+                m.varint(1, 96)
+                m.message(3) { tz in tz.string(1, "Europe/Berlin") }
+                m.message(4) { dnd in dnd.varint(2, 79_200); dnd.varint(3, 28_800) }
+                m.varint(6, 1)
+            }
+        }
+        let settings = try XCTUnwrap(RobotSettings(response: loud))
+        XCTAssertEqual(settings.voiceVolume, 96)
+        XCTAssertEqual(settings.timeZone, "Europe/Berlin")
+        XCTAssertEqual(settings.doNotDisturb, .init(enabled: false, begin: 79_200, end: 28_800))
+
+        let silent = try message { w in w.varint(1, 1); w.message(2) { m in m.varint(6, 1) } }
+        XCTAssertEqual(RobotSettings(response: silent)?.voiceVolume, 0, "0 is omitted on the wire")
+        XCTAssertNil(RobotSettings(response: try message { $0.varint(1, 1) }), "a bare ack is not settings")
+    }
+
     func testDeviceInfoIsNotTakenForAnAck() throws {
         let info = try message { $0.string(1, "DrzDKQ0MU8"); $0.string(2, "abc"); $0.string(3, "v1") }
         let ack = try message { $0.varint(1, 1) }
