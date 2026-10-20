@@ -2,10 +2,9 @@
 
 ## Next: get the first build running
 
-1. `cd NarwalKit && swift test`. Fix any compile errors (this code had no
-   compiler when it was written). All tests should pass, because the fixtures
-   come from a client known to work.
-2. Run the app against `tools/fake_robot.py` in the Simulator.
+1. CI (GitHub Actions) compiles everything and runs the protocol tests on
+   every push. Install the IPA from the latest green run.
+2. Optionally, try it against `tools/fake_robot.py` first.
 3. Run it against the real Z10 Ultra. Check that discovery, status, map, and a single-room
    clean work. Settings → Diagnostics → Connection log has a share button
    for sending logs back.
@@ -14,33 +13,55 @@
 
 These exist on the robot but their payloads are unknown:
 
-| Feature | Robot topic(s) | What a capture needs to show |
+| Feature | Where it probably lives | Lab experiment |
 |---|---|---|
-| Schedules | `schedule/clean_schedule/get`, likely a `set` | Create, edit, and delete a schedule in the Narwal app |
-| Volume, do-not-disturb, carpet boost, etc. | `config/get`, `config/set`, `config/volume/set` | Flip each setting once, one at a time |
-| No-go zones / virtual walls | probably `map/*` edit topics | Add one zone, then delete it |
-| Room split / merge / rename | probably `map/*` edit topics | One rename, one split, one merge |
-| Zone (rectangle) cleaning | `clean/start_clean`, `ZoneOption{1: 2}` | Clean one drawn rectangle |
-| Cleaning history | unknown | Open the history screen |
-| Reset consumable | `consumable/reset_consumable_info` | Reset one part's counter |
+| Voice volume, do-not-disturb, carpet boost, child lock… | `config/get` | Change each setting once, one at a time |
+| Schedules | `schedule/clean_schedule/get` | Add a schedule, then change its time, then delete it |
+| No-go zones / virtual walls | `map/get_map` | Add one no-go zone, then add one wall |
+| Room rename / split / merge | `map/get_map` | Rename one room |
+| Cleaning history | `info/get_clean_time_line` | Snapshot before and after a short clean |
+| Clean settings the app remembers | `clean/current_clean_task/get` | Start a clean from the Narwal app with unusual settings |
 
-### How to capture the official app (iPhone + Mac)
+### Step 1: read side, iPhone only (Feature lab)
 
-The Narwal app talks to the robot over the same local WebSocket, so its
-traffic can be recorded from a Mac:
+Settings → Diagnostics → **Feature lab**. It sends only read-only queries
+and shows every field the robot reports.
 
-1. Connect the iPhone to the Mac by USB. Find its UDID in Finder or
-   `xcrun xctrace list devices`.
-2. `rvictl -s <UDID>`. This creates a virtual interface `rvi0` that mirrors the
-   phone's traffic.
-3. In Wireshark, capture on `rvi0` with the filter `tcp.port == 9002`.
-4. In the Narwal app, do **one** action (for example, change the volume from 5 to 6). Wait 5
-   seconds, then do the next action. Note the time of each action.
-5. Stop and save the `.pcapng`. Then run `rvictl -x <UDID>`.
+1. Take a snapshot and label it ("baseline").
+2. In the Narwal app, change **one** thing (volume 5 → 6). Write down what you did.
+3. Swipe the Narwal app closed. The robot serves one app at a time per phone.
+4. Take another snapshot ("volume 6"), then **Compare** → **Show differences**.
+5. Tap the share button and paste the text into a chat with Claude.
 
-Each action shows up as a WebSocket binary message whose topic names the
-feature. Comparing two captures that differ in a single setting reveals
-the field. That's how the clean-route field was found.
+A good diff looks like `config/get  3.2: 5 → 6`. Repeat once more with a
+different value (6 → 3) to confirm. Two clean diffs pin a setting down.
+
+If a diff shows nothing, the setting is either cloud-only or sits under a
+query the lab doesn't send yet. You can type extra query topics in the lab.
+
+### Step 2: write side
+
+Reading a setting isn't the same as changing it. For most settings the
+`…/set` command is expected to take the same message `…/get` returns. That
+will be tested one harmless setting at a time (volume first), with the
+result confirmed in the Narwal app before anything else is attempted.
+
+### Optional: exact capture of the Narwal app (needs any PC with USB, no Mac)
+
+If a write command doesn't follow the get/set pattern, the Narwal app's own
+bytes settle it. `pymobiledevice3` records an iPhone's traffic over USB from
+**Windows or Linux**:
+
+1. On Windows, install Python 3 and the Apple Devices app (for the USB driver).
+2. `pip install pymobiledevice3`
+3. Plug in the iPhone, unlock it, tap **Trust**.
+4. `pymobiledevice3 pcap --out narwal.pcap` (as administrator / root). Then do one
+   action in the Narwal app and press Ctrl-C.
+5. Share `narwal.pcap`. Everything to and from port 9002 can be decoded with
+   the sytchi fork's `tools/decode_ws_pcap.py`.
+
+If pcap refuses to start, enable Developer Mode with
+`pymobiledevice3 amfi enable-developer-mode`, which needs a restart of the iPhone.
 
 ## Larger ideas
 
@@ -50,6 +71,7 @@ the field. That's how the clean-route field was found.
 - **"Clean when docked" queue.** Room cleans only start from the dock. The app could
   send the robot home, wait for it to dock, then start the queued clean
   instead of showing an error.
+- **Zone cleaning check on the Z10 Ultra.** The shape was validated on a Flow; do one small zone near the dock first.
 - **Verify the running task.** After starting a clean, read
   `clean/current_clean_task/get` and confirm that the robot's room list matches
   the one sent.

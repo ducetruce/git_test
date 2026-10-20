@@ -23,6 +23,9 @@ iPhone app  ──ws://robot:9002──▶  Freo Z10 Ultra
 | Start/pause/resume/stop, return to dock, locate, quick clean | ✅ |
 | **Room cleaning in the order you tap**, with per-room settings | ✅ |
 | Whole-house clean with chosen mode/suction/water/passes/route | ✅ |
+| Zone cleaning: drag rectangles on the map | ✅ (validated on a Narwal Flow; untested on Z10 Ultra) |
+| Plain-English fault messages (53 known codes) | ✅ |
+| Feature lab for decoding unsupported settings from the phone | ✅ |
 | Live map: rooms, dock, robot position, driven path | ✅ |
 | Live suction/water changes mid-clean | ✅ |
 | Station: wash/dry mop, empty dustbin, dry bags, station light | ✅ |
@@ -58,7 +61,17 @@ local integrations:
 - **Robot disconnecting after a minute.** The robot drops idle sockets after 60 s.
   The app sends the heartbeat the robot actually counts, every 15 s.
 
-## Building it (on your Mac)
+## Installing without a Mac (Signulous or any signer)
+
+Every push builds the app on GitHub's Macs (`.github/workflows/build.yml`),
+runs the protocol tests, and produces an unsigned IPA.
+
+1. On GitHub: **Actions → Build →** the latest green run **→ Artifacts →
+   NarwalLocal-ipa**. Download it and unzip it to get `NarwalLocal.ipa`.
+2. Upload `NarwalLocal.ipa` to Signulous and install it.
+3. On first launch, allow **Local Network** access.
+
+## Building it (on a Mac)
 
 You need a Mac with Xcode 15 or later. A free Apple ID can install the app on your own
 iPhone, but the install expires after 7 days and must be re-run from Xcode. A paid
@@ -123,9 +136,8 @@ tools/
 - **Schedules stored on the robot, no-go zones, virtual walls, map editing
   (split/merge/rename rooms), cleaning history, voice volume.** The robot has
   topics for several of these (`schedule/clean_schedule/get`, `config/*`), but
-  nobody has decoded their payloads yet. Decoding them takes captures of the
-  official app's traffic. A capture plan is in
-  [docs/ROADMAP.md](docs/ROADMAP.md).
+  nobody has decoded their payloads yet. The in-app **Feature lab** decodes
+  them from the iPhone alone. See [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Consumable life percentages and firmware updates** appear to come only
   from Narwal's cloud.
 - **Camera images** are encrypted with a key nobody has found yet.

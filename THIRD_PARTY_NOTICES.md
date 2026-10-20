@@ -1,5 +1,7 @@
 NarwalKit ports protocol knowledge and logic from NarwalIntegration
-(https://github.com/sjmotew/NarwalIntegration), used under the MIT License:
+(https://github.com/sjmotew/NarwalIntegration) and its fork
+(https://github.com/sytchi/NarwalIntegration: zone cleaning, fault-code
+messages), both used under the MIT License:
 
 MIT License
 

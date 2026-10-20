@@ -233,7 +233,7 @@ final class RobotStore {
             return ProbeResult(topic: topic, outcome: "Not connected", leaves: [])
         }
         do {
-            let response = try await connection.send(topic, timeout: 6)
+            let response = try await connection.send(topic, timeout: 15)
             let outcome = response.raw.isEmpty ? "Answered (empty)" : "Answered, \(response.raw.count) bytes"
             appendLog("Probe \(topic): \(outcome)")
             return ProbeResult(topic: topic, outcome: outcome, leaves: Research.flatten(response.message))

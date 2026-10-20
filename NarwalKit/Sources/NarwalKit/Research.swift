@@ -9,6 +9,8 @@ public enum Research {
     public static let probeTopics: [String] = [
         "config/get",
         "schedule/clean_schedule/get",
+        // No-go zones, virtual walls and room edits most likely live in the map.
+        "map/get_map",
         "clean/current_clean_task/get",
         "info/get_clean_time_line",
         "common/get_feature_list",
