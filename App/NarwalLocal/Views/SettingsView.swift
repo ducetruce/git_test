@@ -11,6 +11,35 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                RobotSettingsSections()
+
+                Section {
+                    NavigationLink("Connection") { connection }
+                    NavigationLink("Feature lab") { LabView() }
+                    NavigationLink("Connection log") { LogView() }
+                } header: {
+                    Text("Diagnostics")
+                } footer: {
+                    Text("The feature lab helps decode settings this app doesn't support yet.")
+                }
+
+                Section {
+                    Button("Forget this robot", role: .destructive) { confirmForget = true }
+                } footer: {
+                    Text("This app talks only to your robot on your Wi-Fi. Nothing is sent to Narwal or anywhere else.")
+                }
+            }
+            .navigationTitle("Settings")
+            .refreshable { await store.reloadSettings() }
+            .task { if store.robotSettings == nil { await store.reloadSettings() } }
+            .confirmationDialog("Forget this robot?", isPresented: $confirmForget) {
+                Button("Forget", role: .destructive) { store.forgetRobot() }
+            }
+        }
+    }
+
+    private var connection: some View {
+            List {
                 Section {
                     LabeledContent("Address", value: store.host)
                     Picker("Model", selection: Binding(get: { store.model }, set: { store.setModel($0) })) {
@@ -50,27 +79,45 @@ struct SettingsView: View {
                 } footer: {
                     Text("The model must match your robot: a Z10 Ultra disconnects apps that address it as another model. Leave Device ID empty unless asked; it's learned from the robot.")
                 }
-
-                Section {
-                    NavigationLink("Feature lab") { LabView() }
-                    NavigationLink("Connection log") { LogView() }
-                } header: {
-                    Text("Diagnostics")
-                } footer: {
-                    Text("The feature lab helps decode settings this app doesn't support yet.")
-                }
-
-                Section {
-                    Button("Forget this robot", role: .destructive) { confirmForget = true }
-                } footer: {
-                    Text("This app talks only to your robot on your Wi-Fi. Nothing is sent to Narwal or anywhere else.")
-                }
             }
-            .navigationTitle("Settings")
-            .confirmationDialog("Forget this robot?", isPresented: $confirmForget) {
-                Button("Forget", role: .destructive) { store.forgetRobot() }
-            }
+            .navigationTitle("Connection")
+    }
+}
+
+/// The robot's own settings on one flat screen, grouped the way people look
+/// for them. Read-only until changing settings has been tried safely.
+private struct RobotSettingsSections: View {
+    @Environment(RobotStore.self) private var store
+
+    var body: some View {
+        let settings = store.robotSettings
+        Section {
+            LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
+        } header: {
+            Text("Sound")
         }
+
+        Section {
+            if let dnd = settings?.doNotDisturb {
+                LabeledContent("Quiet hours", value: dnd.enabled ? "\(clock(dnd.begin)) – \(clock(dnd.end))" : "Off")
+            } else {
+                LabeledContent("Quiet hours", value: settings == nil ? "–" : "Off")
+            }
+            if let zone = settings?.timeZone {
+                LabeledContent("Time zone", value: zone)
+            }
+        } header: {
+            Text("Schedule & quiet hours")
+        } footer: {
+            Text(settings == nil
+                 ? "Pull down to load the robot's settings."
+                 : "Shown read-only for now. Switches arrive once changing a setting has been tested safely on your robot.")
+        }
+    }
+
+    /// Seconds after midnight -> "22:00".
+    private func clock(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", seconds / 3600 % 24, seconds / 60 % 60)
     }
 }
 

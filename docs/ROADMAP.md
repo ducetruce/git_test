@@ -14,6 +14,23 @@ order of risk:
 Settings → Diagnostics → Connection log has a share button for sending
 logs back.
 
+## Owner priorities
+
+From the owner's list of Narwal app frustrations, in order:
+
+1. **Done:** "can't find the base station" no longer alerts while docked
+   and waits 90 s otherwise (`DockErrorFilter`). The Narwal app's "issue
+   resolved" button probably sends `clean_system/confirm_warning` (payload
+   unknown); worth capturing so the app can do it automatically.
+2. **Done (read-only):** one flat Settings screen instead of nested menus.
+3. Volume write test, then settings switches.
+4. Carpets: never mop carpets (`Carpet.carpetCleanOption` AVOID), remove a
+   detected carpet (`StaticMapPayload.noCarpetAreas`, `NoCarpetAreaOperation`),
+   mark a whole room as carpet (`isFullRoomCarpet`).
+5. Furniture: edit pieces and set rules around them.
+6. Room split: tap a room, draw a line, confirm.
+7. Schedules.
+
 ## Decoded so far (Z10 Ultra)
 
 The full message schema, recovered from the Narwal Android app, is in

@@ -29,6 +29,8 @@ final class RobotStore {
     private(set) var consumables: ConsumableAlerts?
     /// Recent cleaning events: fetched on demand and updated by broadcasts.
     private(set) var history: CleaningHistory?
+    /// config/get, read-only until writes are confirmed on the robot.
+    private(set) var robotSettings: RobotSettings?
 
     // UI
     private(set) var busyAction: String?
@@ -191,6 +193,7 @@ final class RobotStore {
         guard let connection else { return }
         if let polled = try? await connection.baseStatus() { applyStatus(polled) }
         if map == nil, let fetched = try? await connection.fetchMap() { map = fetched }
+        if robotSettings == nil, let fetched = try? await connection.settings() { robotSettings = fetched }
         if let fetched = try? await connection.consumableAlerts() {
             consumables = fetched
             alerts.consumablesChanged(fetched)
@@ -202,6 +205,12 @@ final class RobotStore {
             let fetched = try await connection.cleaningHistory()
             await MainActor.run { self.history = fetched }
         }
+    }
+
+    /// Quiet on failure: settings are a nice-to-have, not worth an error banner.
+    func reloadSettings() async {
+        guard let connection else { return }
+        if let fetched = try? await connection.settings() { robotSettings = fetched }
     }
 
     func reloadMap() async {

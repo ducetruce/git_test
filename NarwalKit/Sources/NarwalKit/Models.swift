@@ -290,3 +290,28 @@ public struct ConsumableAlerts: Equatable, Sendable {
 extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
+
+/// Holds back "can't find the base station" errors, which the Z10 Ultra
+/// raises while sitting in front of its dock and drops on its own (or as
+/// soon as the Narwal app acknowledges it). They are ignored while the
+/// robot says it's docked, and otherwise must last `dockSearchGrace`.
+public struct DockErrorFilter: Sendable {
+    public static let dockSearchCodes: Set<Int> = [0x02100015, 0x02100017, 0x02100018, 0x02110020]
+    public static let dockSearchGrace: TimeInterval = 90
+
+    private var firstSeen: [Int: Date] = [:]
+
+    public init() {}
+
+    public mutating func filter(_ errors: [RobotError], docked: Bool, now: Date = Date()) -> [RobotError] {
+        let codes = Set(errors.map(\.code))
+        firstSeen = firstSeen.filter { codes.contains($0.key) && !docked }
+        return errors.filter { error in
+            guard Self.dockSearchCodes.contains(error.code) else { return true }
+            guard !docked else { return false }
+            let since = firstSeen[error.code] ?? now
+            firstSeen[error.code] = since
+            return now.timeIntervalSince(since) >= Self.dockSearchGrace
+        }
+    }
+}

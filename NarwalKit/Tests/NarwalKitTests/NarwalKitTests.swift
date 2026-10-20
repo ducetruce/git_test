@@ -553,6 +553,31 @@ final class SchemaDecoderTests: XCTestCase {
     }
 }
 
+final class DockErrorFilterTests: XCTestCase {
+    private let lost = RobotError(code: 0x02100017, level: 1, detail: "")
+    private let stuck = RobotError(code: 0x01000001, level: 1, detail: "")
+
+    func testDockSearchErrorWaitsForGrace() {
+        var filter = DockErrorFilter()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(filter.filter([lost, stuck], docked: false, now: t0), [stuck])
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0.addingTimeInterval(60)), [])
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0.addingTimeInterval(90)), [lost])
+    }
+
+    func testDockSearchErrorIgnoredWhileDockedAndRestartsAfterClearing() {
+        var filter = DockErrorFilter()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0), [])
+        XCTAssertEqual(filter.filter([lost], docked: true, now: t0.addingTimeInterval(100)), [])
+        // Off the dock again: the grace period starts over.
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0.addingTimeInterval(110)), [])
+        XCTAssertEqual(filter.filter([], docked: false, now: t0.addingTimeInterval(120)), [])
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0.addingTimeInterval(130)), [])
+        XCTAssertEqual(filter.filter([lost], docked: false, now: t0.addingTimeInterval(220)), [lost])
+    }
+}
+
 final class StationStateTests: XCTestCase {
     func testStatesFollowTheAppEnums() {
         // A station with no bag fitted reports "uninstalled" all the time:

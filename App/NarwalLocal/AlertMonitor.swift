@@ -9,7 +9,9 @@ import UserNotifications
 /// - a condition must appear in two consecutive status reports (~3 s) before
 ///   it alerts, so one-frame glitches never notify;
 /// - each condition notifies once, and again only after it has cleared;
-/// - missing fields are "unknown", never "fine" or "problem".
+/// - missing fields are "unknown", never "fine" or "problem";
+/// - "can't find the base station" waits 90 s and is ignored while docked
+///   (`DockErrorFilter`), since the robot often sorts itself out.
 @MainActor
 @Observable
 final class AlertMonitor {
@@ -25,6 +27,7 @@ final class AlertMonitor {
     /// Conditions already notified; persisted so relaunching doesn't re-alert.
     @ObservationIgnored private var notified = Set(UserDefaults.standard.stringArray(forKey: "notifiedAlerts") ?? [])
     @ObservationIgnored private var cleanStartedAt: Date?
+    @ObservationIgnored private var dockErrors = DockErrorFilter()
 
     private func saveNotified() {
         UserDefaults.standard.set(Array(notified), forKey: "notifiedAlerts")
@@ -35,7 +38,8 @@ final class AlertMonitor {
     }
 
     func statusChanged(_ status: BaseStatus, previousWasCleaning: Bool, roomName: String?) {
-        var current: [Alert] = status.errors.map {
+        let docked = status.isDocked ?? status.workingStatus.isOnDock
+        var current: [Alert] = dockErrors.filter(status.errors, docked: docked).map {
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
                   detail: $0.detail.isEmpty ? "Code \($0.code)" : "Code \($0.code): \($0.detail)")
         }
