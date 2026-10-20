@@ -140,6 +140,11 @@ public struct WorkingProgress: Equatable, Sendable {
 public struct MapPoint: Equatable, Sendable {
     public var x: Double
     public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
 }
 
 /// map/display_map: live robot pose, ~every 1.5 s while subscribed.
