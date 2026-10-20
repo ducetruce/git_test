@@ -13,9 +13,22 @@ jobs:
       - name: Toolchain versions
         run: xcodebuild -version && swift --version
 
-      - name: Test NarwalKit
+      - name: Start fake robot
+        run: |
+          python3 -m venv /tmp/fake && /tmp/fake/bin/pip install -q websockets
+          nohup /tmp/fake/bin/python tools/fake_robot.py > fake_robot.log 2>&1 &
+          for i in $(seq 1 20); do nc -z 127.0.0.1 9002 && exit 0; sleep 0.5; done
+          cat fake_robot.log; exit 1
+
+      - name: Test NarwalKit (unit + end-to-end against the fake robot)
         working-directory: NarwalKit
+        env:
+          NARWAL_FAKE_ROBOT: 127.0.0.1
         run: swift test
+
+      - name: Fake robot log
+        if: always()
+        run: cat fake_robot.log || true
 
       - name: Generate Xcode project
         working-directory: App

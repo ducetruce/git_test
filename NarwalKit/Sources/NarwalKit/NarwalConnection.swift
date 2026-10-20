@@ -244,9 +244,14 @@ public actor NarwalConnection {
     private func requestDeviceInfo() async -> Bool {
         guard let response = try? await send(Topic.getDeviceInfo, timeout: 3),
               let info = DeviceInfo(response: response.message) else { return false }
+        let wakeWentToOtherKey = !identityFromBroadcast
         if !info.productKey.isEmpty { productKey = info.productKey }
         deviceId = info.deviceId
         continuation.yield(.deviceInfo(info))
+        log("Identified robot \(productKey) / \(deviceId), firmware \(info.firmware)")
+        // The connect-time wake burst may have carried a guessed product key,
+        // which the robot ignores; subscribe again under the real identity.
+        if wakeWentToOtherKey { await sendWakeBurst() }
         return true
     }
 

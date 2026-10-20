@@ -187,7 +187,11 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
             topic = data[4:4 + data[3]].decode()
             payload = data[4 + data[3]:]
             short = "/".join(topic.split("/")[3:])
-            print(f"<- {short:34} {payload.hex()}")
+            print(f"<- {topic:50} {payload.hex()}", flush=True)
+            # Like the real robot: commands addressed to another model's
+            # product key are ignored (the device id may be empty).
+            if topic.split("/")[1:2] != [PRODUCT_KEY]:
+                continue
             reply = robot.handle(short, payload)
             if reply is not None:
                 await ws.send(reply)
@@ -198,7 +202,7 @@ async def serve(ws) -> None:  # type: ignore[no-untyped-def]
 
 async def main() -> None:
     async with websockets.serve(serve, "0.0.0.0", 9002, max_size=None):
-        print("fake Narwal robot on ws://0.0.0.0:9002")
+        print("fake Narwal robot on ws://0.0.0.0:9002", flush=True)
         await asyncio.Future()
 
 
