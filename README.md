@@ -8,11 +8,23 @@ iPhone app  ──ws://robot:9002──▶  Freo Z10 Ultra
 (SwiftUI)     protobuf frames     (same Wi-Fi)
 ```
 
-> **Status: first build, not yet run on hardware.** The protocol layer is
-> checked byte-for-byte against a community client that is confirmed working
-> on the Z10 Ultra (CX4). The Swift code was written in an environment without
-> a Swift compiler, so the first `swift test` / Xcode build on your Mac is the
-> first compile. Expect a few small fixes.
+> **Status: connects to and controls a real Freo Z10 Ultra.** Features
+> beyond basic control are still being checked on hardware; see
+> [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## First connection (Z10 Ultra)
+
+The Z10 Ultra ignores commands that don't carry its **device ID**, and the
+Narwal app doesn't show that ID. The robot does broadcast it while awake, so:
+
+1. Open the Narwal app and wait until it shows the robot's status.
+2. Switch straight to Narwal Local (don't close the Narwal app).
+3. The log shows "Robot identity from broadcast" and "Saved device ID". From
+   then on the Narwal app isn't needed.
+
+Also: the robot hangs up on clients that use another model's key (pick the
+right model in Settings), and it accepts one connection per phone, so the two
+apps take turns.
 
 ## What works
 

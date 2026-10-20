@@ -1,13 +1,18 @@
 # Roadmap
 
-## Next: get the first build running
+## Next: verify on the real Z10 Ultra
 
-1. CI (GitHub Actions) compiles everything and runs the protocol tests on
-   every push. Install the IPA from the latest green run.
-2. Optionally, try it against `tools/fake_robot.py` first.
-3. Run it against the real Z10 Ultra. Check that discovery, status, map, and a single-room
-   clean work. Settings → Diagnostics → Connection log has a share button
-   for sending logs back.
+Connection and basic commands work. Still to check on hardware, roughly in
+order of risk:
+
+1. Live status, battery, docked/charging on Home.
+2. Map: rooms and names match the Narwal app; live position during a clean.
+3. A single-room clean, then two rooms in a chosen order.
+4. Station actions (wash/dry mop, empty dustbin).
+5. A small zone clean near the dock (zone shape was validated on a Flow).
+
+Settings → Diagnostics → Connection log has a share button for sending
+logs back.
 
 ## Features that need decoding first
 
