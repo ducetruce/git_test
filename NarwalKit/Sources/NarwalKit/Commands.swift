@@ -150,6 +150,18 @@ extension NarwalConnection {
         return try await settings()
     }
 
+    // MARK: Map edits
+
+    /// Sets how the robot treats one carpet, then fetches the map back so the
+    /// change can be checked. (The reply may carry a map too, but possibly
+    /// without its pixels.)
+    public func setCarpetCleanOption(_ carpetId: Int, to option: Int, on map: RobotMap) async throws -> RobotMap {
+        try await perform(Topic.mapOperation,
+                          Payloads.carpetCleanOption(map, carpetId: carpetId, option: option),
+                          timeout: 10)
+        return try await fetchMap()
+    }
+
     /// Acknowledges the robot's current warning, as the Narwal app's
     /// "issue resolved" button seems to. Untried; the payload is a guess.
     public func confirmWarning() async throws {

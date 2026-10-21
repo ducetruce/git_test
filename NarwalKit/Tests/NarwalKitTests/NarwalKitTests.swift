@@ -492,6 +492,40 @@ final class SchemaDecoderTests: XCTestCase {
         XCTAssertEqual(map.pixel(x: 1, y: 0), .floor(room: 1))
     }
 
+    func testCarpetEditPayload() throws {
+        var map = RobotMap(mapId: 1742, width: 1, height: 1, resolution: 60, rooms: [], pixels: [0])
+        map.mapVersion = 3
+        map.editVersion = 9
+        let bytes = Payloads.carpetCleanOption(map, carpetId: 5, option: 4)
+        // {1: 1742, 2: 3, 3: 9, 4: {6: {1: 5, 2: 4, 3: 0}}}
+        XCTAssertEqual(bytes, [0x08, 0xCE, 0x0D, 0x10, 0x03, 0x18, 0x09,
+                               0x22, 0x08, 0x32, 0x06, 0x08, 0x05, 0x10, 0x04, 0x18, 0x00])
+        let request = try ProtoMessage(bytes: bytes)
+        let carpet = try XCTUnwrap(request.message(4)?.message(6))
+        XCTAssertEqual([carpet.int(1), carpet.int(2), carpet.int(3)], [5, 4, 0])
+    }
+
+    func testCarpetDetails() throws {
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { map in
+                map.varint(1, 7); map.varint(2, 12); map.varint(33, 4); map.varint(4, 20); map.varint(5, 20)
+                map.message(26) { carpet in
+                    carpet.varint(1, 2)
+                    for (x, y) in [(0, 0), (10, 0), (10, 5), (0, 5)] { carpet.message(2) { p in p.varint(1, x); p.varint(2, y) } }
+                    carpet.varint(4, 4); carpet.varint(5, 2); carpet.varint(9, 1); carpet.varint(11, 1)
+                }
+            }
+        }
+        let map = try RobotMap(response: response)
+        XCTAssertEqual([map.mapVersion, map.editVersion], [12, 4])
+        let carpet = try XCTUnwrap(map.carpets.first)
+        XCTAssertEqual(carpet.cleanOption, 4)
+        XCTAssertEqual(carpet.source, 2)
+        XCTAssertTrue(carpet.isFullRoom && carpet.sideBrush && !carpet.deepClean)
+        XCTAssertEqual(carpet.area, 50)
+    }
+
     func testMapWithoutAnnotations() throws {
         let map = try RobotMap(response: ProtoMessage(bytes: hex(GoldenVectors.mapResponse)))
         XCTAssertTrue(map.noGoZones.isEmpty)

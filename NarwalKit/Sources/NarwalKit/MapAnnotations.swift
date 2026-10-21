@@ -124,11 +124,31 @@ extension Furniture {
     }
 }
 
-/// A carpet: StaticMapPayload 26 Carpet {1 id, 2 polygon (Grid), ..., 12 roomId}.
+/// A carpet: StaticMapPayload 26 Carpet {1 id, 2 polygon (Grid), 3 center,
+/// 4 carpetCleanOption, 5 source, 6 carpetModifyPolygon, 7 material, ...,
+/// 9 isFullRoomCarpet, 10 enableDeepClean, 11 sideBrushCleanEnabled,
+/// 12 roomId}.
 public struct CarpetArea: Equatable, Sendable, Identifiable {
     public var id: Int
     public var polygon: [MapPoint]
     public var roomId: Int?
+    /// CarpetCleanOption: 0 = follow the global setting, 1 cross, 2 boost
+    /// suction, 3 ignore, 4 avoid.
+    public var cleanOption: Int = 0
+    /// Carpet_CarpetSource: 0 found by ultrasound, 1 drawn by the owner,
+    /// 2 found by the camera.
+    public var source: Int = 0
+    public var isFullRoom = false
+    public var deepClean = false
+    public var sideBrush = false
+
+    /// Shoelace area in map units squared.
+    public var area: Double {
+        guard polygon.count > 2 else { return 0 }
+        var sum = 0.0
+        for (a, b) in zip(polygon, polygon.dropFirst() + [polygon[0]]) { sum += a.x * b.y - b.x * a.y }
+        return abs(sum) / 2
+    }
 }
 
 extension CarpetArea {
@@ -138,6 +158,11 @@ extension CarpetArea {
         // User-edited carpets may only carry carpetModifyPolygon (6).
         if polygon.count < 3 { polygon = m.messages(6).map(MapCoordinates.point) }
         roomId = m.int(12).flatMap { $0 > 0 ? $0 : nil }
+        cleanOption = m.int(4) ?? 0
+        source = m.int(5) ?? 0
+        isFullRoom = m.int(9) == 1
+        deepClean = m.int(10) == 1
+        sideBrush = m.int(11) == 1
     }
 }
 

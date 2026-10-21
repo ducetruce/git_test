@@ -14,6 +14,8 @@ struct MapScreen: View {
     @AppStorage("mapShowCarpets") private var showCarpets = true
     @State private var showingPixelTypes = false
     @State private var highlightPixelType: Int?
+    @State private var showingCarpets = false
+    @State private var highlightCarpet: Int?
     // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
     @State private var zoom: CGFloat = 1
     @State private var zoomAtGestureStart: CGFloat = 1
@@ -46,7 +48,8 @@ struct MapScreen: View {
                         zoom: zoom,
                         showFurniture: showFurniture,
                         showCarpets: showCarpets,
-                        highlightPixelType: highlightPixelType
+                        highlightPixelType: highlightPixelType,
+                        highlightCarpet: highlightCarpet
                     )
                     .padding()
                     .scaleEffect(zoom)
@@ -114,6 +117,7 @@ struct MapScreen: View {
                             Toggle("Carpets", isOn: $showCarpets)
                             Toggle("Furniture", isOn: $showFurniture)
                         }
+                        Button("Carpets…") { showingCarpets = true }
                         Button("Map key…") { showingPixelTypes = true }
                     } label: {
                         Image(systemName: "square.3.layers.3d")
@@ -123,6 +127,13 @@ struct MapScreen: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await store.reloadMap() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(store.busyAction != nil)
+                }
+            }
+            .sheet(isPresented: $showingCarpets, onDismiss: { highlightCarpet = nil }) {
+                if let map = store.map {
+                    CarpetsSheet(map: map, highlight: $highlightCarpet)
+                        .presentationDetents([.medium, .large])
+                        .presentationBackgroundInteraction(.enabled)
                 }
             }
             .sheet(isPresented: $showingPixelTypes) {
@@ -205,6 +216,67 @@ struct MapScreen: View {
         }
         .padding()
         .background(.bar)
+    }
+}
+
+/// Each carpet the robot knows, with how it should treat that one carpet.
+struct CarpetsSheet: View {
+    @Environment(RobotStore.self) private var store
+    let map: RobotMap
+    @Binding var highlight: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    static let options: [(Int, String)] = [
+        (0, "Same as all carpets"), (1, "Cross over"), (2, "Boost suction"), (3, "Ignore"), (4, "Avoid"),
+    ]
+
+    var body: some View {
+        let current = store.map ?? map
+        NavigationStack {
+            List {
+                if current.carpets.isEmpty {
+                    Text("The robot's map has no individual carpets. Carpets it only marks on the floor (the dotted areas) can't be set one by one.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(current.carpets) { carpet in
+                    Section {
+                        if store.allowsWrites {
+                            Picker("When cleaning", selection: Binding(
+                                get: { carpet.cleanOption },
+                                set: { option in
+                                    highlight = carpet.id
+                                    Task { await store.setCarpetOption(carpet.id, to: option) }
+                                }
+                            )) {
+                                ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
+                            }
+                            .disabled(store.busyAction != nil)
+                        } else {
+                            LabeledContent("When cleaning", value: Self.options.first { $0.0 == carpet.cleanOption }?.1 ?? "Not set")
+                        }
+                        Button(highlight == carpet.id ? "Shown on map" : "Show on map") { highlight = carpet.id }
+                    } header: {
+                        Text(title(carpet, in: current))
+                    }
+                }
+            }
+            .navigationTitle("Carpets")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Done") { dismiss() } }
+            .safeAreaInset(edge: .bottom) {
+                if !store.allowsWrites {
+                    Text("Turn on Settings > Change robot settings to edit carpets.")
+                        .font(.footnote).foregroundStyle(.secondary).padding()
+                }
+            }
+        }
+    }
+
+    private func title(_ carpet: CarpetArea, in map: RobotMap) -> String {
+        let room = carpet.roomId.flatMap { id in map.rooms.first { $0.id == id }?.displayName }
+        let squareMeters = carpet.area * pow(Double(map.resolution) / 1000, 2)
+        let size = squareMeters > 0 ? " · " + AreaFormat.string(squareMeters: squareMeters) : ""
+        return (room.map { "Carpet in \($0)" } ?? "Carpet \(carpet.id)") + size
     }
 }
 

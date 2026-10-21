@@ -73,7 +73,7 @@ W, H = 60, 40
 ROOMS = [(1, 4, "", 0, 20), (2, 3, "", 20, 40), (3, 5, "Ensuite", 40, 60)]
 
 
-def map_payload() -> bytes:
+def map_payload(carpet_option: int = 0) -> bytes:
     pixels = []
     for y in range(H):
         for x in range(W):
@@ -106,7 +106,7 @@ def map_payload() -> bytes:
         # 26: a carpet (Grid polygon), 32.1: a sofa, 11: a doorway (Grid points)
         + f_bytes(26, f_varint(1, 1) + b"".join(f_bytes(2, f_varint(1, x) + f_varint(2, y))
                                                   for x, y in [(4, 4), (14, 4), (14, 12), (4, 12)])
-                  + f_varint(12, 1))
+                  + f_varint(4, carpet_option) + f_varint(12, 1))
         + f_bytes(32, f_bytes(1, f_varint(1, 5) + f_varint(2, 14)
                               + f_bytes(3, f_bytes(1, f_float(1, 30) + f_float(2, 30)) + f_float(2, 12) + f_float(3, 4))
                               + f_float(4, 15)))
@@ -147,6 +147,35 @@ def parse_single_field(data: bytes) -> tuple[int, int, int | bytes]:
     return tag >> 3, tag & 7, value
 
 
+def parse_fields(data: bytes) -> dict:
+    """Varint fields as ints; repeated length-delimited fields as lists of bytes."""
+    out: dict = {}
+    pos = 0
+
+    def read_varint() -> int:
+        nonlocal pos
+        value = shift = 0
+        while True:
+            b = data[pos]
+            pos += 1
+            value |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                return value
+
+    while pos < len(data):
+        tag = read_varint()
+        if tag & 7 == 0:
+            out[tag >> 3] = read_varint()
+        elif tag & 7 == 2:
+            length = read_varint()
+            out.setdefault(tag >> 3, []).append(data[pos:pos + length])
+            pos += length
+        else:
+            break
+    return out
+
+
 class Robot:
     def __init__(self) -> None:
         self.status = 14  # charged on dock
@@ -159,6 +188,7 @@ class Robot:
         self.x, self.y, self.heading = 5.0, 5.0, 0.0
         # config/get varint fields by get number, plus DisturbMode bytes.
         self.config: dict[int, int] = {1: 29, 6: 1}
+        self.carpet_option = 0
         self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
 
     @property
@@ -183,7 +213,7 @@ class Robot:
         elif short == "status/get_device_base_status":
             return response(f_varint(1, 1) + f_bytes(2, self.base_status()))
         elif short == "map/get_map":
-            return response(map_payload())
+            return response(map_payload(self.carpet_option))
         elif short == "info/get_clean_time_line":
             # GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 RobotEventNode...}}
             start = int(time.time() * 1000) - 3_600_000
@@ -203,6 +233,17 @@ class Robot:
                 self.config[get] = value
             else:
                 return response(f_varint(1, 2))
+        elif short == "map/operation":
+            # MapOperation.Request {1 mapId, 4 MapOperationPayload {6 CarpetOperation}}
+            fields = parse_fields(payload)
+            if fields.get(1) != MAP_ID:
+                return response(f_varint(1, 2))
+            for op in fields.get(4, []):
+                carpet = parse_fields(op).get(6)
+                if carpet:
+                    c = parse_fields(carpet[0])
+                    if c.get(1) == 1 and c.get(3, 0) == 0:
+                        self.carpet_option = c.get(2, 0)
         elif short == "consumable/get_consumable_info":
             return response(f_bytes(1, f_bytes(1, bytes([4])) + f_bytes(2, bytes([3]))))
         elif short == "clean/start_clean":

@@ -102,6 +102,8 @@ struct MapCanvas: View {
     var showCarpets = true
     /// Low-byte pixel type to paint magenta, for diagnosis.
     var highlightPixelType: Int?
+    /// Carpet to outline, e.g. while it's being edited.
+    var highlightCarpet: Int?
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -140,6 +142,12 @@ struct MapCanvas: View {
                         .stroke(MapPalette.carpet.opacity(0.7), lineWidth: max(0.5, 1 / zoom))
                         .clipShape(polygonPath(points))
                     polygonPath(points).stroke(MapPalette.carpet, lineWidth: max(0.75, 1.5 / zoom))
+                }
+
+                if let id = highlightCarpet, let carpet = map.carpets.first(where: { $0.id == id }) {
+                    let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
+                    polygonPath(points).fill(Color.yellow.opacity(0.3))
+                    polygonPath(points).stroke(Color.yellow, lineWidth: max(1.5, 3 / zoom))
                 }
 
                 // Furniture: a floor-plan drawing of each piece, rotated into place.

@@ -66,6 +66,30 @@ public enum Payloads {
         singleVarint(value, field: key.setField)
     }
 
+    /// map/operation: MapOperation.Request {1 mapId, 2 mapVersion,
+    /// 3 editVersion, 4 operations: MapOperationPayload}. Each operation is
+    /// one MapOperationPayload (a oneof: field number = kind of edit).
+    public static func mapOperation(_ map: RobotMap, _ operations: [(field: Int, body: [UInt8])]) -> [UInt8] {
+        var w = ProtoWriter()
+        w.varint(1, map.mapId)
+        if map.mapVersion != 0 { w.varint(2, map.mapVersion) }
+        if map.editVersion != 0 { w.varint(3, map.editVersion) }
+        for op in operations {
+            w.message(4) { payload in payload.bytesField(op.field, op.body) }
+        }
+        return w.bytes
+    }
+
+    /// MapOperationPayload 6, CarpetOperation {1 carpetId, 2 carpetCleanOption,
+    /// 3 operation = OPERATION_CARPET_CLEAN_OPTION (0)}: one carpet's handling.
+    public static func carpetCleanOption(_ map: RobotMap, carpetId: Int, option: Int) -> [UInt8] {
+        var op = ProtoWriter()
+        op.varint(1, carpetId)
+        op.varint(2, option)
+        op.varint(3, 0)
+        return mapOperation(map, [(field: 6, body: op.bytes)])
+    }
+
     /// config/set field 5, DisturbMode {1 enabled, 2 beginTime, 3 endTime},
     /// times in seconds after midnight.
     public static func setDoNotDisturb(_ dnd: RobotSettings.DoNotDisturb) -> [UInt8] {

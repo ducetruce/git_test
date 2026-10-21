@@ -25,7 +25,8 @@ From the owner's list of Narwal app frustrations, in order:
 2. **Done (read-only):** one flat Settings screen instead of nested menus.
 3. **Built, untested:** every setting as switches behind a beta toggle;
    test volume first.
-4. Carpets: never mop carpets (`Carpet.carpetCleanOption` AVOID), remove a
+4. **Built, untested:** per-carpet handling (Map > Layers > Carpets) via
+   `map/operation` CarpetOperation, the first map edit. Then: never mop carpets (`Carpet.carpetCleanOption` AVOID), remove a
    detected carpet (`StaticMapPayload.noCarpetAreas`, `NoCarpetAreaOperation`),
    mark a whole room as carpet (`isFullRoomCarpet`).
 5. Furniture: edit pieces and set rules around them.

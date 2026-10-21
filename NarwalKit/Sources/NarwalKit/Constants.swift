@@ -85,6 +85,7 @@ public enum Topic {
     public static let getConfig = "config/get"
     /// Takes SetConfig.Request, whose field numbers differ from config/get's.
     public static let setConfig = "config/set"
+    public static let mapOperation = "map/operation"
     /// Probably the Narwal app's "issue resolved" button; payload unknown,
     /// sent empty.
     public static let confirmWarning = "clean_system/confirm_warning"

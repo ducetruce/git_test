@@ -41,6 +41,10 @@ public enum MapPixel: Equatable, Sendable {
 /// The saved house map from map/get_map.
 public struct RobotMap: Equatable, Sendable {
     public var mapId: Int
+    /// StaticMapPayload 2 and 33: echoed in map/operation so the robot can
+    /// refuse an edit made against an outdated map.
+    public var mapVersion = 0
+    public var editVersion = 0
     public var width: Int
     public var height: Int
     /// Millimetres per pixel.
@@ -73,6 +77,8 @@ public struct RobotMap: Equatable, Sendable {
             throw ParseError.noActiveMap
         }
         mapId = id
+        mapVersion = map.int(2) ?? 0
+        editVersion = map.int(33) ?? 0
         resolution = map.int(3) ?? 0
         width = map.int(4) ?? 0
         height = map.int(5) ?? 0

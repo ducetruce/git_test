@@ -82,6 +82,10 @@ final class FakeRobotTests: XCTestCase {
         let withQuiet = try await connection.setDoNotDisturb(quiet)
         XCTAssertEqual(withQuiet?.doNotDisturb, quiet)
 
+        // A map edit: one carpet set to "avoid", read back from the map.
+        let edited = try await connection.setCarpetCleanOption(1, to: 4, on: map)
+        XCTAssertEqual(edited.carpets.first?.cleanOption, 4)
+
         do {
             try await connection.cleanRooms([42])
             XCTFail("unknown room accepted")

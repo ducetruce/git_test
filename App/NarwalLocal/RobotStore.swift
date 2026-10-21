@@ -232,6 +232,20 @@ final class RobotStore {
         await write("Quiet hours", expecting: { $0.doNotDisturb == dnd }) { try await $0.setDoNotDisturb(dnd) }
     }
 
+    func setCarpetOption(_ carpetId: Int, to option: Int) async {
+        guard allowsWrites, let current = map else { return }
+        await run("Carpet") { connection in
+            let updated = try await connection.setCarpetCleanOption(carpetId, to: option, on: current)
+            await MainActor.run {
+                self.map = updated
+                if updated.carpets.first(where: { $0.id == carpetId })?.cleanOption != option {
+                    self.lastError = "The robot didn't apply the change to that carpet."
+                    self.appendLog("Carpet \(carpetId): not applied after map/operation")
+                }
+            }
+        }
+    }
+
     func confirmWarning() async {
         await run("Mark resolved") { try await $0.confirmWarning() }
         await refreshAll()
