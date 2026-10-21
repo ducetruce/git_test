@@ -110,7 +110,7 @@ public actor NarwalConnection {
         self.host = Self.normalizedHost(host)
         self.port = port
         self.productKey = productKey
-        self.deviceId = deviceId
+        self.deviceId = DeviceInfo.isPlausibleId(deviceId) ? deviceId : ""
         let (stream, continuation) = AsyncStream<NarwalEvent>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.events = stream
         self.continuation = continuation
@@ -352,8 +352,11 @@ public actor NarwalConnection {
             onError(NarwalError.notConnected)
             return
         }
-        let frame = NarwalFrame(topic: fullTopic(short), payload: payload)
-        ws.send(.data(Data(frame.encoded()))) { error in
+        guard let bytes = NarwalFrame(topic: fullTopic(short), payload: payload).encoded() else {
+            onError(NarwalError.rejected(short, -1))
+            return
+        }
+        ws.send(.data(Data(bytes))) { error in
             if let error { onError(error) }
         }
         if short == Topic.activeRobotPublish { lastSubscription = Date() }
@@ -570,7 +573,7 @@ struct ResponseShape: Sendable {
         case .ack:
             return Self.isStatusOnly(m) || m.fields.isEmpty
         case .deviceInfo:
-            return !(m.string(2)?.isEmpty ?? true) || Self.isErrorStatus(m)
+            return DeviceInfo(response: m) != nil || Self.isErrorStatus(m)
         case .map:
             // Not a bare number in field 2: that's a status reply (#108).
             return m.message(2) != nil || Self.isErrorStatus(m)

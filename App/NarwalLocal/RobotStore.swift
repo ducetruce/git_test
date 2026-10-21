@@ -51,7 +51,10 @@ final class RobotStore {
     private(set) var model = NarwalModel(rawValue: UserDefaults.standard.string(forKey: "robotModel") ?? "")
         ?? .freoZ10Ultra
     /// Optional: normally learned from the robot.
-    private(set) var deviceIdOverride = UserDefaults.standard.string(forKey: "robotDeviceId") ?? ""
+    /// A saved id that isn't a plausible id (an older build could save a
+    /// binary blob) is dropped.
+    private(set) var deviceIdOverride = UserDefaults.standard.string(forKey: "robotDeviceId")
+        .flatMap { DeviceInfo.isPlausibleId($0) ? $0 : nil } ?? ""
 
     func setModel(_ newModel: NarwalModel) {
         guard newModel != model else { return }
@@ -62,7 +65,7 @@ final class RobotStore {
 
     /// Saves a device id learned from the robot without reconnecting.
     private func rememberDeviceId(_ id: String, source: String) {
-        guard !id.isEmpty, id != deviceIdOverride else { return }
+        guard DeviceInfo.isPlausibleId(id), id != deviceIdOverride else { return }
         deviceIdOverride = id
         UserDefaults.standard.set(id, forKey: "robotDeviceId")
         appendLog("Saved device ID from \(source)")

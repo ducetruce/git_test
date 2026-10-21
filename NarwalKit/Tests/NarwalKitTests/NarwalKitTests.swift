@@ -18,10 +18,10 @@ private func hexString(_ bytes: [UInt8]) -> String {
 
 final class EncodingTests: XCTestCase {
     func testFramesMatchReference() {
-        XCTAssertEqual(hexString(NarwalFrame(topic: "/DrzDKQ0MU8/DEV123/common/yell").encoded()),
+        XCTAssertEqual(hexString(NarwalFrame(topic: "/DrzDKQ0MU8/DEV123/common/yell").encoded() ?? []),
                        GoldenVectors.frameYell)
         XCTAssertEqual(hexString(NarwalFrame(topic: "/DrzDKQ0MU8/DEV123/clean/set_fan_level",
-                                             payload: Payloads.setFanLevel(.strong)).encoded()),
+                                             payload: Payloads.setFanLevel(.strong)).encoded() ?? []),
                        GoldenVectors.frameSetFan)
     }
 
@@ -64,7 +64,7 @@ final class DecodingTests: XCTestCase {
     }
 
     func testBroadcastTopicParts() throws {
-        let frame = try NarwalFrame(bytes: NarwalFrame(topic: "/DrzDKQ0MU8/abc/status/working_status").encoded())
+        let frame = try NarwalFrame(bytes: XCTUnwrap(NarwalFrame(topic: "/DrzDKQ0MU8/abc/status/working_status").encoded()))
         XCTAssertEqual(frame.shortTopic, "status/working_status")
         XCTAssertEqual(frame.topicDeviceId, "abc")
         XCTAssertEqual(frame.topicProductKey, "DrzDKQ0MU8")
@@ -278,6 +278,24 @@ final class ResponseShapeTests: XCTestCase {
         XCTAssertEqual(carpets.label(for: settings.value(carpets)), "Avoid")
         let petMode = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "petMode" })
         XCTAssertEqual(petMode.label(for: settings.value(petMode)), "Off", "absent is off")
+    }
+
+    func testOtherRepliesAreNotTakenForDeviceInfo() async throws {
+        // As crashed the app: a config/get reply (field 2 = a message) read
+        // as device info made its bytes the device id.
+        let config = try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in m.varint(1, 96); m.message(3) { tz in tz.string(1, "America/Los_Angeles") } }
+        }
+        XCTAssertNil(DeviceInfo(response: config))
+        let shape = ResponseShape(topic: Topic.getDeviceInfo, fireAndForget: false)
+        XCTAssertFalse(shape.accepts(config))
+        XCTAssertNotNil(DeviceInfo(response: try message { $0.string(1, "DrzDKQ0MU8"); $0.string(2, "a1B2-c3_d4") }))
+        XCTAssertFalse(DeviceInfo.isPlausibleId(String(repeating: "x", count: 65)))
+        XCTAssertFalse(DeviceInfo.isPlausibleId("ab cd"))
+        XCTAssertNil(NarwalFrame(topic: "/" + String(repeating: "x", count: 300)).encoded(), "too long: nil, not a trap")
+        let restored = await NarwalConnection(host: "127.0.0.1", deviceId: "\u{8}\u{1}\u{12}").deviceId
+        XCTAssertEqual(restored, "", "a saved binary id is dropped")
     }
 
     func testDeviceInfoIsNotTakenForAnAck() throws {

@@ -6,11 +6,22 @@ public struct DeviceInfo: Equatable, Sendable {
     public var firmware: String
 
     /// get_device_info response: {1: productKey, 2: deviceId, 3: firmware}.
+    /// Other replies also carry bytes in field 2 (a settings or status
+    /// message), so the strings must look like identifiers, or a binary blob
+    /// becomes the "device id" and every later topic is garbage.
     public init?(response: ProtoMessage) {
-        guard let id = response.string(2)?.trimmed, !id.isEmpty else { return nil }
-        productKey = response.string(1)?.trimmed ?? ""
+        guard let id = response.string(2)?.trimmed, Self.isPlausibleId(id) else { return nil }
+        let key = response.string(1)?.trimmed ?? ""
+        guard key.isEmpty || Self.isPlausibleId(key) else { return nil }
+        productKey = key
         deviceId = id
         firmware = response.string(3)?.trimmed ?? ""
+    }
+
+    /// Short and plain: letters, digits, '-', '_', '.' and ':'.
+    public static func isPlausibleId(_ s: String) -> Bool {
+        (1...64).contains(s.utf8.count)
+            && s.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || "-_.:".unicodeScalars.contains($0)) }
     }
 }
 
