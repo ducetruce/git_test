@@ -383,7 +383,9 @@ public actor NarwalConnection {
     public func send(_ short: String, _ payload: [UInt8] = [],
                      timeout: TimeInterval = NarwalDefaults.commandTimeout,
                      lateGrace: TimeInterval = NarwalDefaults.lateResponseGrace) async throws -> CommandResponse {
-        guard socket != nil else { throw NarwalError.notConnected }
+        // Between a dropped socket and the reconnect there's a short gap; a
+        // command sent then waits for the new socket instead of failing.
+        guard await waitForSocket(timeout: NarwalDefaults.reconnectWait) else { throw NarwalError.notConnected }
         await acquireCommandSlot()
         defer { releaseCommandSlot() }
 
@@ -415,6 +417,15 @@ public actor NarwalConnection {
         let response = try await send(short, payload, timeout: timeout)
         guard response.accepted else { throw NarwalError.rejected(short, response.resultCode) }
         return response
+    }
+
+    private func waitForSocket(timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while socket == nil {
+            guard runTask != nil, Date() < deadline, !Task.isCancelled else { return false }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return true
     }
 
     private func fail(_ id: UInt64, _ error: Error) {

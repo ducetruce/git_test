@@ -8,6 +8,9 @@ public enum NarwalDefaults {
     public static let bonjourType = "_narwal_sweeper._tcp"
 
     public static let commandTimeout: TimeInterval = 5
+    /// How long a command waits for a dropped socket to be replaced. The
+    /// reconnect backoff is 1-2 s, or ~12 s when the robot refuses a client.
+    public static let reconnectWait: TimeInterval = 15
     /// A timed-out command keeps its place in the response order this much
     /// longer, so its late answer is dropped instead of misattributed.
     public static let lateResponseGrace: TimeInterval = 10

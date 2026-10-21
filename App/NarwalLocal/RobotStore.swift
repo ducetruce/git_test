@@ -243,7 +243,14 @@ final class RobotStore {
                        _ send: @escaping (NarwalConnection) async throws -> RobotSettings?) async {
         guard allowsWrites else { return }
         await run(title) { connection in
-            let after = try await send(connection)
+            let after: RobotSettings?
+            do {
+                after = try await send(connection)
+            } catch NarwalError.notConnected {
+                // The socket dropped mid-write; setting a value twice is
+                // harmless, so try once more on the new connection.
+                after = try await send(connection)
+            }
             await MainActor.run {
                 if let after { self.robotSettings = after }
                 if after.map(applied) != true {
