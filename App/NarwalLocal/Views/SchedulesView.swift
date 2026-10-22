@@ -6,9 +6,26 @@ struct SchedulesView: View {
     @Environment(RobotStore.self) private var store
     @State private var adding = false
 
+    @State private var day = Calendar.current.startOfDay(for: Date())
+
     var body: some View {
         List {
+            Section { weekStrip }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             if let schedules = store.schedules {
+                if !schedules.isEmpty {
+                    let today = runs(on: day, schedules)
+                    Section(day.formatted(.dateTime.weekday(.wide).month().day())) {
+                        if today.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary) }
+                        ForEach(today) { schedule in
+                            HStack {
+                                Text(timeText(schedule)).font(.system(size: 22, weight: .light)).monospacedDigit()
+                                Text(schedule.name.isEmpty ? "Schedule" : schedule.name).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
                 if schedules.isEmpty {
                     Text("No schedules yet.").foregroundStyle(.secondary)
                 }
@@ -40,6 +57,7 @@ struct SchedulesView: View {
             }
         }
         .navigationTitle("Schedules")
+        .themedList()
         .toolbar {
             Button { adding = true } label: { Image(systemName: "plus") }
                 .disabled(!store.allowsWrites || store.map == nil || store.busyAction != nil)
@@ -48,6 +66,45 @@ struct SchedulesView: View {
         .sheet(isPresented: $adding) { AddScheduleSheet() }
         .refreshable { await store.reloadSchedules() }
         .task { await store.reloadSchedules() }
+    }
+
+    /// The next seven days, dotted where a schedule runs, like Narwal's.
+    private var weekStrip: some View {
+        let schedules = store.schedules ?? []
+        let calendar = Calendar.current
+        let days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: Date())) }
+        return HStack(spacing: 6) {
+            ForEach(days, id: \.self) { date in
+                let chosen = calendar.isDate(date, inSameDayAs: day)
+                Button {
+                    day = date
+                } label: {
+                    VStack(spacing: 4) {
+                        Text(calendar.isDateInToday(date) ? "Today" : date.formatted(.dateTime.weekday(.abbreviated)))
+                            .font(.system(size: 11))
+                        Text(date.formatted(.dateTime.day())).font(.system(size: 17, weight: .semibold))
+                        Circle().fill(runs(on: date, schedules).isEmpty ? Color.clear : Theme.teal).frame(width: 5, height: 5)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(chosen ? Theme.background : Theme.text)
+                    .background(chosen ? Theme.text : Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func runs(on date: Date, _ schedules: [CleanSchedule]) -> [CleanSchedule] {
+        let weekday = Calendar.current.component(.weekday, from: date) - 1
+        return schedules.filter { $0.enabled && ($0.time?.weekdays.contains(weekday) ?? false) }
+            .sorted { ($0.time?.hour ?? 0, $0.time?.minute ?? 0) < ($1.time?.hour ?? 0, $1.time?.minute ?? 0) }
+    }
+
+    private func timeText(_ schedule: CleanSchedule) -> String {
+        guard let t = schedule.time else { return "–" }
+        return String(format: "%02d:%02d", t.hour, t.minute)
     }
 
     private func row(_ schedule: CleanSchedule) -> some View {
@@ -76,6 +133,7 @@ private struct AddScheduleSheet: View {
     @State private var routineId: UUID?
     @State private var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var weekdays: Set<Int> = Set(1...5)
+    @State private var freoMind = false
 
     private static let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -89,8 +147,9 @@ private struct AddScheduleSheet: View {
                         Text("Whole house").tag(UUID?.none)
                         ForEach(routines) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
+                    Toggle("Freo Mind", isOn: $freoMind)
                 } footer: {
-                    Text("Routines are saved from the Map tab. Zone routines can't be scheduled on the robot.")
+                    Text("Routines are saved in the Clean tab; zone routines can't be scheduled on the robot. With Freo Mind the robot chooses suction, water and coverage itself.")
                 }
                 Section("When") {
                     DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
@@ -129,6 +188,7 @@ private struct AddScheduleSheet: View {
                 rooms: routine?.rooms ?? [],
                 settings: routine?.settings ?? CleanSettings(),
                 perRoom: routine?.perRoom ?? [:],
+                freoMind: freoMind,
                 hour: parts.hour ?? 9, minute: parts.minute ?? 0, weekdays: weekdays)
         }
         dismiss()

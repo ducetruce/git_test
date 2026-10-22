@@ -34,6 +34,17 @@ final class RobotStore {
     /// Robot-stored schedules; nil until loaded (or if the robot never answers).
     private(set) var schedules: [CleanSchedule]?
     private(set) var schedulesError: String?
+    /// Saved maps; nil until loaded.
+    private(set) var maps: [MapSummary]?
+    private(set) var firmware: FirmwareVersions?
+    private(set) var battery: BatteryHealth?
+    /// An interrupted clean the robot offers to pick up.
+    private(set) var continuable: ContinuableTask?
+    private(set) var dryingMinutesLeft: Int?
+    /// Cleans this app watched finish (area and time), kept on the phone.
+    private(set) var ledger = CleaningLedger.load()
+    /// The clean in progress: when it started and the most area seen.
+    private var watching: (start: Date, squareMeters: Double, seconds: Int)?
 
     // UI
     private(set) var busyAction: String?
@@ -228,8 +239,30 @@ final class RobotStore {
     /// writes haven't been tried on a real robot yet.
     var allowsWrites: Bool { UserDefaults.standard.bool(forKey: "allowRobotWrites") }
 
-    func changeSetting(_ key: RobotSettingKey, to value: Int) async {
-        await write(key.title, expecting: { $0.value(key) == value }) { try await $0.setSetting(key, value) }
+    func changeSetting(_ setting: RobotSetting, to choice: RobotSetting.Choice) async {
+        await write(setting.title, expecting: { setting.choice(in: $0) == choice }) { try await $0.setSetting(choice) }
+    }
+
+    func changeNoStairs(_ on: Bool, mapId: Int) async {
+        await write("No stairs", expecting: { $0.noStairs(mapId: mapId) == on }) {
+            try await $0.setNoStairs(on, mapId: mapId)
+        }
+    }
+
+    func saveCleaningOrder(_ rooms: [Int]) async {
+        guard let mapId = map?.mapId else { return }
+        await write("Cleaning order", expecting: { $0.cleaningOrder(mapId: mapId) == rooms }) {
+            try await $0.setCleaningOrder(rooms, mapId: mapId)
+        }
+    }
+
+    /// The saved House Cleaning Order for the current map, else map order.
+    var cleaningOrder: [Int] {
+        let rooms = map?.rooms.map(\.id) ?? []
+        guard let mapId = map?.mapId, let saved = robotSettings?.cleaningOrder(mapId: mapId), !saved.isEmpty else {
+            return rooms
+        }
+        return saved.filter(rooms.contains) + rooms.filter { !saved.contains($0) }
     }
 
     func changeVolume(to percent: Int) async {
@@ -290,13 +323,14 @@ final class RobotStore {
 
     /// Saves the routine on the robot as a clean plan, then schedules it.
     func addSchedule(name: String, rooms: [Int], settings: CleanSettings, perRoom: [Int: CleanSettings],
-                     hour: Int, minute: Int, weekdays: Set<Int>) async {
+                     freoMind: Bool = false, hour: Int, minute: Int, weekdays: Set<Int>) async {
         guard allowsWrites, let map else { return }
         let before = schedules?.count ?? 0
         let existing = schedules?.map(\.cron) ?? []
         await run("New schedule") { connection in
             let planId = try await connection.saveCleanPlan(
-                Payloads.setCleanPlan(mapId: map.mapId, name: name, rooms: rooms, settings: settings, perRoom: perRoom))
+                Payloads.setCleanPlan(mapId: map.mapId, name: name, rooms: rooms, settings: settings, perRoom: perRoom,
+                                      freoMind: freoMind))
             await MainActor.run { self.ownPlanIds.insert(planId) }
             let mode = Payloads.cleanMode(Set(rooms.isEmpty ? [settings.workMode] : rooms.map { (perRoom[$0] ?? settings).workMode }))
             let cron = CleanSchedule.cron(hour: hour, minute: minute, weekdays: weekdays, like: existing)
@@ -418,6 +452,19 @@ final class RobotStore {
             applyStatus(status)
         case .progress(let progress):
             self.progress = progress
+            if isCleaning {
+                let area = Double(progress.areaSquareMeters ?? 0)
+                if watching == nil || watching?.squareMeters == 0,
+                   let resumed = ledger.reopen(ifContinuedWith: area) {
+                    // The same clean after a mop wash or recharge: the
+                    // robot's area keeps counting, so don't count it twice.
+                    watching = (start: resumed.start, squareMeters: resumed.squareMeters, seconds: resumed.seconds)
+                }
+                var current = watching ?? (start: Date(), squareMeters: 0, seconds: 0)
+                current.squareMeters = max(current.squareMeters, Double(progress.areaSquareMeters ?? 0))
+                current.seconds = max(current.seconds, progress.elapsedSeconds ?? Int(Date().timeIntervalSince(current.start)))
+                watching = current
+            }
         case .history(let history):
             // Broadcasts can carry only the current task; keep a fuller list.
             if !history.events.isEmpty || self.history == nil { self.history = history }
@@ -441,6 +488,14 @@ final class RobotStore {
         statusUpdatedAt = Date()
         if new.workingStatus.isActiveCleaning, !wasCleaning {
             trail = []
+            watching = (start: Date(), squareMeters: 0, seconds: 0)
+        }
+        // A clean ended: keep its area and time on the phone. A pause or a
+        // trip to the dock mid-clean isn't an end.
+        if !new.workingStatus.isActiveCleaning, !new.isPaused, !new.isReturning, let finished = watching {
+            ledger.add(.init(start: finished.start, end: Date(), squareMeters: finished.squareMeters,
+                             seconds: finished.seconds > 0 ? finished.seconds : Int(Date().timeIntervalSince(finished.start))))
+            watching = nil
         }
         alerts.statusChanged(new, previousWasCleaning: wasCleaning, roomName: currentRoomName)
     }
@@ -476,11 +531,105 @@ final class RobotStore {
         }
     }
 
-    func cleanRooms(_ rooms: [Int], settings: CleanSettings, perRoom: [Int: CleanSettings] = [:]) async {
+    func cleanRooms(_ rooms: [Int], settings: CleanSettings, perRoom: [Int: CleanSettings] = [:],
+                    options: CleanOptions = CleanOptions()) async {
         await run("Starting clean") { connection in
-            let used = try await connection.cleanRooms(rooms, settings: settings, perRoom: perRoom)
+            let used = try await connection.cleanRooms(rooms, settings: settings, perRoom: perRoom, options: options)
             await MainActor.run { self.map = used }
         }
+    }
+
+    // MARK: Wood floor care
+
+    /// Rooms set to Wood Floor, the only ones the robot maintains.
+    var woodRooms: [Room] { map?.rooms.filter { $0.floor == .wood } ?? [] }
+
+    func startFloorMaintenance(rooms: [Int], cleanFirst: Bool) async {
+        await run("Starting floor maintenance") { connection in
+            if let used = try await connection.startFloorMaintenance(rooms: rooms, cleanFirst: cleanFirst) {
+                await MainActor.run { self.map = used }
+            }
+        }
+    }
+
+    // MARK: Maps
+
+    func reloadMaps() async {
+        guard let connection else { return }
+        do {
+            maps = try await connection.allMaps()
+        } catch {
+            appendLog("Maps: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+        }
+    }
+
+    func switchMap(to id: Int) async {
+        guard allowsWrites else { return }
+        await run("Switch map") { connection in
+            try await connection.switchMap(to: id)
+            let fetched = try await connection.fetchMap()
+            await MainActor.run { self.map = fetched }
+        }
+        await reloadMaps()
+    }
+
+    func deleteMap(_ id: Int) async {
+        guard allowsWrites else { return }
+        await run("Delete map") { try await $0.deleteMap(id) }
+        await reloadMaps()
+    }
+
+    func startMapping(rebuildCurrent: Bool) async {
+        guard allowsWrites else { return }
+        let stairs = !(robotSettings?.noStairs(mapId: map?.mapId ?? 0) ?? false)
+        await run(rebuildCurrent ? "Remapping" : "New secondary map") {
+            try await $0.startMapping(rebuildCurrent: rebuildCurrent, hasStairs: stairs)
+        }
+    }
+
+    // MARK: Device and parts
+
+    func reloadDeviceInfo() async {
+        guard let connection else { return }
+        if let fetched = try? await connection.firmwareVersions() { firmware = fetched }
+        if let fetched = try? await connection.batteryHealth() { battery = fetched }
+    }
+
+    func reboot() async {
+        guard allowsWrites else { return }
+        await run("Restart robot") { try await $0.reboot() }
+    }
+
+    func replacedPart(_ part: PartLife) async {
+        part.setStart(hoursLeft: part.ratedHours)
+        guard allowsWrites else { return }
+        await run("\(part.name) replaced") { try await $0.resetConsumable(part.item) }
+        await refreshAll()
+    }
+
+    func drainDockBase() async {
+        guard allowsWrites else { return }
+        await run("Dock Base Drainage") { try await $0.drainDockBase() }
+    }
+
+    func checkForInterruptedClean() async {
+        guard let connection, !isCleaning else { return }
+        continuable = try? await connection.continuableTask()
+    }
+
+    func continueInterruptedClean(_ resume: Bool) async {
+        await run(resume ? "Resuming clean" : "Discarding interrupted clean") { try await $0.continueTask(resume) }
+        continuable = nil
+    }
+
+    func reloadDryingTime() async {
+        guard let connection else { return }
+        dryingMinutesLeft = try? await connection.dryingTimeLeft()
+    }
+
+    /// Area cleaned in the last 7 days, including the clean in progress.
+    var squareMetersThisWeek: Double {
+        ledger.squareMetersThisWeek() + (watching?.squareMeters ?? 0)
     }
 
     func cleanZones(_ zones: [Payloads.Zone], settings: CleanSettings) async {
@@ -518,9 +667,16 @@ final class RobotStore {
         }
     }
 
-    func cleanAll(settings: CleanSettings) async {
+    /// Whole house, in the saved House Cleaning Order.
+    func cleanAll(settings: CleanSettings, options: CleanOptions = CleanOptions()) async {
+        let order = cleaningOrder
         await run("Starting whole-house clean") { connection in
-            let used = try await connection.cleanAll(settings: settings)
+            let used: RobotMap
+            if order.isEmpty {
+                used = try await connection.cleanAll(settings: settings, options: options)
+            } else {
+                used = try await connection.cleanRooms(order, settings: settings, options: options)
+            }
             await MainActor.run { self.map = used }
         }
     }

@@ -1,3 +1,4 @@
+import NarwalKit
 import SwiftUI
 
 /// One pass over everything that hasn't been tried on the real robot, with
@@ -15,69 +16,93 @@ struct ChecklistView: View {
     static let sections: [(String, [Item])] = [
         ("Look", [
             Item(id: "model", title: "3D robot and station",
-                 how: "Today and Station: does the model look like your robot? Drag to turn it. Note what's off."),
+                 how: "Today and Station: does the model look like your robot? Drag to turn it."),
+            Item(id: "screens", title: "New screens",
+                 how: "Today, Clean, Station and More: anything cramped, cut off or hard to read?"),
+            Item(id: "area", title: "Cleaned this week",
+                 how: "Today's middle ring: after a clean, does the area roughly match the Narwal app's report?"),
             Item(id: "map3d", title: "3D map",
-                 how: "Clean tab in 3D: walls, furniture and the robot in the right places? Pick rooms with the chips."),
-            Item(id: "obstacles", title: "Obstacle photos",
-                 how: "More > Obstacle photos: does tapping one show the robot's photo?"),
+                 how: "Clean tab in 3D: walls, furniture and the robot in the right places?"),
+            Item(id: "obstacles", title: "Obstacle photos", how: "More > Obstacle photos: tap one."),
         ]),
         ("Status", [
             Item(id: "status", title: "Today shows the right state",
-                 how: "Docked, charging, cleaning, returning: compare with the Narwal app."),
-            Item(id: "relocalize", title: "\"Finding its position\"",
-                 how: "Shown while the robot relocates itself, not \"Charging\"."),
-            Item(id: "activity", title: "Station activities",
-                 how: "Washing mops, drying, emptying the dustbin show by name."),
+                 how: "Docked, charging, cleaning, returning, \"Finding its position\": compare with the Narwal app."),
+            Item(id: "activity", title: "Dock activities",
+                 how: "Washing mops, drying, emptying, drying the dust bag show by name."),
+            Item(id: "cartridges", title: "Cartridges",
+                 how: "Station > Cartridges: Detergent and the Wood Floor Maintenance Solution show, and the stain remover isn't listed as missing."),
+            Item(id: "drying", title: "Drying time left",
+                 how: "While the mops dry, the Station screen shows minutes left."),
+        ]),
+        ("Freo Mind and cleaning", [
+            Item(id: "freo-clean", title: "Clean with Freo Mind",
+                 how: "Clean tab: pick a room > Freo Mind on > Start. Does the Narwal app show it as a Freo Mind clean?"),
+            Item(id: "freo-settings", title: "Freo Mind Mode settings",
+                 how: "More > Freo Mind Mode: change Re-mopping Cycle Limit and Coverage Precision. Check the Narwal app."),
+            Item(id: "order", title: "House Cleaning Order",
+                 how: "More > Map management > Cleaning order: move a room, Save. Check the Narwal app's order."),
+            Item(id: "resume", title: "Resume an interrupted clean",
+                 how: "If a clean stops early, Today offers Continue."),
+        ]),
+        ("Wood floor care", [
+            Item(id: "floor-material", title: "Floor material",
+                 how: "Clean > Edit > Select: tap a room > Floor material > Wood Floor. Check the Narwal app's Floor material."),
+            Item(id: "maintain", title: "Floor maintenance",
+                 how: "Clean tab > ✨ button: pick wood rooms, Start. Try once with \"Cleaning before maintenance\" off."),
+            Item(id: "maintain-after", title: "Maintain after a clean",
+                 how: "Start a clean with \"Maintain wood floors afterwards\" on."),
         ]),
         ("Settings", [
-            Item(id: "settings", title: "Three different settings",
-                 how: "Change one switch, one choice and quiet hours. Check each in the Narwal app."),
+            Item(id: "floor-cleaning", title: "Floor Cleaning",
+                 how: "Rewash Strategy, Intensive Corner Cleaning, granular debris: each matches the Narwal app before and after changing it."),
+            Item(id: "dock", title: "Dock",
+                 how: "Auto-empty Frequency and Level, Default Cleaning Mode, hot water, detergent: compare with the Narwal app."),
+            Item(id: "general", title: "General",
+                 how: "Do Not Disturb, Plateau Mode, Child Lock, Auto Power-Off."),
+            Item(id: "carpet", title: "Newly detected carpets", how: "Clean / Avoid / Cross / Vacuum & Mop matches the Narwal app."),
+            Item(id: "voice", title: "Navo Voice Assistant", how: "Assistant switch, language shown correctly, volume."),
+            Item(id: "ai", title: "Obstacle Avoidance Strategy", how: "Smart / Safety matches."),
+            Item(id: "drain", title: "Dock Base Drainage", how: "Station > Dock Base Drainage: does the dock drain?"),
         ]),
-        ("Carpets (Clean tab)", [
+        ("Map", [
             Item(id: "carpet-option", title: "One carpet's handling",
-                 how: "Clean tab, switch to 2D, Layers > Carpets…: set one carpet to Avoid. Check the same carpet in the Narwal app."),
-            Item(id: "carpet-add", title: "Add a carpet",
-                 how: "Edit > Add carpet: drag over a rug the robot missed."),
-            Item(id: "carpet-not", title: "Not a carpet",
-                 how: "Edit > Not a carpet: drag over a spot wrongly marked as carpet."),
-            Item(id: "carpet-room", title: "Whole room is carpet",
-                 how: "Edit > Select: tap a carpet > Whole room is carpet."),
-            Item(id: "carpet-delete", title: "Delete a carpet",
-                 how: "Edit > Select: tap a carpet > Delete. (Add it back afterwards if you need it.)"),
+                 how: "Clean tab, 2D, Layers > Carpets…: set one carpet to Avoid. Check the Narwal app."),
+            Item(id: "carpet-edit", title: "Add / not a carpet / delete",
+                 how: "Edit tools Add carpet and Not a carpet, then delete what you added."),
+            Item(id: "nogo", title: "No-go zone and virtual wall", how: "Add each, then delete them."),
+            Item(id: "rooms", title: "Rename, split, merge", how: "Rename a room; split one, then merge it back."),
+            Item(id: "character", title: "Room character and type",
+                 how: "Tap a room > Room character, and Room type. Check the Narwal app."),
+            Item(id: "furniture", title: "Change a furniture type", how: "Edit > Select: tap furniture > Change type."),
+            Item(id: "maps", title: "Map management",
+                 how: "More > Map management: the Main Map is listed, No stairs matches the Narwal app. (Don't remap unless you want to.)"),
+            Item(id: "rotate", title: "Rotate map", how: "Map management > Rotate map 90°. Rotate back the same way."),
         ]),
-        ("Map (Clean tab)", [
-            Item(id: "nogo-add", title: "Add a no-go zone", how: "Edit > No-go zone: drag a rectangle."),
-            Item(id: "nogo-delete", title: "Delete it", how: "Edit > Select: tap the zone > Delete."),
-            Item(id: "wall-add", title: "Add a virtual wall", how: "Edit > Virtual wall: drag a line."),
-            Item(id: "wall-delete", title: "Delete it", how: "Edit > Select: tap the wall > Delete."),
-            Item(id: "room-rename", title: "Rename a room", how: "Edit > Select: tap a room > Rename."),
-            Item(id: "room-split", title: "Split a room",
-                 how: "Edit > Split room: drag a line across a room. Then merge it back (next item)."),
-            Item(id: "room-merge", title: "Merge two rooms", how: "Edit > Select: tap a room > Merge with…"),
-            Item(id: "furniture", title: "Change a furniture type",
-                 how: "Edit > Select: tap furniture > Change type. Check the Narwal app's 3D map."),
+        ("Schedules", [
+            Item(id: "schedule-list", title: "Schedules load", how: "Your 07:00 schedule appears on the right days."),
+            Item(id: "schedule-add", title: "Add one", how: "Add one for a few minutes from now, with Freo Mind. Does it run?"),
+            Item(id: "schedule-toggle", title: "Turn it off and on, then delete it", how: "Switch, then swipe left."),
         ]),
-        ("Schedules (More)", [
-            Item(id: "schedule-list", title: "Schedules load",
-                 how: "Any schedules made in the Narwal app appear, with the right time and days."),
-            Item(id: "schedule-add", title: "Add a schedule",
-                 how: "Add one for a few minutes from now. Check it in the Narwal app, and that it runs."),
-            Item(id: "schedule-toggle", title: "Turn it off and on", how: "Use its switch; check the Narwal app."),
-            Item(id: "schedule-delete", title: "Delete it", how: "Swipe left on it."),
+        ("Device and parts", [
+            Item(id: "device", title: "Device", how: "More > Device: firmware matches v01.07.01.02, battery shows."),
+            Item(id: "parts", title: "Parts hours",
+                 how: "More > Parts and Consumables: enter the hours the Narwal app shows for each part. Check again after a few cleans."),
+            Item(id: "restart", title: "Restart Robot", how: "More > Device > Restart Robot. It comes back within a few minutes."),
         ]),
         ("Everyday use", [
             Item(id: "resolved", title: "Mark resolved",
                  how: "Next \"can't find the base station\" alert: tap Mark resolved. Does the robot find it?"),
             Item(id: "connect", title: "Connects without the Narwal app",
                  how: "Close both apps, wait an hour, open only this one."),
-            Item(id: "crash", title: "No crashes", how: "Settings > Diagnostics > Crash reports stays empty."),
+            Item(id: "crash", title: "No crashes", how: "More > Diagnostics > Crash reports stays empty."),
         ]),
     ]
 
     var body: some View {
         List {
             Section {
-                Text("Turn on Settings > Change robot settings first. Every change can be undone in the Narwal app. Mark each item, then share the report.")
+                Text("Turn on More > Change robot settings first. Every change can be undone in the Narwal app. Mark each item, then share the report.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             ForEach(Self.sections.indices, id: \.self) { index in
@@ -124,6 +149,31 @@ struct ChecklistView: View {
                 lines.append("- \(item.title): \(result)")
             }
         }
+        lines.append("")
+        lines.append("## Robot values")
+        // The raw values behind each setting, to check the mappings that
+        // couldn't be confirmed without the robot.
+        if let settings = store.robotSettings {
+            for setting in RobotSetting.all {
+                let paths = Set(setting.choices.flatMap { $0.writes.map(\.path) }).sorted { $0.lexicographicallyPrecedes($1) }
+                let raw = paths.map { "\($0.map(String.init).joined(separator: "."))=\(settings.int(path: $0))" }
+                lines.append("- \(setting.id): \(setting.label(in: settings)) [\(raw.joined(separator: " "))]")
+            }
+            if let mapId = store.map?.mapId {
+                lines.append("- noStairs(map \(mapId)): \(settings.noStairs(mapId: mapId))")
+                lines.append("- cleaningOrder: \(settings.cleaningOrder(mapId: mapId) ?? [])")
+            }
+        } else {
+            lines.append("- settings not loaded")
+        }
+        if let station = store.status?.station {
+            lines.append("- detergent=\(station.detergent ?? -1) stain=\(station.stainRemover ?? -1)/\(station.stainRemoverPercent ?? -1)% wood=\(station.woodFloorSolution ?? -1)/used \(station.woodFloorSolutionUsedPercent ?? -1)%")
+        }
+        for room in store.map?.rooms ?? [] {
+            lines.append("- room \(room.id) \(room.displayName): floor=\(room.floor.label) angle=\(room.floorAngle) soiled=\(room.isHeavilySoiled) type=\(room.roomType)")
+        }
+        lines.append("- cleans recorded on the phone: \(store.ledger.entries.count)")
+
         lines.append("")
         lines.append("## Last log lines")
         lines += store.log.suffix(60)

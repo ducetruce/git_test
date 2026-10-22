@@ -134,8 +134,8 @@ public struct StationState: Equatable, Sendable {
     public var cartridges: [Cartridge] {
         var out: [Cartridge] = []
         if let d = detergent {
-            let level: Cartridge.Level? = [1: .ok, 2: .notInstalled, 3: .empty, 4: .low, 5: .notInUse][d]
-            if let level { out.append(Cartridge(name: "Detergent", level: level, percent: nil)) }
+            let table: [Int: Cartridge.Level] = [1: .ok, 2: .notInstalled, 3: .empty, 4: .low, 5: .notInUse]
+            if let level = table[d] { out.append(Cartridge(name: "Detergent", level: level, percent: nil)) }
         }
         let shared: [Int: Cartridge.Level] = [1: .notInstalled, 2: .ok, 3: .empty, 4: .low]
         let wood = woodFloorSolution.flatMap { shared[$0] }.map {

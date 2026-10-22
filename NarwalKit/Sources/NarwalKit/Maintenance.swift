@@ -44,12 +44,13 @@ public struct MapSummary: Equatable, Sendable, Identifiable {
 /// common/upgrade/get_firmware_version: the robot, dock and camera
 /// versions as text.
 public struct FirmwareVersions: Equatable, Sendable {
-    public let robot: String
-    public let parts: [(name: String, version: String)]
-
-    public static func == (a: Self, b: Self) -> Bool {
-        a.robot == b.robot && a.parts.map(\.version) == b.parts.map(\.version)
+    public struct Part: Hashable, Sendable {
+        public let name: String
+        public let version: String
     }
+
+    public let robot: String
+    public let parts: [Part]
 
     public init?(_ m: ProtoMessage) {
         guard let text = m.string(2), !text.isEmpty else { return nil }
@@ -57,9 +58,9 @@ public struct FirmwareVersions: Equatable, Sendable {
         func version(_ group: ProtoMessage?, _ field: Int) -> String? {
             group?.message(field)?.string(3).flatMap { $0.isEmpty ? nil : $0 }
         }
-        var out: [(String, String)] = []
-        if let v = version(m.message(4), 3) ?? version(m.message(4), 1) { out.append(("Dock", v)) }
-        if let v = version(m.message(5), 1) ?? version(m.message(5), 2) { out.append(("Camera", v)) }
+        var out: [Part] = []
+        if let v = version(m.message(4), 3) ?? version(m.message(4), 1) { out.append(Part(name: "Dock", version: v)) }
+        if let v = version(m.message(5), 1) ?? version(m.message(5), 2) { out.append(Part(name: "Camera", version: v)) }
         parts = out
     }
 }
@@ -78,9 +79,10 @@ public struct BatteryHealth: Equatable, Sendable {
         } else {
             capacityPercent = nil
         }
-        temperature = m.first(5).flatMap {
-            if case .fixed64(let bits) = $0 { return Double(bitPattern: bits) }
-            return nil
+        if case .fixed64(let bits)? = m.first(5) {
+            temperature = Double(bitPattern: bits)
+        } else {
+            temperature = nil
         }
         if cycles == nil && capacityPercent == nil && temperature == nil { return nil }
     }
@@ -146,9 +148,58 @@ extension Payloads {
     }
 }
 
+extension Payloads {
+    /// SetConfig 18 customCleanStrategy with one map's CustomCleanOrder
+    /// (4 cleanOrders: {1 isModified, 2 roomCleanOrder, 3 default order,
+    /// 4 mapId}) replaced: Narwal's House Cleaning Order. The strategy's
+    /// other fields (rewash) and other maps' orders are kept.
+    public static func setCleaningOrder(_ rooms: [Int], mapId: Int, current: RobotSettings) -> [UInt8] {
+        let strategy = current.config.message(18) ?? ProtoMessage(fields: [])
+        var order = ProtoWriter()
+        order.varint(1, 1)
+        order.bytesField(2, rooms.flatMap { ProtoWriter.encodeVarint(UInt64($0)) })
+        if let previous = strategy.messages(4).first(where: { $0.int(4) == mapId }), let defaults = previous.first(3) {
+            if case .bytes(let b) = defaults { order.bytesField(3, b) }
+        }
+        order.varint(4, mapId)
+        let kept = strategy.fields.filter { field in
+            guard field.number == 4 else { return true }
+            if case .bytes(let b) = field.value, let unit = try? ProtoMessage(bytes: b) { return unit.int(4) != mapId }
+            return true
+        }
+        let updated = ProtoMessage(fields: kept + [ProtoField(number: 4, value: .bytes(order.bytes))])
+        var w = ProtoWriter()
+        w.bytesField(18, updated.encoded())
+        return w.bytes
+    }
+}
+
 extension RobotSettings {
+    /// The saved House Cleaning Order for a map, if the owner set one.
+    public func cleaningOrder(mapId: Int) -> [Int]? {
+        guard let order = config.message(18)?.messages(4).first(where: { $0.int(4) == mapId }),
+              order.int(1) == 1 else { return nil }
+        let rooms = order.varints(2)
+        return rooms.isEmpty ? nil : rooms
+    }
+
     /// Narwal's "No stairs" for one map.
     public func noStairs(mapId: Int) -> Bool {
         config.message(44)?.messages(1).first { $0.int(1) == mapId }?.int(2) == 1
+    }
+}
+
+extension RobotMap {
+    /// Floor area inside rooms, from the pixel grid (resolution is
+    /// millimetres per pixel).
+    public var floorSquareMeters: Double {
+        guard resolution > 0 else { return 0 }
+        var count = 0
+        for y in 0..<height {
+            for x in 0..<width {
+                if case .floor(let room) = pixel(x: x, y: y), room > 0 { count += 1 }
+            }
+        }
+        return Double(count) * pow(Double(resolution) / 1000, 2)
     }
 }

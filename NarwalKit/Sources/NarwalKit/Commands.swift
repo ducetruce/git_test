@@ -271,6 +271,13 @@ extension NarwalConnection {
         return try await settings()
     }
 
+    @discardableResult
+    public func setCleaningOrder(_ rooms: [Int], mapId: Int) async throws -> RobotSettings? {
+        guard let current = try await settings() else { throw NarwalError.timeout("config/get") }
+        try await perform(Topic.setConfig, Payloads.setCleaningOrder(rooms, mapId: mapId, current: current))
+        return try await settings()
+    }
+
     // MARK: Device and parts
 
     public func reboot() async throws { try await perform(Topic.reboot) }

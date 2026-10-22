@@ -29,6 +29,15 @@ struct TodayView: View {
                             FaultCard(alert: alert)
                         }
 
+                        if let task = store.continuable, !store.isCleaning { ResumeCard(task: task) }
+                        ForEach(store.status?.station.cartridges.filter(\.needsCare) ?? []) { cartridge in
+                            Card {
+                                Theme.label("Dock", color: Theme.amber)
+                                Text("\(cartridge.name): \(cartridge.label.lowercased())")
+                                    .font(.system(size: 17)).foregroundStyle(Theme.text)
+                            }
+                        }
+
                         if showSilentHint { SilentRobotHint() }
                         if store.autoConnectPaused { PausedCard() }
 
@@ -49,6 +58,7 @@ struct TodayView: View {
             .toolbar(.hidden, for: .navigationBar)
             .task {
                 if store.history == nil { await store.reloadHistory() }
+                await store.checkForInterruptedClean()
                 while !Task.isCancelled {
                     now = Date()
                     try? await Task.sleep(for: .seconds(5))
@@ -101,9 +111,8 @@ struct TodayView: View {
             ScoreRing(value: battery.map(String.init) ?? "–", label: "Battery",
                       fraction: battery.map { Double($0) / 100 }, color: Theme.blue)
             Spacer()
-            let week = roomsThisWeek
-            ScoreRing(value: week.map { "\($0.done)" } ?? "–", label: "Rooms / wk",
-                      fraction: week.map { $0.total == 0 ? 0 : Double($0.done) / Double($0.total) }, color: Theme.teal)
+            let week = areaThisWeek
+            ScoreRing(value: week.value, label: week.label, fraction: week.fraction, color: Theme.teal)
             Spacer()
             let bag = store.status?.station.dustBagHealth.flatMap { $0.isFinite ? Double($0) : nil }
             ScoreRing(value: bag.map { "\(Int($0.rounded()))" } ?? "–", label: "Bag",
@@ -112,12 +121,15 @@ struct TodayView: View {
         .padding(.horizontal, 8)
     }
 
-    /// Rooms cleaned in the last 7 days, out of all rooms on the map.
-    private var roomsThisWeek: (done: Int, total: Int)? {
-        guard let map = store.map, let history = store.history else { return nil }
-        let recent = history.lastCleaned().filter { now.timeIntervalSince($0.value) < 7 * 86_400 }
-        let ids = Set(map.rooms.map(\.id))
-        return (recent.keys.filter(ids.contains).count, ids.count)
+    /// Area cleaned in the last 7 days. A full ring is the whole mapped
+    /// floor once. Counts cleans this app saw finish.
+    private var areaThisWeek: (value: String, label: String, fraction: Double?) {
+        let squareMeters = store.squareMetersThisWeek
+        let text = AreaFormat.string(squareMeters: squareMeters)
+        let number = text.split(separator: " ").first.map(String.init) ?? text
+        let unit = text.hasSuffix("sq ft") ? "Sq ft / wk" : "m² / wk"
+        let floor = store.map?.floorSquareMeters ?? 0
+        return (squareMeters > 0 ? number : "0", unit, floor > 0 ? squareMeters / floor : nil)
     }
 
     /// The room left longest without a clean, if the history says.
@@ -370,3 +382,27 @@ private struct PausedCard: View {
         }
     }
 }
+
+/// An interrupted clean the robot can pick up where it stopped.
+private struct ResumeCard: View {
+    @Environment(RobotStore.self) private var store
+    let task: ContinuableTask
+
+    var body: some View {
+        Card {
+            Theme.label("Unfinished clean", color: Theme.amber)
+            Text(task.stoppedAt.map { "A clean stopped \($0.formatted(.relative(presentation: .named)))." }
+                 ?? "A clean stopped before it finished.")
+                .font(.system(size: 19)).foregroundStyle(Theme.text)
+            HStack(spacing: 10) {
+                Button("Continue") { Task { await store.continueInterruptedClean(true) } }
+                    .buttonStyle(PillButtonStyle())
+                Button("Dismiss") { Task { await store.continueInterruptedClean(false) } }
+                    .buttonStyle(PillButtonStyle(filled: false))
+            }
+            .padding(.top, 6)
+            .disabled(store.busyAction != nil)
+        }
+    }
+}
+

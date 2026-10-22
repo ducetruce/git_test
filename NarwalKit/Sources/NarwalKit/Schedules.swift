@@ -124,7 +124,8 @@ extension Payloads {
     /// clean/plan/set: SetCleanPlan.Request {1 CleanPlan}. Rooms in order;
     /// no rooms means the whole house. `id` 0 creates a plan.
     public static func setCleanPlan(id: Int = 0, mapId: Int, name: String, rooms: [Int],
-                                    settings: CleanSettings, perRoom: [Int: CleanSettings] = [:]) -> [UInt8] {
+                                    settings: CleanSettings, perRoom: [Int: CleanSettings] = [:],
+                                    freoMind: Bool = false) -> [UInt8] {
         let resolved = rooms.map { perRoom[$0] ?? settings }
         let mode = cleanMode(Set(rooms.isEmpty ? [settings.workMode] : resolved.map(\.workMode)))
         var w = ProtoWriter()
@@ -147,6 +148,8 @@ extension Payloads {
                     areaOption(&option, resolved[index])
                 }
             }
+            // CleanPlan 10 cleanParam: CleanTaskParam {1 enableSmartClean}.
+            if freoMind { plan.message(10) { $0.varint(1, 1) } }
         }
         return w.bytes
     }

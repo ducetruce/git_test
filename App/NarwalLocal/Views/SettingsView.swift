@@ -30,6 +30,7 @@ struct SettingsView: View {
                     NavigationLink("Test checklist") { ChecklistView() }
                     NavigationLink("Connection") { connection }
                     NavigationLink("Feature lab") { LabView() }
+                    NavigationLink("Hidden settings") { HiddenSettingsView() }
                     NavigationLink("Connection log") { LogView() }
                     NavigationLink("Crash reports") { CrashReportsView() }
                 } header: {
@@ -100,55 +101,30 @@ struct SettingsView: View {
     }
 }
 
-/// The robot's own settings on one flat screen, grouped the way people look
-/// for them. Read-only until the owner turns on "Change robot settings".
+/// The robot's settings, in the Narwal app's menus and order.
 private struct RobotSettingsSections: View {
     @Environment(RobotStore.self) private var store
     @AppStorage("allowRobotWrites") private var allowWrites = false
-    @State private var volume: Double?
     @State private var confirmWrites = false
 
     var body: some View {
-        let settings = store.robotSettings
-        // Controls stay in place while a write runs (only disabled): swapping
-        // a slider out mid-drag lost the next change.
-        let editable = allowWrites && settings != nil
-        let busy = store.busyAction != nil
-
         Section {
-            if editable, let settings {
-                VStack(alignment: .leading) {
-                    LabeledContent("Voice volume", value: "\(Int(volume ?? Double(settings.voiceVolume)))%")
-                    Slider(value: Binding(get: { volume ?? Double(settings.voiceVolume) }, set: { volume = $0 }),
-                           in: 0...100, step: 1, onEditingChanged: { editing in
-                        guard !editing, let volume else { return }
-                        Task {
-                            await store.changeVolume(to: Int(volume))
-                            self.volume = nil
-                        }
-                    })
-                    .disabled(busy)
-                }
-            } else {
-                LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
-            }
-            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { RobotSettingRow(key: $0) }
+            NavigationLink { RobotMenuView(menu: .freoMind) } label: { Label("Freo Mind Mode", systemImage: "drop.circle") }
+            NavigationLink { RobotMenuView(menu: .floorCleaning) } label: { Label("Floor Cleaning", systemImage: "bubbles.and.sparkles") }
+            NavigationLink { RobotMenuView(menu: .carpet) } label: { Label("Carpet Detection and Cleaning", systemImage: "square.grid.3x3") }
+            NavigationLink { GeneralMenuView() } label: { Label("General", systemImage: "gearshape") }
+            NavigationLink { RobotMenuView(menu: .dock) } label: { Label("Dock", systemImage: "square.bottomhalf.filled") }
+            NavigationLink { RobotMenuView(menu: .pet) } label: { Label("Pet-friendly Mode", systemImage: "pawprint") }
+            NavigationLink { MapManagementView() } label: { Label("Map management", systemImage: "map") }
+            NavigationLink { PartsView() } label: { Label("Parts and Consumables", systemImage: "wrench.and.screwdriver") }
         } header: {
-            Text(RobotSettingKey.Group.sound.rawValue)
+            Text("Robot")
         }
 
-        QuietHoursSection(settings: settings, editable: editable)
-            .disabled(busy)
-
-        ForEach(RobotSettingKey.Group.allCases.filter { $0 != .sound }, id: \.self) { group in
-            Section {
-                ForEach(RobotSettingKey.all.filter { $0.group == group }) { RobotSettingRow(key: $0) }
-            } header: {
-                Text(group.rawValue)
-            } footer: {
-                let notes = RobotSettingKey.all.filter { $0.group == group }.compactMap(\.footnote)
-                if !notes.isEmpty { Text(notes.joined(separator: " ")) }
-            }
+        Section {
+            NavigationLink { VoiceMenuView() } label: { Label("Navo Voice Assistant", systemImage: "waveform") }
+            NavigationLink { RobotMenuView(menu: .ai) } label: { Label("AI Recognition", systemImage: "eye") }
+            NavigationLink { DeviceView() } label: { Label("Device", systemImage: "info.circle") }
         }
 
         Section {
@@ -157,55 +133,39 @@ private struct RobotSettingsSections: View {
                 set: { on in if on { confirmWrites = true } else { allowWrites = false } }
             ))
         } footer: {
-            Text(settings == nil
+            Text(store.robotSettings == nil
                  ? "Pull down to load the robot's settings."
-                 : "Beta. After each change the app reads the setting back and tells you if the robot didn't apply it.")
+                 : "After each change the app reads the setting back and tells you if the robot didn't apply it.")
         }
         .alert("Change robot settings?", isPresented: $confirmWrites) {
             Button("Turn on") { allowWrites = true }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Voice volume has been confirmed on your robot; other settings haven't been tried yet. Any setting can be changed back in the Narwal app.")
+            Text("Voice volume has been confirmed on your robot; the rest is part of this test round. Any setting can be changed back in the Narwal app.")
         }
     }
 }
 
-/// One robot setting: a switch or a menu when changes are allowed, else
-/// its current value.
-struct RobotSettingRow: View {
+/// Every stored setting the Narwal app doesn't show for this robot, for
+/// diagnostics.
+struct HiddenSettingsView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
-    let key: RobotSettingKey
 
     var body: some View {
-        let value = store.robotSettings?.value(key)
-        Group {
-            if allowWrites, let value {
-                if key.isToggle {
-                    Toggle(key.title, isOn: Binding(
-                        get: { value != 0 },
-                        set: { on in Task { await store.changeSetting(key, to: on ? 1 : 0) } }
-                    ))
-                } else {
-                    Picker(key.title, selection: Binding(
-                        get: { value },
-                        set: { new in Task { await store.changeSetting(key, to: new) } }
-                    )) {
-                        if !key.options.contains(where: { $0.value == value }) {
-                            Text("Not set").tag(value)
-                        }
-                        ForEach(key.options, id: \.value) { Text($0.label).tag($0.value) }
-                    }
-                }
-            } else {
-                LabeledContent(key.title, value: value.map { key.label(for: $0) } ?? "–")
+        List {
+            Section {
+                ForEach(RobotSetting.menu(.hidden)) { SettingRow(setting: $0) }
+            } footer: {
+                Text("The robot stores these, but the Narwal app doesn't show them for the Freo Z10 Ultra, so they may do nothing.")
             }
         }
-        .disabled(store.busyAction != nil)
+        .navigationTitle("Hidden settings")
+        .themedList()
+        .task { if store.robotSettings == nil { await store.reloadSettings() } }
     }
 }
 
-private struct QuietHoursSection: View {
+struct QuietHoursSection: View {
     @Environment(RobotStore.self) private var store
     let settings: RobotSettings?
     let editable: Bool
@@ -214,7 +174,7 @@ private struct QuietHoursSection: View {
         let dnd = settings?.doNotDisturb ?? .init(enabled: false, begin: 22 * 3600, end: 8 * 3600)
         Section {
             if editable {
-                Toggle("Quiet hours", isOn: Binding(
+                Toggle("Do Not Disturb Mode", isOn: Binding(
                     get: { dnd.enabled },
                     set: { on in change(dnd, enabled: on) }
                 ))
@@ -225,16 +185,14 @@ private struct QuietHoursSection: View {
                                displayedComponents: .hourAndMinute)
                 }
             } else {
-                LabeledContent("Quiet hours", value: settings == nil ? "–"
+                LabeledContent("Do Not Disturb Mode", value: settings == nil ? "–"
                                : dnd.enabled ? "\(clock(dnd.begin)) – \(clock(dnd.end))" : "Off")
             }
             if let zone = settings?.timeZone {
                 LabeledContent("Time zone", value: zone)
             }
-        } header: {
-            Text("Quiet hours")
         } footer: {
-            Text("No cleaning, emptying or voice prompts during quiet hours.")
+            Text("Some robot voices and dock lights are turned off during these hours.")
         }
     }
 

@@ -25,11 +25,18 @@ struct StationView: View {
                     VStack(spacing: 14) {
                         rings.padding(.bottom, 8)
                         if let note = comingUp { note }
+                        if let minutes = store.dryingMinutesLeft {
+                            Card {
+                                Theme.label("Drying mops", color: Theme.teal)
+                                Text("\(minutes) min left").font(.system(size: 19)).foregroundStyle(Theme.text)
+                            }
+                        }
                         actions.padding(.vertical, 8)
                         if !store.isDocked {
                             Text("Station actions need the robot on its dock.")
                                 .font(.system(size: 13)).foregroundStyle(Theme.tertiary)
                         }
+                        cartridges
                         maintenance
                         settings
                     }
@@ -38,7 +45,11 @@ struct StationView: View {
                 }
             }
             .background(Theme.background.ignoresSafeArea())
-            .refreshable { await store.refreshAll() }
+            .refreshable {
+                await store.refreshAll()
+                await store.reloadDryingTime()
+            }
+            .task { await store.reloadDryingTime() }
             .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -117,6 +128,25 @@ struct StationView: View {
         Task { await store.run(title, action) }
     }
 
+    private var cartridges: some View {
+        Card {
+            Theme.label("Cartridges")
+            let list = store.status?.station.cartridges ?? []
+            if list.isEmpty {
+                Text("Not reported yet.").font(.system(size: 16)).foregroundStyle(Theme.secondary)
+            }
+            ForEach(list) { c in
+                HStack {
+                    Text(c.name).font(.system(size: 16)).foregroundStyle(Theme.text)
+                    Spacer()
+                    Text(c.label).font(.system(size: 14)).foregroundStyle(c.needsCare ? Theme.amber : Theme.secondary)
+                }
+            }
+            Text("The Wood Floor Maintenance Solution and the Heavy-duty Stain Remover share one slot.")
+                .font(.system(size: 13)).foregroundStyle(Theme.tertiary)
+        }
+    }
+
     private var maintenance: some View {
         Card {
             Theme.label("Parts")
@@ -133,22 +163,36 @@ struct StationView: View {
             } else {
                 Text("Not loaded yet.").font(.system(size: 16)).foregroundStyle(Theme.secondary)
             }
-            if let detergent = store.status?.station.detergentRemaining {
-                Text("Detergent \(detergent)%").font(.system(size: 14)).foregroundStyle(Theme.secondary)
+            NavigationLink {
+                PartsView()
+            } label: {
+                HStack {
+                    Text("Parts and Consumables").font(.system(size: 15)).foregroundStyle(Theme.teal)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Theme.tertiary)
+                }
             }
+            .padding(.top, 4)
         }
     }
 
     private var settings: some View {
         Card {
-            Theme.label("Station settings")
-            ForEach(RobotSettingKey.all.filter { $0.group == .mopping }) { key in
-                RobotSettingRow(key: key)
+            Theme.label("Dock settings")
+            ForEach(RobotSetting.menu(.dock)) { setting in
+                SettingRow(setting: setting)
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.text)
                     .tint(Theme.teal)
                     .padding(.vertical, 2)
             }
+            Button {
+                Task { await store.drainDockBase() }
+            } label: {
+                Text("Dock Base Drainage").font(.system(size: 15)).foregroundStyle(Theme.teal)
+            }
+            .disabled(!store.allowsWrites || store.busyAction != nil)
+            .padding(.vertical, 2)
             HStack {
                 Text("Station light").font(.system(size: 15)).foregroundStyle(Theme.text)
                 Spacer()

@@ -51,6 +51,9 @@ struct MapScreen: View {
     @State private var newName = ""
     @State private var merging: Room?
     @State private var retyping: Furniture?
+    @State private var flooring: Room?
+    @State private var typing: Room?
+    @State private var showingMaintenance = false
 
     struct PendingEdit: Identifiable {
         let id = UUID()
@@ -223,6 +226,23 @@ struct MapScreen: View {
                                                   title: "Change \(item.name) to \(Furniture.names[type] ?? "Object")?"))
                 }
             }
+            .sheet(item: $flooring) { room in
+                FloorMaterialPicker(room: room) { floor, angle in
+                    confirmAfterSheet(PendingEdit(edit: .setFloor(room, floor, angle: angle),
+                                                  title: "Set \(room.displayName) to \(floor.label)?"))
+                }
+            }
+            .sheet(item: $typing) { room in
+                RoomTypePicker(current: room.roomType) { type in
+                    confirmAfterSheet(PendingEdit(edit: .setRoomType(room, type),
+                                                  title: "Make \(room.displayName) a \(RoomType.names[type] ?? "room")?"))
+                }
+            }
+            .sheet(isPresented: $showingMaintenance) {
+                if let map = store.map {
+                    FloorMaintenanceSheet(map: map, preselected: selected)
+                }
+            }
             .sheet(isPresented: $showingCarpets, onDismiss: { highlightCarpet = nil }) {
                 if let map = store.map {
                     CarpetsSheet(map: map, highlight: $highlightCarpet)
@@ -343,6 +363,13 @@ struct MapScreen: View {
             }
         case .room(let room):
             Button("Rename…") { newName = room.userName; renaming = room }
+            Button("Floor material…") { flooring = room }
+            Button(room.isHeavilySoiled ? "Room character: No character" : "Room character: Heavily Soiled Room") {
+                pending = PendingEdit(edit: .setHeavilySoiled(room, !room.isHeavilySoiled),
+                                      title: room.isHeavilySoiled ? "Set \(room.displayName) to No character?"
+                                          : "Mark \(room.displayName) as a Heavily Soiled Room?")
+            }
+            Button("Room type…") { typing = room }
             Button("Merge with…") { merging = room }
         }
         Button("Cancel", role: .cancel) {}
@@ -434,6 +461,16 @@ struct MapScreen: View {
                 }
                 if mode == .zones, !zones.isEmpty {
                     Button("Undo") { zones.removeLast() }.buttonStyle(.bordered)
+                }
+                if mode == .rooms {
+                    Button {
+                        showingMaintenance = true
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Floor maintenance")
+                    .disabled(store.busyAction != nil || store.isCleaning)
                 }
                 Button {
                     showingSetup = true
@@ -651,6 +688,7 @@ struct CleanSetupSheet: View {
 
     @State private var settings = CleanSettings()
     @State private var perRoom: [Int: CleanSettings] = [:]
+    @State private var options = CleanOptions()
     @State private var presetName = ""
     @State private var savingPreset = false
 
@@ -693,7 +731,19 @@ struct CleanSetupSheet: View {
                     }
                 }
                 }
-                SettingsFields(settings: $settings)
+                if zones.isEmpty {
+                    Section {
+                        Toggle("Freo Mind", isOn: $options.freoMind)
+                        if store.status?.station.hasWoodFloorSolution == true {
+                            Toggle("Maintain wood floors afterwards", isOn: $options.maintainFloorsAfter)
+                        }
+                    } footer: {
+                        Text(options.freoMind
+                             ? "The robot chooses suction, water and coverage for each area, using the Freo Mind Mode settings in More."
+                             : "Freo Mind lets the robot choose suction, water and coverage itself.")
+                    }
+                }
+                SettingsFields(settings: $settings, freoMind: options.freoMind && zones.isEmpty)
                 Section {
                     Button("Save as routine…") { savingPreset = true }
                 }
@@ -708,9 +758,9 @@ struct CleanSetupSheet: View {
                             if !zones.isEmpty {
                                 await store.cleanZones(zones, settings: settings)
                             } else if rooms.isEmpty {
-                                await store.cleanAll(settings: settings)
+                                await store.cleanAll(settings: settings, options: options)
                             } else {
-                                await store.cleanRooms(rooms, settings: settings, perRoom: perRoom)
+                                await store.cleanRooms(rooms, settings: settings, perRoom: perRoom, options: options)
                             }
                             if store.lastError == nil { dismiss() }
                         }
@@ -735,28 +785,34 @@ struct CleanSetupSheet: View {
 
 struct SettingsFields: View {
     @Binding var settings: CleanSettings
+    /// Freo Mind picks suction, water and coverage itself.
+    var freoMind = false
 
     var body: some View {
         Section("Mode") {
             Picker("Mode", selection: $settings.workMode) {
                 ForEach(WorkMode.allCases, id: \.self) { Text($0.label).tag($0) }
             }
-            Stepper("Passes: \(settings.passes)", value: $settings.passes, in: 1...3)
-            Picker("Route", selection: Binding(
-                get: { settings.route ?? .standard },
-                set: { settings.route = $0 }
-            )) {
-                ForEach(CleaningRoute.allCases, id: \.self) { Text($0.label).tag($0) }
+            if !freoMind {
+                Stepper("Passes: \(settings.passes)", value: $settings.passes, in: 1...3)
+                Picker("Coverage precision", selection: Binding(
+                    get: { settings.route ?? .standard },
+                    set: { settings.route = $0 }
+                )) {
+                    ForEach(CleaningRoute.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
             }
         }
-        if settings.workMode != .mop {
+        if freoMind {
+            EmptyView()
+        } else if settings.workMode != .mop {
             Section("Vacuum") {
                 Picker("Suction", selection: $settings.fan) {
                     ForEach(FanLevel.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
             }
         }
-        if settings.workMode != .vacuum {
+        if !freoMind, settings.workMode != .vacuum {
             Section("Mop") {
                 Picker("Water", selection: $settings.water) {
                     ForEach(MopHumidity.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -787,3 +843,154 @@ private struct RoomOverrideView: View {
         .navigationTitle(name)
     }
 }
+
+/// Narwal's Floor maintenance: wood rooms, optionally cleaned first.
+struct FloorMaintenanceSheet: View {
+    @Environment(RobotStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let map: RobotMap
+    var preselected: [Int] = []
+
+    @State private var rooms: Set<Int> = []
+    @State private var cleanFirst = true
+
+    var body: some View {
+        let wood = map.rooms.filter { $0.floor == .wood }
+        let solution = store.status?.station.cartridges.first { $0.name.hasPrefix("Wood") }
+        NavigationStack {
+            Form {
+                Section {
+                    if wood.isEmpty {
+                        Text("No room is set to Wood Floor. In the Clean tab's Edit mode, tap a room and choose Floor material.")
+                            .foregroundStyle(Theme.secondary)
+                    }
+                    ForEach(wood) { room in
+                        Button {
+                            if rooms.contains(room.id) { rooms.remove(room.id) } else { rooms.insert(room.id) }
+                        } label: {
+                            HStack {
+                                Text(room.displayName).foregroundStyle(Theme.text)
+                                Spacer()
+                                if rooms.contains(room.id) { Image(systemName: "checkmark").foregroundStyle(Theme.teal) }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Wood floor rooms")
+                } footer: {
+                    Text("Only rooms with wood floors can be maintained. Setting the wood's pattern direction gives better results.")
+                }
+                Section {
+                    Toggle("Cleaning before maintenance", isOn: $cleanFirst)
+                } footer: {
+                    Text("The robot runs Vacuum and mop with Freo Mind on these rooms first. Put things away from the floor so more of it is maintained.")
+                }
+                Section {
+                    LabeledContent("Wood Floor Maintenance Solution", value: solution?.label ?? "Not reported")
+                }
+            }
+            .navigationTitle("Floor maintenance")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Start") {
+                        let ordered = store.cleaningOrder.filter(rooms.contains)
+                        Task {
+                            await store.startFloorMaintenance(rooms: ordered.isEmpty ? Array(rooms) : ordered,
+                                                              cleanFirst: cleanFirst)
+                            if store.lastError == nil { dismiss() }
+                        }
+                    }
+                    .disabled(rooms.isEmpty || store.busyAction != nil)
+                }
+            }
+            .onAppear {
+                let woodIds = Set(wood.map(\.id))
+                let picked = preselected.filter(woodIds.contains)
+                rooms = Set(picked.isEmpty ? Array(woodIds) : picked)
+            }
+        }
+    }
+}
+
+/// Narwal's Floor material choices, plus the wood's pattern direction.
+struct FloorMaterialPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let room: Room
+    let pick: (FloorMaterial, Int?) -> Void
+
+    @State private var floor: FloorMaterial = .defaultMaterial
+    @State private var angle = 0
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Floor material", selection: $floor) {
+                        ForEach(FloorMaterial.narwalOrder, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } footer: {
+                    Text("Freo Mind adjusts how it mops each material. Only Wood Floor rooms get floor maintenance.")
+                }
+                if floor == .wood {
+                    Section {
+                        Picker("Pattern direction", selection: $angle) {
+                            Text("Across").tag(0)
+                            Text("Diagonal ↗").tag(45)
+                            Text("Along").tag(90)
+                            Text("Diagonal ↖").tag(135)
+                        }
+                    } footer: {
+                        Text("Which way the boards run on the map. The robot maintains along the grain.")
+                    }
+                }
+            }
+            .navigationTitle(room.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        pick(floor, floor == .wood ? angle : nil)
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                floor = room.floor
+                angle = room.floorAngle
+            }
+        }
+    }
+}
+
+/// Room type, which Freo Mind uses (kitchens and bathrooms get more care).
+struct RoomTypePicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let current: Int
+    let pick: (Int) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List(RoomType.names.sorted { $0.key < $1.key }.filter { $0.key > 0 }, id: \.key) { entry in
+                Button {
+                    pick(entry.key)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(entry.value).foregroundStyle(Theme.text)
+                        Spacer()
+                        if entry.key == current { Image(systemName: "checkmark").foregroundStyle(Theme.teal) }
+                    }
+                }
+            }
+            .navigationTitle("Room type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+}
+
