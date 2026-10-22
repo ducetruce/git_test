@@ -111,6 +111,7 @@ final class RobotStore {
         }
         guard let status else { return "Waking robot…" }
         if !status.errors.isEmpty { return "Needs attention" }
+        if status.isRelocalizing { return "Finding its position" }
         if status.isReturning { return "Returning to dock" }
         if status.isPaused { return "Paused" }
         switch status.workingStatus {
@@ -118,7 +119,10 @@ final class RobotStore {
         case .remapping: return "Mapping"
         case .taskCompleted: return "Finished, heading home"
         case .charged: return "Docked"
-        case .docked, .dockedV2: return status.battery == 100 ? "Docked" : "Charging"
+        case .docked, .dockedV2:
+            // Charging only on the robot's word, else by battery as before.
+            if let charging = status.isCharging { return charging ? "Charging" : "Docked" }
+            return status.battery == 100 ? "Docked" : "Charging"
         case .standby: return status.isDocked == true ? "Docked" : "Idle"
         case .unknown: return "Status unknown"
         }

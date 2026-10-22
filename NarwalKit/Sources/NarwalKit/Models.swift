@@ -165,6 +165,12 @@ public struct BaseStatus: Equatable, Sendable {
     public var workingStatus: WorkingStatus
     public var isPaused: Bool
     public var isReturning: Bool
+    /// The robot is working out where it is (RELOCALIZATION in any of the
+    /// task's sub-statuses). It may sit on or by the dock meanwhile.
+    public var isRelocalizing: Bool
+    /// RobotBaseStatus 47 chargingStatus / 11 stationContactType; nil when
+    /// neither was sent.
+    public var isCharging: Bool?
     /// nil when this message carried no dock evidence either way.
     public var isDocked: Bool?
     public var fanLevel: FanLevel?
@@ -202,6 +208,7 @@ public struct BaseStatus: Equatable, Sendable {
         workingStatus = status
         isPaused = task?.int(2) == 1
         isReturning = task?.int(7) == 1
+        isRelocalizing = Self.relocalizing(task)
 
         let f11 = m.int(11)
         let f47 = m.int(47)
@@ -214,6 +221,13 @@ public struct BaseStatus: Equatable, Sendable {
             || subState == 1
             || (activity.map { $0 > 0 } ?? false)
         let saysOffDock = f11 == 1 || f47 == 2 || presence == 2 || subState == 2
+        if f47 == 1 || f11 == 3 {
+            isCharging = true
+        } else if let f47, (2...5).contains(f47) {
+            isCharging = false
+        } else {
+            isCharging = nil
+        }
         if saysOffDock {
             isDocked = false
         } else if saysDocked {
@@ -221,6 +235,18 @@ public struct BaseStatus: Equatable, Sendable {
         } else {
             isDocked = nil
         }
+    }
+
+    /// RobotTaskStatus field -> its RELOCALIZATION value (docs/schema/enums.txt,
+    /// RobotTaskStatus_*Status). Field 1 is the task type, 13 = RELOCALIZATION.
+    static let relocalizationValues: [Int: Int] = [
+        1: 13, 4: 5, 5: 9, 6: 9, 7: 11, 8: 13, 9: 4, 10: 3, 11: 4,
+        12: 5, 13: 3, 15: 4, 17: 13, 19: 6, 20: 8,
+    ]
+
+    static func relocalizing(_ task: ProtoMessage?) -> Bool {
+        guard let task else { return false }
+        return relocalizationValues.contains { field, value in task.int(field) == value }
     }
 }
 

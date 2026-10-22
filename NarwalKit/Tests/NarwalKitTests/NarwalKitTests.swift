@@ -648,6 +648,33 @@ final class SchemaDecoderTests: XCTestCase {
     }
 }
 
+final class RelocalizationTests: XCTestCase {
+    private func status(_ build: (inout ProtoWriter) -> Void, _ top: (inout ProtoWriter) -> Void = { _ in }) throws -> BaseStatus {
+        var w = ProtoWriter()
+        w.float(2, 80)
+        w.message(3, build)
+        top(&w)
+        return BaseStatus(try ProtoMessage(bytes: w.bytes))
+    }
+
+    func testRelocalizationFromTaskType() throws {
+        XCTAssertTrue(try status { $0.varint(1, 13) }.isRelocalizing)
+    }
+
+    func testRelocalizationWhileHeadingToCharge() throws {
+        // On the dock's status code, but chargingStatus = RELOCALIZATION.
+        let s = try status { $0.varint(1, 10); $0.varint(11, 4) }
+        XCTAssertTrue(s.isRelocalizing)
+    }
+
+    func testPlainDockedIsNotRelocalizing() throws {
+        let s = try status({ $0.varint(1, 10) }, { $0.varint(47, 1) })
+        XCTAssertFalse(s.isRelocalizing)
+        XCTAssertEqual(s.isCharging, true)
+        XCTAssertEqual(try status({ $0.varint(1, 10) }, { $0.varint(47, 4) }).isCharging, false)
+    }
+}
+
 final class DockErrorFilterTests: XCTestCase {
     private let lost = RobotError(code: 0x02100017, level: 1, detail: "")
     private let stuck = RobotError(code: 0x01000001, level: 1, detail: "")
