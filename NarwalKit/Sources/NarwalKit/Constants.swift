@@ -127,6 +127,21 @@ public enum Topic {
     // Map
     public static let getMap = "map/get_map"
     public static let getAllMaps = "map/get_all_reduced_maps"
+    public static let switchMap = "map/switch_map"
+    public static let deleteMap = "map/delete_map"
+    public static let buildMap = "map/build_map/start"
+
+    // Floor care, device, parts
+    public static let startFloorMaintenance = "clean/floor_maintenance/start"
+    public static let getContinueTask = "task/get_continue_task"
+    public static let continueTask = "task/continue_task"
+    public static let getFirmwareVersion = "common/upgrade/get_firmware_version"
+    public static let batteryInfo = "info/battery_info"
+    public static let resetConsumable = "consumable/reset_consumable_info"
+    public static let dryMopRemainTime = "supply/get_dry_mop_remain_time"
+    /// Narwal's "Dock Base Drainage". Which of the two pump routines it is
+    /// is unconfirmed; the test checklist sends this one only on request.
+    public static let pumpTroubleshooting = "supply/pump_troubleshooting"
 
     /// The robot never answers these, so they must not take a place in the
     /// response order or they would swallow the next real answer.

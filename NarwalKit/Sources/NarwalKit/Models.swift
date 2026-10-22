@@ -52,11 +52,18 @@ public struct RobotSettings: Equatable, Sendable {
     /// Every varint field of the config, by config/get field number.
     /// Absent means 0 (off / not set): proto3 omits zeros.
     public var values: [Int: Int] = [:]
+    /// The whole config as received, so a nested setting can be written
+    /// back with only one value changed.
+    public var config: ProtoMessage = ProtoMessage(fields: [])
 
-    public func value(_ key: RobotSettingKey) -> Int { values[key.getField] ?? 0 }
+    /// A stored value by config/get path; absent reads as 0.
+    public func int(path: [Int]) -> Int { config.int(path: path) ?? 0 }
+
+    public func value(_ setting: RobotSetting) -> String { setting.label(in: self) }
 
     public init?(response: ProtoMessage) {
         guard let settings = response.message(2) else { return nil }
+        config = settings
         for field in settings.fields {
             if case .varint(let v) = field.value { values[field.number] = Int(truncatingIfNeeded: v) }
         }
@@ -84,7 +91,73 @@ public struct StationState: Equatable, Sendable {
     public var dustBag: Int?
     public var stationBag: Int?
     public var dustBagHealth: Float?
-    public var detergentRemaining: Int?
+    /// 12 detergentState: 1 installed, 2 not installed, 3 empty, 4 running
+    /// out, 5 not in use.
+    public var detergent: Int?
+    /// 40 heavyDetergentStatus (Heavy-duty Stain Remover): 1 not installed,
+    /// 2 installed, 3 empty, 4 running out.
+    public var stainRemover: Int?
+    /// 41 heavyDetergentRemainPercent.
+    public var stainRemoverPercent: Int?
+    /// 33 multiLiquidStatus (Wood Floor Maintenance Solution, "curing
+    /// agent"): 1 not installed, 2 installed, 3 empty, 4 running out.
+    public var woodFloorSolution: Int?
+    /// 38 curingAgentConsumptionPercent.
+    public var woodFloorSolutionUsedPercent: Int?
+
+    /// One dock cartridge as the Narwal app names it.
+    public struct Cartridge: Equatable, Sendable, Identifiable {
+        public enum Level: Equatable, Sendable { case ok, low, empty, notInstalled, notInUse }
+        public let name: String
+        public let level: Level
+        /// Percent left, when the robot reports it.
+        public let percent: Int?
+        public var id: String { name }
+
+        public var label: String {
+            switch level {
+            case .ok: return percent.map { "\($0)% left" } ?? "Installed"
+            case .low: return percent.map { "Running low, \($0)% left" } ?? "Running low"
+            case .empty: return "Empty"
+            case .notInstalled: return "Not installed"
+            case .notInUse: return "Not in use"
+            }
+        }
+
+        public var needsCare: Bool { level == .low || level == .empty }
+    }
+
+    /// The detergent slot, then whatever is in the shared slot (the Wood
+    /// Floor Maintenance Solution or the Heavy-duty Stain Remover, never
+    /// both). A shared-slot cartridge that isn't installed is left out
+    /// when the other one is, so it never reads as missing.
+    public var cartridges: [Cartridge] {
+        var out: [Cartridge] = []
+        if let d = detergent {
+            let level: Cartridge.Level? = [1: .ok, 2: .notInstalled, 3: .empty, 4: .low, 5: .notInUse][d]
+            if let level { out.append(Cartridge(name: "Detergent", level: level, percent: nil)) }
+        }
+        let shared: [Int: Cartridge.Level] = [1: .notInstalled, 2: .ok, 3: .empty, 4: .low]
+        let wood = woodFloorSolution.flatMap { shared[$0] }.map {
+            Cartridge(name: "Wood Floor Maintenance Solution", level: $0,
+                      percent: woodFloorSolutionUsedPercent.map { max(0, 100 - $0) })
+        }
+        let stain = stainRemover.flatMap { shared[$0] }.map {
+            Cartridge(name: "Heavy-duty Stain Remover", level: $0, percent: stainRemoverPercent)
+        }
+        let candidates = [wood, stain].compactMap { $0 }
+        let installed = candidates.filter { $0.level != .notInstalled }
+        out += installed.isEmpty ? Array(candidates.prefix(1)) : installed
+        return out
+    }
+
+    public var hasWoodFloorSolution: Bool {
+        cartridges.contains { $0.name.hasPrefix("Wood") && $0.level != .notInstalled && $0.level != .empty }
+    }
+
+    public var hasStainRemover: Bool {
+        cartridges.contains { $0.name.hasPrefix("Heavy") && $0.level != .notInstalled }
+    }
 
     public struct Reading: Equatable, Sendable {
         public let part: String
@@ -197,7 +270,8 @@ public struct BaseStatus: Equatable, Sendable {
         station = StationState(
             cleanWaterTank: m.int(23), sewageTank: m.int(24), dustBox: m.int(20),
             dustBag: m.int(21), stationBag: m.int(39),
-            dustBagHealth: m.float(35), detergentRemaining: m.int(41)
+            dustBagHealth: m.float(35), detergent: m.int(12), stainRemover: m.int(40),
+            stainRemoverPercent: m.int(41), woodFloorSolution: m.int(33), woodFloorSolutionUsedPercent: m.int(38)
         )
 
         let task = m.message(3)

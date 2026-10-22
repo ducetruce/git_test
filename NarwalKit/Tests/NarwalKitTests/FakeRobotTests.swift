@@ -73,11 +73,20 @@ final class FakeRobotTests: XCTestCase {
         XCTAssertEqual(before?.voiceVolume, 29)
         let louder = try await connection.setVoiceVolume(40)
         XCTAssertEqual(louder?.voiceVolume, 40)
-        let childLock = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "childLockEnabled" })
-        let locked = try await connection.setSetting(childLock, 1)
-        XCTAssertEqual(locked?.value(childLock), 1)
-        let unlocked = try await connection.setSetting(childLock, 0)
-        XCTAssertEqual(unlocked?.value(childLock), 0)
+        let childLock = try XCTUnwrap(RobotSetting.named("childLockEnabled"))
+        let locked = try await connection.setSetting(childLock.choices[1])
+        XCTAssertEqual(locked?.value(childLock), "On")
+        let unlocked = try await connection.setSetting(childLock.choices[0])
+        XCTAssertEqual(unlocked?.value(childLock), "Off")
+        // A nested Freo Mind setting, written into smartCleanParam.
+        let remop = try XCTUnwrap(RobotSetting.named("maxRemopCount"))
+        let two = try XCTUnwrap(remop.choices.first { $0.label == "2" })
+        let limited = try await connection.setSetting(two)
+        XCTAssertEqual(limited?.value(remop), "2")
+        // Narwal's auto-empty picker: two stored switches.
+        let frequency = try XCTUnwrap(RobotSetting.named("autoEmptyFrequency"))
+        let smartEmpty = try await connection.setSetting(frequency.choices[0])
+        XCTAssertEqual(smartEmpty?.value(frequency), "Smart")
         let quiet = RobotSettings.DoNotDisturb(enabled: true, begin: 75_600, end: 25_200)
         let withQuiet = try await connection.setDoNotDisturb(quiet)
         XCTAssertEqual(withQuiet?.doNotDisturb, quiet)
@@ -101,6 +110,20 @@ final class FakeRobotTests: XCTestCase {
         let renamed = try await connection.editMap([rename], on: withoutZone)
         XCTAssertTrue(rename.isApplied(before: withoutZone, after: renamed))
         XCTAssertEqual(renamed.rooms.first { $0.id == 1 }?.displayName, "Pantry")
+        // Floor material keeps the name just set: the edit sends the room's
+        // own RoomInfo with one value changed.
+        let pantry = try XCTUnwrap(renamed.rooms.first { $0.id == 1 })
+        let wood = MapEdit.setFloor(pantry, .wood, angle: 90)
+        let floored = try await connection.editMap([wood], on: renamed)
+        XCTAssertTrue(wood.isApplied(before: renamed, after: floored))
+        XCTAssertEqual(floored.rooms.first { $0.id == 1 }?.displayName, "Pantry")
+        XCTAssertEqual(floored.rooms.first { $0.id == 1 }?.floorAngle, 90)
+        let soiled = MapEdit.setHeavilySoiled(try XCTUnwrap(floored.rooms.first { $0.id == 1 }), true)
+        let marked = try await connection.editMap([soiled], on: floored)
+        XCTAssertTrue(marked.rooms.first { $0.id == 1 }?.isHeavilySoiled == true)
+        XCTAssertEqual(marked.rooms.first { $0.id == 1 }?.floor, .wood)
+        // Wood floor maintenance on its own.
+        try await connection.startFloorMaintenance(rooms: [1], cleanFirst: false)
 
         // Schedules: a routine saved as a plan, scheduled, switched off, deleted.
         let planId = try await connection.saveCleanPlan(

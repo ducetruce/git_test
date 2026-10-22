@@ -62,9 +62,6 @@ public enum Payloads {
 
     /// config/set for one catalog setting. Off (0) is sent explicitly, or
     /// the request would be empty.
-    public static func setConfig(_ key: RobotSettingKey, _ value: Int) -> [UInt8] {
-        singleVarint(value, field: key.setField)
-    }
 
     /// map/operation: MapOperation.Request {1 mapId, 2 mapVersion,
     /// 3 editVersion, 4 operations: MapOperationPayload}. Each operation is
@@ -118,7 +115,8 @@ public enum Payloads {
         mapId: Int,
         rooms: [Int],
         settings: CleanSettings = CleanSettings(),
-        perRoom: [Int: CleanSettings] = [:]
+        perRoom: [Int: CleanSettings] = [:],
+        options: CleanOptions = CleanOptions()
     ) -> [UInt8] {
         let resolved = rooms.map { perRoom[$0] ?? settings }
         let modes = Set(resolved.map(\.workMode))
@@ -135,11 +133,15 @@ public enum Payloads {
                     }
                     item.message(2) { param in
                         writeCleanParam(&param, resolved[index])
+                        if options.freoMind { param.varint(9, 1) }
                     }
                     item.varint(3, index + 1)
                 }
             }
-            task.message(3) { _ in }
+            task.message(3) { option in
+                if options.freoMind { option.varint(1, 1) }
+                if options.maintainFloorsAfter { option.varint(5, 1) }
+            }
             task.varint(5, taskType)
         }
         return w.bytes

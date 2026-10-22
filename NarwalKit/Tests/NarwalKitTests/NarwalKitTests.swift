@@ -257,27 +257,52 @@ final class ResponseShapeTests: XCTestCase {
             default: return nil
             }
         }
-        for key in RobotSettingKey.all {
-            XCTAssertEqual(key.setField, setField(forGet: key.getField), key.id)
+        for setting in RobotSetting.all {
+            for choice in setting.choices {
+                for write in choice.writes {
+                    XCTAssertNotNil(setField(forGet: write.path[0]), "\(setting.id) has no setter")
+                    XCTAssertEqual(RobotSetting.setField(forGet: write.path[0]), setField(forGet: write.path[0]), setting.id)
+                }
+            }
         }
-        XCTAssertEqual(Set(RobotSettingKey.all.map(\.id)).count, RobotSettingKey.all.count)
-
-        let childLock = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "childLockEnabled" })
-        XCTAssertEqual(Payloads.setConfig(childLock, 1), [0x40, 0x01])
-        XCTAssertEqual(Payloads.setConfig(childLock, 0), [0x40, 0x00], "off must still be sent")
-        XCTAssertEqual(Payloads.setDoNotDisturb(.init(enabled: true, begin: 79_200, end: 28_800)),
-                       [0x2A, 0x0A, 0x08, 0x01, 0x10, 0xE0, 0xEA, 0x04, 0x18, 0x80, 0xE1, 0x01])
+        XCTAssertEqual(Set(RobotSetting.all.map(\.id)).count, RobotSetting.all.count)
 
         let response = try message { w in
             w.varint(1, 1)
-            w.message(2) { m in m.varint(7, 1); m.varint(15, 4) }
+            w.message(2) { m in
+                m.varint(7, 1); m.varint(17, 4); m.varint(27, 1)
+                m.message(29) { p in p.message(4) { f in f.varint(1, 1); f.varint(2, 3) }; p.varint(99, 7) }
+            }
         }
         let settings = try XCTUnwrap(RobotSettings(response: response))
-        XCTAssertEqual(settings.value(childLock), 1)
-        let carpets = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "carpetCleanOption" })
-        XCTAssertEqual(carpets.label(for: settings.value(carpets)), "Avoid")
-        let petMode = try XCTUnwrap(RobotSettingKey.all.first { $0.id == "petMode" })
-        XCTAssertEqual(petMode.label(for: settings.value(petMode)), "Off", "absent is off")
+
+        let childLock = try XCTUnwrap(RobotSetting.named("childLockEnabled"))
+        XCTAssertEqual(settings.value(childLock), "On")
+        XCTAssertEqual(RobotSetting.requests(for: childLock.choices[1], current: settings), [[0x40, 0x01]])
+        XCTAssertEqual(RobotSetting.requests(for: childLock.choices[0], current: settings), [[0x40, 0x00]],
+                       "off must still be sent")
+        XCTAssertEqual(settings.value(try XCTUnwrap(RobotSetting.named("addCarpetCleanOption"))), "Avoid")
+        XCTAssertEqual(settings.value(try XCTUnwrap(RobotSetting.named("petMode"))), "Off", "absent is off")
+        // Two stored switches behind one Narwal picker: emptying on, smart off.
+        let frequency = try XCTUnwrap(RobotSetting.named("autoEmptyFrequency"))
+        XCTAssertEqual(settings.value(frequency), "Frequent")
+        XCTAssertEqual(RobotSetting.requests(for: frequency.choices[0], current: settings),
+                       [[0xD8, 0x01, 0x01], [0xE0, 0x01, 0x01]])
+
+        // A Freo Mind strategy lives inside smartCleanParam (29): the write
+        // sends the robot's own message back with one value changed and
+        // unknown fields kept.
+        let suction = try XCTUnwrap(RobotSetting.named("fanLevelStrategy"))
+        XCTAssertEqual(settings.value(suction), "Strong")
+        let smart = try XCTUnwrap(suction.choices.first { $0.label == "Smart" })
+        let request = try XCTUnwrap(RobotSetting.requests(for: smart, current: settings).first)
+        let sent = try XCTUnwrap(try ProtoMessage(bytes: request).message(29))
+        XCTAssertEqual(sent.int(path: [4, 1]), 0)
+        XCTAssertEqual(sent.int(path: [4, 2]), 3)
+        XCTAssertEqual(sent.int(99), 7)
+
+        XCTAssertEqual(Payloads.setDoNotDisturb(.init(enabled: true, begin: 79_200, end: 28_800)),
+                       [0x2A, 0x0A, 0x08, 0x01, 0x10, 0xE0, 0xEA, 0x04, 0x18, 0x80, 0xE1, 0x01])
     }
 
     func testOtherRepliesAreNotTakenForDeviceInfo() async throws {
@@ -888,3 +913,96 @@ final class ObstacleTests: XCTestCase {
         XCTAssertNil(ObstaclePhoto.imageData(try ProtoMessage(bytes: [0x08, 0x01])))
     }
 }
+
+final class FloorCareTests: XCTestCase {
+    private func message(_ build: (inout ProtoWriter) -> Void) throws -> ProtoMessage {
+        var w = ProtoWriter()
+        build(&w)
+        return try ProtoMessage(bytes: w.bytes)
+    }
+
+    func testProtoEditsKeepUnknownFields() throws {
+        let m = try message { $0.varint(1, 5); $0.string(3, "Den"); $0.varint(42, 7) }
+        let edited = m.setting(4, int: 1).setting(path: [9, 2], int: 3)
+        let back = try ProtoMessage(bytes: edited.encoded())
+        XCTAssertEqual(back.int(1), 5)
+        XCTAssertEqual(back.string(3), "Den")
+        XCTAssertEqual(back.int(42), 7)
+        XCTAssertEqual(back.int(4), 1)
+        XCTAssertEqual(back.int(path: [9, 2]), 3)
+        XCTAssertEqual(m.setting(1, int: 6).int(1), 6, "replaces, not appends")
+        XCTAssertEqual(m.setting(1, int: 6).all(1).count, 1)
+    }
+
+    func testFloorMaintenanceAndCleanOptions() throws {
+        XCTAssertEqual(Payloads.startFloorMaintenance(rooms: [3, 7]), [0x0A, 0x02, 0x03, 0x07])
+        let plain = try ProtoMessage(bytes: Payloads.startClean(mapId: 9, rooms: [1]))
+        XCTAssertNil(plain.message(1)?.message(3)?.int(1), "no Freo Mind unless asked")
+        let both = try ProtoMessage(bytes: Payloads.startClean(
+            mapId: 9, rooms: [1], options: CleanOptions(freoMind: true, maintainFloorsAfter: true)))
+        let task = try XCTUnwrap(both.message(1))
+        XCTAssertEqual(task.message(3)?.int(1), 1)
+        XCTAssertEqual(task.message(3)?.int(5), 1)
+        XCTAssertEqual(task.message(2)?.message(2)?.int(9), 1)
+    }
+
+    func testRoomEditsSendTheRoomsOwnInfo() throws {
+        let info = try message { $0.varint(1, 4); $0.varint(2, 3); $0.string(3, "Den"); $0.varint(9, 12) }
+        let room = Room(id: 4, userName: "Den", roomType: 3, category: 0, instanceIndex: 0, info: info)
+        let (field, body) = MapEdit.setFloor(room, .wood, angle: 45).operation
+        XCTAssertEqual(field, 3)
+        let sent = try XCTUnwrap(try ProtoMessage(bytes: body).message(1))
+        XCTAssertEqual([sent.int(1), sent.int(4), sent.int(5), sent.int(9)], [4, 1, 45, 12])
+        XCTAssertEqual(sent.string(3), "Den")
+        XCTAssertEqual(MapEdit.rotateMap(degrees: 90).operation.field, 5)
+        let floor = Room(id: 1, userName: "", roomType: 0, category: 0, instanceIndex: 0,
+                         info: try message { $0.varint(1, 1); $0.varint(4, 1); $0.varint(7, 1) })
+        XCTAssertEqual(floor.floor, .wood)
+        XCTAssertTrue(floor.isHeavilySoiled)
+    }
+
+    func testCartridgesFollowTheSharedSlot() {
+        // Wood Floor Maintainer in the shared slot: the stain remover isn't
+        // listed as missing.
+        var station = StationState(detergent: 1, stainRemover: 1, stainRemoverPercent: nil,
+                                   woodFloorSolution: 2, woodFloorSolutionUsedPercent: 30)
+        XCTAssertEqual(station.cartridges.map(\.name), ["Detergent", "Wood Floor Maintenance Solution"])
+        XCTAssertEqual(station.cartridges.last?.percent, 70)
+        XCTAssertTrue(station.hasWoodFloorSolution)
+        XCTAssertFalse(station.hasStainRemover)
+        station = StationState(detergent: 4, stainRemover: 2, stainRemoverPercent: 55, woodFloorSolution: 1)
+        XCTAssertEqual(station.cartridges.map(\.name), ["Detergent", "Heavy-duty Stain Remover"])
+        XCTAssertTrue(station.cartridges[0].needsCare)
+        station = StationState(stainRemover: 1, woodFloorSolution: 1)
+        XCTAssertEqual(station.cartridges.map(\.label), ["Not installed"], "an empty shared slot shows once")
+    }
+
+    func testMapsAndNoStairs() throws {
+        let response = try message { w in
+            w.varint(1, 1)
+            w.message(2) { $0.varint(1, 11); $0.varint(30, 1); $0.message(8) { _ in } }
+            w.message(2) { $0.varint(1, 12); $0.string(28, "Upstairs") }
+        }
+        let maps = MapSummary.list(response)
+        XCTAssertEqual(maps.map(\.title), ["Main Map", "Upstairs"])
+        XCTAssertEqual(maps.map(\.hasDock), [true, false])
+
+        let config = try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in
+                m.message(44) { c in
+                    c.message(1) { $0.varint(1, 11); $0.varint(2, 0) }
+                    c.message(1) { $0.varint(1, 12); $0.varint(2, 1) }
+                }
+            }
+        }
+        let settings = try XCTUnwrap(RobotSettings(response: config))
+        XCTAssertFalse(settings.noStairs(mapId: 11))
+        XCTAssertTrue(settings.noStairs(mapId: 12))
+        let request = try ProtoMessage(bytes: Payloads.setNoStairs(true, mapId: 11, current: settings))
+        let units = request.message(44)?.messages(1) ?? []
+        XCTAssertEqual(units.map { $0.int(1) }, [11, 12])
+        XCTAssertEqual(units.map { $0.int(2) }, [1, 1])
+    }
+}
+

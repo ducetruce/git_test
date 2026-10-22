@@ -29,6 +29,16 @@ public enum MapEdit: Equatable, Sendable {
     /// SetFurnitureOperation (8): SET (1) to retype, DELETE (2).
     case retypeFurniture(Furniture, to: Int)
     case deleteFurniture(Furniture)
+    /// RoomInfoOperation (3) with the room's own RoomInfo, one value changed:
+    /// floor material and grain angle (4, 5), Heavily Soiled Room (7), room
+    /// type (2).
+    case setFloor(Room, FloorMaterial, angle: Int?)
+    case setHeavilySoiled(Room, Bool)
+    case setRoomType(Room, Int)
+    /// MapRotateOperation (5): {1 rotateAngle} in degrees.
+    case rotateMap(degrees: Int)
+    /// SetMapNameOperation (7): {1 customName}.
+    case renameMap(String)
 
     public static func == (a: MapEdit, b: MapEdit) -> Bool { a.operation == b.operation }
 
@@ -70,12 +80,25 @@ public enum MapEdit: Equatable, Sendable {
             }
             return (13, w.bytes)
         case let .renameRoom(room, name):
-            w.message(1) { info in
-                info.varint(1, room.id)
-                info.varint(2, room.roomType)
-                info.string(3, name)
-            }
+            w.bytesField(1, Self.info(room).setting(3, .bytes(Array(name.utf8))).encoded())
             return (3, w.bytes)
+        case let .setFloor(room, floor, angle):
+            var info = Self.info(room).setting(4, int: floor.rawValue)
+            if let angle { info = info.setting(5, int: angle) }
+            w.bytesField(1, info.encoded())
+            return (3, w.bytes)
+        case let .setHeavilySoiled(room, on):
+            w.bytesField(1, Self.info(room).setting(7, int: on ? 1 : 0).encoded())
+            return (3, w.bytes)
+        case let .setRoomType(room, type):
+            w.bytesField(1, Self.info(room).setting(2, int: type).encoded())
+            return (3, w.bytes)
+        case let .rotateMap(degrees):
+            w.varint(1, degrees)
+            return (5, w.bytes)
+        case let .renameMap(name):
+            w.string(1, name)
+            return (7, w.bytes)
         case let .mergeRooms(a, b):
             w.varint(1, a)
             w.varint(2, b)
@@ -145,6 +168,14 @@ public enum MapEdit: Equatable, Sendable {
     }
 }
 
+extension MapEdit {
+    /// The room's RoomInfo as the robot sent it, or a minimal one.
+    static func info(_ room: Room) -> ProtoMessage {
+        if !room.info.fields.isEmpty { return room.info }
+        return ProtoMessage(fields: []).setting(1, int: room.id).setting(2, int: room.roomType)
+    }
+}
+
 extension RobotMap {
     /// A new id for an item kind: one more than the largest in use.
     public func nextId(_ ids: [Int]) -> Int { (ids.max() ?? 0) + 1 }
@@ -172,6 +203,10 @@ extension MapEdit {
         case .addWall: return after.virtualWalls.count > before.virtualWalls.count
         case .deleteWall(let wall): return !after.virtualWalls.contains(wall)
         case let .renameRoom(room, name): return after.rooms.first { $0.id == room.id }?.userName == name
+        case let .setFloor(room, floor, _): return after.rooms.first { $0.id == room.id }?.floor == floor
+        case let .setHeavilySoiled(room, on): return after.rooms.first { $0.id == room.id }?.isHeavilySoiled == on
+        case let .setRoomType(room, type): return after.rooms.first { $0.id == room.id }?.roomType == type
+        case .rotateMap, .renameMap: return true
         case .mergeRooms: return after.rooms.count < before.rooms.count
         case .splitRoom: return after.rooms.count > before.rooms.count
         case .addCarpet: return after.carpets.count > before.carpets.count

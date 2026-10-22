@@ -9,6 +9,18 @@ public struct Room: Equatable, Hashable, Sendable, Identifiable {
     public var roomType: Int
     public var category: Int
     public var instanceIndex: Int
+    /// The robot's RoomInfo as received, so an edit changes one value and
+    /// keeps the rest.
+    public var info: ProtoMessage = ProtoMessage(fields: [])
+
+    /// RoomInfo 4 texture (RoomInfo_FloorTexture): 0 default, 1 wood,
+    /// 2 tile, 3 cobblestone, 4 tatami, 5 marble.
+    public var floor: FloorMaterial { FloorMaterial(rawValue: info.int(4) ?? 0) ?? .defaultMaterial }
+    /// RoomInfo 5 textureDirectionAngle, degrees.
+    public var floorAngle: Int { info.int(5) ?? 0 }
+    /// RoomInfo 7 isCustomizeHeavyDirtyRoom: Narwal's Room character
+    /// "Heavily Soiled Room".
+    public var isHeavilySoiled: Bool { (info.int(7) ?? 0) != 0 }
 
     /// The user's name, else the app's room-type name, numbered for duplicates.
     public var displayName: String {
@@ -16,6 +28,30 @@ public struct Room: Equatable, Hashable, Sendable, Identifiable {
         let base = RoomType.names[roomType] ?? "Room"
         return instanceIndex > 1 ? "\(base) \(instanceIndex)" : base
     }
+}
+
+/// Narwal's Floor material choices (RoomInfo_FloorTexture).
+public enum FloorMaterial: Int, CaseIterable, Sendable, Hashable {
+    case defaultMaterial = 0
+    case wood = 1
+    case tile = 2
+    case cobblestone = 3
+    case tatami = 4
+    case marble = 5
+
+    public var label: String {
+        switch self {
+        case .defaultMaterial: return "Default material"
+        case .wood: return "Wood Floor"
+        case .tile: return "Tile"
+        case .cobblestone: return "Cobblestone"
+        case .tatami: return "Tatami"
+        case .marble: return "Marble"
+        }
+    }
+
+    /// The order the Narwal app lists them.
+    public static let narwalOrder: [FloorMaterial] = [.defaultMaterial, .wood, .tile, .tatami, .marble, .cobblestone]
 }
 
 /// One map pixel. Values are `roomId << 8 | type`.
@@ -45,6 +81,12 @@ public struct RobotMap: Equatable, Sendable {
     /// refuse an edit made against an outdated map.
     public var mapVersion = 0
     public var editVersion = 0
+    /// StaticMapPayload 25 rotateAngle (degrees), 28 customName,
+    /// 30 isMainMap, 8 station (absent on a secondary map without a dock).
+    public var rotation = 0
+    public var customName = ""
+    public var isMainMap = false
+    public var hasStation = false
     public var width: Int
     public var height: Int
     /// Millimetres per pixel.
@@ -86,6 +128,10 @@ public struct RobotMap: Equatable, Sendable {
         mapId = id
         mapVersion = map.int(2) ?? 0
         editVersion = map.int(33) ?? 0
+        rotation = map.int(25) ?? 0
+        customName = map.string(28) ?? ""
+        isMainMap = (map.int(30) ?? 0) != 0
+        hasStation = map.message(8) != nil
         resolution = map.int(3) ?? 0
         width = map.int(4) ?? 0
         height = map.int(5) ?? 0
@@ -97,7 +143,7 @@ public struct RobotMap: Equatable, Sendable {
             guard let id = r.int(1), id > 0 else { return nil }
             return Room(
                 id: id, userName: r.string(3) ?? "", roomType: r.int(2) ?? 0,
-                category: r.int(4) ?? 0, instanceIndex: r.int(8) ?? 0
+                category: r.int(4) ?? 0, instanceIndex: r.int(8) ?? 0, info: r
             )
         }
 

@@ -78,7 +78,8 @@ DEFAULT_NOGO = (b"".join(f_bytes(1, f_float(1, x) + f_float(2, y))
                 + f_varint(2, 3) + f_varint(3, 1))
 
 
-def map_payload(carpet_option: int = 0, nogo: list | None = None, names: dict | None = None) -> bytes:
+def map_payload(carpet_option: int = 0, nogo: list | None = None, names: dict | None = None,
+                infos: dict | None = None) -> bytes:
     nogo = [DEFAULT_NOGO] if nogo is None else nogo
     names = names or {}
     pixels = []
@@ -94,10 +95,11 @@ def map_payload(carpet_option: int = 0, nogo: list | None = None, names: dict | 
                     pixels.append(rid << 8 | (0x10 if wall else 0) | rug)
                     break
     grid = zlib.compress(f_bytes(1, b"".join(varint(p) for p in pixels)))
+    infos = infos or {}
     rooms = b"".join(
-        f_bytes(12, f_varint(1, rid) + f_varint(2, rtype)
+        f_bytes(12, infos.get(rid) or (f_varint(1, rid) + f_varint(2, rtype)
                 + (f_bytes(3, names.get(rid, name).encode()) if names.get(rid, name) else b"")
-                + f_varint(4, 1))
+                + f_varint(4, 1)))
         for rid, rtype, name, _, _ in ROOMS
     )
     body = (
@@ -197,9 +199,13 @@ class Robot:
         self.carpet_option = 0
         self.nogo: list[bytes] = [DEFAULT_NOGO]
         self.names: dict[int, str] = {}
+        self.room_infos: dict[int, bytes] = {}
+        self.maintaining: list[int] = []
         self.plans: dict[int, bytes] = {}
         self.schedules: list[tuple[int, bytes]] = []
         self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
+        # Message-valued config fields by get number, e.g. 29 smartCleanParam.
+        self.config_messages: dict[int, bytes] = {29: f_bytes(99, b"keep")}
 
     @property
     def cleaning(self) -> bool:
@@ -223,7 +229,7 @@ class Robot:
         elif short == "status/get_device_base_status":
             return response(f_varint(1, 1) + f_bytes(2, self.base_status()))
         elif short == "map/get_map":
-            return response(map_payload(self.carpet_option, self.nogo, self.names))
+            return response(map_payload(self.carpet_option, self.nogo, self.names, self.room_infos))
         elif short == "info/get_clean_time_line":
             # GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 RobotEventNode...}}
             start = int(time.time() * 1000) - 3_600_000
@@ -233,6 +239,7 @@ class Robot:
             return response(f_varint(1, 1) + f_bytes(2, f_bytes(1, clean) + f_bytes(1, dust)))
         elif short == "config/get":
             body = b"".join(f_varint(k, v) for k, v in sorted(self.config.items()) if v)
+            body += b"".join(f_bytes(k, v) for k, v in sorted(self.config_messages.items()))
             return response(f_varint(1, 1) + f_bytes(2, body + f_bytes(4, self.disturb)))
         elif short == "config/set":
             # SetConfig.Request: one field, numbered differently from config/get.
@@ -241,6 +248,8 @@ class Robot:
                 self.disturb = value
             elif wire == 0 and (get := set_to_get(field)) is not None:
                 self.config[get] = value
+            elif wire == 2 and (get := set_to_get(field)) is not None:
+                self.config_messages[get] = value
             else:
                 return response(f_varint(1, 2))
         elif short == "map/operation":
@@ -262,8 +271,16 @@ class Robot:
                     if f.get(1) == 1:
                         self.nogo.append(area)
                 if ops.get(3):  # RoomInfoOperation {1 RoomInfo {1 roomId, 3 customName}}
-                    info = parse_fields(parse_fields(ops[3][0])[1][0])
+                    raw = parse_fields(ops[3][0])[1][0]
+                    info = parse_fields(raw)
                     self.names[info[1]] = info.get(3, [b""])[0].decode()
+                    self.room_infos[info[1]] = raw
+        elif short == "clean/floor_maintenance/start":
+            # StartMaintainFloor.Request {1 roomIds (packed)}
+            raw = parse_fields(payload).get(1, [b""])
+            self.maintaining = list(raw[0]) if isinstance(raw, list) else [raw]
+            if not self.maintaining:
+                return response(f_varint(1, 2))
         elif short == "clean/plan/set":
             plan_id = max(self.plans, default=0) + 1
             self.plans[plan_id] = parse_fields(payload)[1][0]

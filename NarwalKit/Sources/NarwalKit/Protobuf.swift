@@ -12,19 +12,19 @@ public enum ProtoError: Error, Equatable {
     case unsupportedWireType(Int)
 }
 
-public enum ProtoValue: Equatable, Sendable {
+public enum ProtoValue: Hashable, Sendable {
     case varint(UInt64)
     case fixed64(UInt64)
     case bytes([UInt8])
     case fixed32(UInt32)
 }
 
-public struct ProtoField: Equatable, Sendable {
+public struct ProtoField: Hashable, Sendable {
     public let number: Int
     public let value: ProtoValue
 }
 
-public struct ProtoMessage: Equatable, Sendable {
+public struct ProtoMessage: Hashable, Sendable {
     public let fields: [ProtoField]
 
     public init(fields: [ProtoField]) {
@@ -183,6 +183,8 @@ public struct ProtoWriter {
 
     public init() {}
 
+    mutating func bytesAppend(_ more: [UInt8]) { bytes += more }
+
     public static func encodeVarint(_ value: UInt64) -> [UInt8] {
         var v = value
         var out: [UInt8] = []
@@ -220,5 +222,76 @@ public struct ProtoWriter {
         var inner = ProtoWriter()
         build(&inner)
         bytesField(number, inner.bytes)
+    }
+}
+
+// MARK: Editing a received message
+
+extension ProtoMessage {
+    /// The message back on the wire, fields in their received order.
+    public func encoded() -> [UInt8] {
+        var w = ProtoWriter()
+        for field in fields {
+            switch field.value {
+            case .varint(let v):
+                w.rawVarint(field.number, v)
+            case .bytes(let b):
+                w.bytesField(field.number, b)
+            case .fixed32(let v):
+                w.rawFixed32(field.number, v)
+            case .fixed64(let v):
+                w.rawFixed64(field.number, v)
+            }
+        }
+        return w.bytes
+    }
+
+    /// A copy with `number` set to `value`, replacing every earlier copy of
+    /// the field. Fields this app doesn't know are kept as they were, so a
+    /// write changes only what the user changed.
+    public func setting(_ number: Int, _ value: ProtoValue) -> ProtoMessage {
+        var out = fields.filter { $0.number != number }
+        let at = fields.firstIndex { $0.number == number } ?? out.count
+        out.insert(ProtoField(number: number, value: value), at: min(at, out.count))
+        return ProtoMessage(fields: out)
+    }
+
+    public func setting(_ number: Int, int value: Int) -> ProtoMessage {
+        setting(number, .varint(UInt64(bitPattern: Int64(value))))
+    }
+
+    /// Sets a field inside a nested message, creating the parents if absent:
+    /// `setting(path: [2, 1], int: 1)` sets field 1 of field 2.
+    public func setting(path: [Int], int value: Int) -> ProtoMessage {
+        guard let first = path.first else { return self }
+        if path.count == 1 { return setting(first, int: value) }
+        let inner = message(first) ?? ProtoMessage(fields: [])
+        return setting(first, .bytes(inner.setting(path: Array(path.dropFirst()), int: value).encoded()))
+    }
+
+    public func setting(_ number: Int, message: ProtoMessage) -> ProtoMessage {
+        setting(number, .bytes(message.encoded()))
+    }
+
+    /// The varint at a nested path, e.g. `int(path: [2, 1])`.
+    public func int(path: [Int]) -> Int? {
+        guard let last = path.last else { return nil }
+        var m: ProtoMessage? = self
+        for n in path.dropLast() { m = m?.message(n) }
+        return m?.int(last)
+    }
+}
+
+extension ProtoWriter {
+    mutating func rawVarint(_ number: Int, _ value: UInt64) {
+        bytesAppend(Self.encodeVarint(UInt64(number << 3)) + Self.encodeVarint(value))
+    }
+
+    mutating func rawFixed32(_ number: Int, _ v: UInt32) {
+        bytesAppend(Self.encodeVarint(UInt64(number << 3 | 5)) + [UInt8(v & 0xFF), UInt8(v >> 8 & 0xFF), UInt8(v >> 16 & 0xFF), UInt8(v >> 24)])
+    }
+
+    mutating func rawFixed64(_ number: Int, _ v: UInt64) {
+        bytesAppend(Self.encodeVarint(UInt64(number << 3 | 1)) + (0..<8).map { UInt8(v >> (8 * UInt64($0)) & 0xFF) })
     }
 }
