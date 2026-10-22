@@ -3,7 +3,33 @@ import SwiftUI
 
 struct MapScreen: View {
     @Environment(RobotStore.self) private var store
-    enum Mode: String, CaseIterable { case rooms = "Rooms", zones = "Zones" }
+    enum Mode: String, CaseIterable { case rooms = "Rooms", zones = "Zones", edit = "Edit" }
+
+    enum EditTool: String, CaseIterable, Identifiable {
+        case select = "Select", noGo = "No-go zone", wall = "Virtual wall", carpet = "Add carpet",
+             noCarpet = "Not a carpet", split = "Split room"
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .select: return "hand.tap"
+            case .noGo: return "nosign"
+            case .wall: return "line.diagonal"
+            case .carpet: return "square.grid.3x3.fill"
+            case .noCarpet: return "square.slash"
+            case .split: return "scissors"
+            }
+        }
+        var hint: String {
+            switch self {
+            case .select: return "Tap a room, carpet, no-go zone, wall or piece of furniture to change it."
+            case .noGo: return "Drag a rectangle the robot must stay out of."
+            case .wall: return "Drag a line the robot must not cross."
+            case .carpet: return "Drag a rectangle over a carpet the robot missed."
+            case .noCarpet: return "Drag over a spot the robot wrongly thinks is carpet."
+            case .split: return "Drag a line across a room to split it in two."
+            }
+        }
+    }
 
     @State private var mode = Mode.rooms
     /// Selection order is cleaning order.
@@ -16,6 +42,20 @@ struct MapScreen: View {
     @State private var highlightPixelType: Int?
     @State private var showingCarpets = false
     @State private var highlightCarpet: Int?
+    @State private var tool = EditTool.select
+    @State private var noGoKind = NoGoZone.Kind.noVacuumOrMop
+    @State private var picked: MapItem?
+    @State private var pending: PendingEdit?
+    @State private var renaming: Room?
+    @State private var newName = ""
+    @State private var merging: Room?
+    @State private var retyping: Furniture?
+
+    struct PendingEdit: Identifiable {
+        let id = UUID()
+        let edit: MapEdit
+        let title: String
+    }
     // Pinch to zoom; drag to pan (in Rooms mode, where a drag isn't drawing).
     @State private var zoom: CGFloat = 1
     @State private var zoomAtGestureStart: CGFloat = 1
@@ -44,12 +84,16 @@ struct MapScreen: View {
                                 selected.append(room)
                             }
                         },
-                        onDrawZone: mode == .zones ? { (zone: Payloads.Zone) in zones.append(zone) } : nil,
+                        onDrawZone: drawZoneHandler(map),
                         zoom: zoom,
                         showFurniture: showFurniture,
                         showCarpets: showCarpets,
                         highlightPixelType: highlightPixelType,
-                        highlightCarpet: highlightCarpet
+                        highlightCarpet: highlightCarpet,
+                        onDrawLine: mode == .edit && (tool == .wall || tool == .split)
+                            ? { a, b in drewLine(a, b, map) } : nil,
+                        onTapPoint: mode == .edit && tool == .select
+                            ? { p in picked = map.item(at: p) } : nil
                     )
                     .padding()
                     .scaleEffect(zoom)
@@ -71,7 +115,7 @@ struct MapScreen: View {
                                              height: panAtGestureStart.height + value.translation.height)
                             }
                             .onEnded { _ in panAtGestureStart = pan },
-                        including: mode == .rooms ? .all : .subviews
+                        including: mode == .rooms || (mode == .edit && tool == .select) ? .all : .subviews
                     )
                     .clipped()
                     .overlay(alignment: .topTrailing) {
@@ -129,6 +173,41 @@ struct MapScreen: View {
                         .disabled(store.busyAction != nil)
                 }
             }
+            .confirmationDialog(pickedTitle, isPresented: Binding(get: { picked != nil }, set: { if !$0 { picked = nil } }),
+                                titleVisibility: .visible, presenting: picked) { item in
+                pickedActions(item)
+            }
+            .confirmationDialog(pending?.title ?? "", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+                                titleVisibility: .visible, presenting: pending) { change in
+                Button("Save to robot") { Task { await store.applyMapEdit(change.edit, change.title) } }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("The app reads the map back afterwards and tells you if the robot didn't apply it.")
+            }
+            .alert("Rename room", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Name", text: $newName)
+                Button("Save") {
+                    if let room = renaming, !newName.trimmingCharacters(in: .whitespaces).isEmpty {
+                        let name = newName.trimmingCharacters(in: .whitespaces)
+                        Task { await store.applyMapEdit(.renameRoom(room, to: name), "Rename to \(name)") }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(item: $merging) { room in
+                if let map = store.map {
+                    RoomPicker(title: "Merge \(room.displayName) with…", rooms: map.rooms.filter { $0.id != room.id }) { other in
+                        confirmAfterSheet(PendingEdit(edit: .mergeRooms(room.id, other.id),
+                                                      title: "Merge \(room.displayName) and \(other.displayName)?"))
+                    }
+                }
+            }
+            .sheet(item: $retyping) { item in
+                FurnitureTypePicker(current: item.type) { type in
+                    confirmAfterSheet(PendingEdit(edit: .retypeFurniture(item, to: type),
+                                                  title: "Change \(item.name) to \(Furniture.names[type] ?? "Object")?"))
+                }
+            }
             .sheet(isPresented: $showingCarpets, onDismiss: { highlightCarpet = nil }) {
                 if let map = store.map {
                     CarpetsSheet(map: map, highlight: $highlightCarpet)
@@ -157,8 +236,107 @@ struct MapScreen: View {
         }
     }
 
+    // MARK: Editing
+
+    private func drawZoneHandler(_ map: RobotMap) -> ((Payloads.Zone) -> Void)? {
+        switch mode {
+        case .zones: return { zones.append($0) }
+        case .edit where tool == .noGo || tool == .carpet || tool == .noCarpet: return { drewZone($0, map) }
+        default: return nil
+        }
+    }
+
+    private func drewZone(_ zone: Payloads.Zone, _ map: RobotMap) {
+        let corners = RobotMap.corners(zone)
+        let origin = (x: map.originX, y: map.originY)
+        switch tool {
+        case .noGo:
+            pending = PendingEdit(edit: .addNoGoZone(id: map.nextId(map.noGoZones.map(\.id)), kind: noGoKind, corners: corners),
+                                  title: "Add this \(noGoKind.label.lowercased()) zone?")
+        case .carpet:
+            pending = PendingEdit(edit: .addCarpet(id: map.nextId(map.carpets.map(\.id)), corners: corners,
+                                                   gridInPixels: map.carpetGridInPixels, origin: origin),
+                                  title: "Add a carpet here?")
+        case .noCarpet:
+            pending = PendingEdit(edit: .addNoCarpetArea(id: map.nextId(map.noCarpetAreaIds), corners: corners,
+                                                         gridInPixels: map.carpetGridInPixels, origin: origin),
+                                  title: "Mark this area as not carpet?")
+        default: break
+        }
+    }
+
+    /// A dialog can't open while a sheet is still closing.
+    private func confirmAfterSheet(_ edit: PendingEdit) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            pending = edit
+        }
+    }
+
+    private func drewLine(_ a: MapPoint, _ b: MapPoint, _ map: RobotMap) {
+        if tool == .wall {
+            pending = PendingEdit(edit: .addWall(id: map.nextId(map.virtualWalls.map(\.id)), from: a, to: b),
+                                  title: "Add this virtual wall?")
+            return
+        }
+        let mid = map.gridPoint(for: MapPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2))
+        guard let roomId = map.roomId(atGridX: Int(mid.x), y: Int(mid.y)),
+              let room = map.rooms.first(where: { $0.id == roomId }) else {
+            store.lastError = "Draw the line across the middle of a room."
+            return
+        }
+        pending = PendingEdit(edit: .splitRoom(room.id, from: a, to: b), title: "Split \(room.displayName) along this line?")
+    }
+
+    private var pickedTitle: String {
+        switch picked {
+        case .noGoZone(let zone): return zone.kind.label + " zone"
+        case .wall: return "Virtual wall"
+        case .furniture(let item): return item.name
+        case .carpet: return "Carpet"
+        case .room(let room): return room.displayName
+        case nil: return ""
+        }
+    }
+
+    @ViewBuilder
+    private func pickedActions(_ item: MapItem) -> some View {
+        switch item {
+        case .noGoZone(let zone):
+            Button("Delete zone", role: .destructive) {
+                pending = PendingEdit(edit: .deleteNoGoZone(zone), title: "Delete this zone?")
+            }
+        case .wall(let wall):
+            Button("Delete wall", role: .destructive) {
+                pending = PendingEdit(edit: .deleteWall(wall), title: "Delete this wall?")
+            }
+        case .furniture(let furniture):
+            Button("Change type…") { retyping = furniture }
+            Button("Delete \(furniture.name)", role: .destructive) {
+                pending = PendingEdit(edit: .deleteFurniture(furniture), title: "Delete \(furniture.name) from the map?")
+            }
+        case .carpet(let carpet):
+            Button("Carpet settings…") { highlightCarpet = carpet.id; showingCarpets = true }
+            if carpet.roomId != nil {
+                Button(carpet.isFullRoom ? "Not the whole room" : "Whole room is carpet") {
+                    pending = PendingEdit(edit: .setWholeRoomCarpet(carpet, !carpet.isFullRoom),
+                                          title: carpet.isFullRoom ? "Stop treating the whole room as carpet?" : "Treat the whole room as carpet?")
+                }
+            }
+            Button("Delete carpet", role: .destructive) {
+                pending = PendingEdit(edit: .deleteCarpet(carpet.id), title: "Delete this carpet?")
+            }
+        case .room(let room):
+            Button("Rename…") { newName = room.userName; renaming = room }
+            Button("Merge with…") { merging = room }
+        }
+        Button("Cancel", role: .cancel) {}
+    }
+
     private func hint(_ map: RobotMap) -> String {
         switch mode {
+        case .edit:
+            return tool.hint
         case .rooms:
             return selected.isEmpty
                 ? "Tap rooms to choose them. They'll be cleaned in the order you tap."
@@ -170,6 +348,8 @@ struct MapScreen: View {
 
     private var buttonTitle: String {
         switch mode {
+        case .edit:
+            return ""
         case .rooms:
             return selected.isEmpty ? "Clean whole house…" : "Clean \(selected.count) room\(selected.count == 1 ? "" : "s")…"
         case .zones:
@@ -190,6 +370,41 @@ struct MapScreen: View {
 
     @ViewBuilder
     private func bottomBar(_ map: RobotMap) -> some View {
+        if mode == .edit {
+            editBar(map)
+        } else {
+            cleanBar(map)
+        }
+    }
+
+    private func editBar(_ map: RobotMap) -> some View {
+        VStack(spacing: 8) {
+            HStack {
+                Picker("Tool", selection: $tool) {
+                    ForEach(EditTool.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
+                }
+                .pickerStyle(.menu)
+                if tool == .noGo {
+                    Picker("Keep out", selection: $noGoKind) {
+                        Text("Vacuum & mop").tag(NoGoZone.Kind.noVacuumOrMop)
+                        Text("Mopping").tag(NoGoZone.Kind.noMop)
+                        Text("Vacuuming").tag(NoGoZone.Kind.noVacuum)
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            Text(store.allowsWrites ? tool.hint : "Turn on Settings > Change robot settings to edit the map.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .background(.bar)
+        .disabled(store.busyAction != nil)
+    }
+
+    @ViewBuilder
+    private func cleanBar(_ map: RobotMap) -> some View {
         VStack(spacing: 8) {
             Text(hint(map))
                 .font(.footnote)
@@ -216,6 +431,53 @@ struct MapScreen: View {
         }
         .padding()
         .background(.bar)
+    }
+}
+
+/// Picks one room, e.g. to merge with.
+struct RoomPicker: View {
+    let title: String
+    let rooms: [Room]
+    let onPick: (Room) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(rooms) { room in
+                Button(room.displayName) { dismiss(); onPick(room) }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Cancel") { dismiss() } }
+        }
+    }
+}
+
+/// Picks a furniture type from the app's list.
+struct FurnitureTypePicker: View {
+    let current: Int
+    let onPick: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(Furniture.names.sorted { $0.value < $1.value }, id: \.key) { entry in
+                Button {
+                    dismiss()
+                    if entry.key != current { onPick(entry.key) }
+                } label: {
+                    HStack {
+                        Text(entry.value)
+                        Spacer()
+                        if entry.key == current { Image(systemName: "checkmark") }
+                    }
+                }
+                .tint(.primary)
+            }
+            .navigationTitle("Furniture type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Cancel") { dismiss() } }
+        }
     }
 }
 

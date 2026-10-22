@@ -73,7 +73,14 @@ W, H = 60, 40
 ROOMS = [(1, 4, "", 0, 20), (2, 3, "", 20, 40), (3, 5, "Ensuite", 40, 60)]
 
 
-def map_payload(carpet_option: int = 0) -> bytes:
+DEFAULT_NOGO = (b"".join(f_bytes(1, f_float(1, x) + f_float(2, y))
+                         for x, y in [(25, 10), (35, 10), (35, 18), (25, 18)])
+                + f_varint(2, 3) + f_varint(3, 1))
+
+
+def map_payload(carpet_option: int = 0, nogo: list | None = None, names: dict | None = None) -> bytes:
+    nogo = [DEFAULT_NOGO] if nogo is None else nogo
+    names = names or {}
     pixels = []
     for y in range(H):
         for x in range(W):
@@ -88,7 +95,8 @@ def map_payload(carpet_option: int = 0) -> bytes:
                     break
     grid = zlib.compress(f_bytes(1, b"".join(varint(p) for p in pixels)))
     rooms = b"".join(
-        f_bytes(12, f_varint(1, rid) + f_varint(2, rtype) + (f_bytes(3, name.encode()) if name else b"")
+        f_bytes(12, f_varint(1, rid) + f_varint(2, rtype)
+                + (f_bytes(3, names.get(rid, name).encode()) if names.get(rid, name) else b"")
                 + f_varint(4, 1))
         for rid, rtype, name, _, _ in ROOMS
     )
@@ -98,9 +106,7 @@ def map_payload(carpet_option: int = 0) -> bytes:
         + f_bytes(8, f_bytes(1, f_float(1, 5.0) + f_float(2, 5.0)))
         + rooms + f_bytes(17, grid)
         # 9: a no-go zone (ForbiddenArea, float polygon), 50: a virtual wall
-        + f_bytes(9, b"".join(f_bytes(1, f_float(1, x) + f_float(2, y))
-                              for x, y in [(25, 10), (35, 10), (35, 18), (25, 18)])
-                  + f_varint(2, 3) + f_varint(3, 1))
+        + b"".join(f_bytes(9, zone) for zone in nogo)
         + f_bytes(50, f_varint(1, 2) + f_bytes(2, f_float(1, 45) + f_float(2, 25))
                   + f_bytes(3, f_float(1, 45) + f_float(2, 35)))
         # 26: a carpet (Grid polygon), 32.1: a sofa, 11: a doorway (Grid points)
@@ -189,6 +195,10 @@ class Robot:
         # config/get varint fields by get number, plus DisturbMode bytes.
         self.config: dict[int, int] = {1: 29, 6: 1}
         self.carpet_option = 0
+        self.nogo: list[bytes] = [DEFAULT_NOGO]
+        self.names: dict[int, str] = {}
+        self.plans: dict[int, bytes] = {}
+        self.schedules: list[tuple[int, bytes]] = []
         self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
 
     @property
@@ -213,7 +223,7 @@ class Robot:
         elif short == "status/get_device_base_status":
             return response(f_varint(1, 1) + f_bytes(2, self.base_status()))
         elif short == "map/get_map":
-            return response(map_payload(self.carpet_option))
+            return response(map_payload(self.carpet_option, self.nogo, self.names))
         elif short == "info/get_clean_time_line":
             # GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 RobotEventNode...}}
             start = int(time.time() * 1000) - 3_600_000
@@ -239,11 +249,44 @@ class Robot:
             if fields.get(1) != MAP_ID:
                 return response(f_varint(1, 2))
             for op in fields.get(4, []):
-                carpet = parse_fields(op).get(6)
-                if carpet:
-                    c = parse_fields(carpet[0])
+                ops = parse_fields(op)
+                if ops.get(6):
+                    c = parse_fields(ops[6][0])
                     if c.get(1) == 1 and c.get(3, 0) == 0:
                         self.carpet_option = c.get(2, 0)
+                if ops.get(4):  # ForbiddenAreaOperation {1 op, 2 ForbiddenArea}
+                    f = parse_fields(ops[4][0])
+                    area = f.get(2, [b""])[0]
+                    zone_id = parse_fields(area).get(3)
+                    self.nogo = [z for z in self.nogo if parse_fields(z).get(3) != zone_id]
+                    if f.get(1) == 1:
+                        self.nogo.append(area)
+                if ops.get(3):  # RoomInfoOperation {1 RoomInfo {1 roomId, 3 customName}}
+                    info = parse_fields(parse_fields(ops[3][0])[1][0])
+                    self.names[info[1]] = info.get(3, [b""])[0].decode()
+        elif short == "clean/plan/set":
+            plan_id = max(self.plans, default=0) + 1
+            self.plans[plan_id] = parse_fields(payload)[1][0]
+            return response(f_varint(1, 1) + f_varint(2, plan_id))
+        elif short == "clean/plan/delete":
+            self.plans.pop(parse_fields(payload).get(1), None)
+        elif short == "schedule/clean_schedule/get":
+            body = b"".join(f_bytes(2, f_varint(1, i) + f_bytes(2, p)) for i, p in self.schedules)
+            return response(f_bytes(1, f_varint(1, 1)) + body)
+        elif short == "schedule/clean_schedule/add":
+            param = parse_fields(payload)[1][0]
+            if parse_fields(param).get(2) not in self.plans:
+                return response(f_bytes(1, f_varint(1, 3)))  # CLEAN_PLAN_MISSED
+            self.schedules.append((max((i for i, _ in self.schedules), default=0) + 1, param))
+            return response(f_bytes(1, f_varint(1, 1)))
+        elif short == "schedule/clean_schedule/update":
+            sched = parse_fields(parse_fields(payload)[1][0])
+            self.schedules = [(i, sched[2][0] if i == sched[1] else p) for i, p in self.schedules]
+            return response(f_bytes(1, f_varint(1, 1)))
+        elif short == "schedule/clean_schedule/delete":
+            gone = parse_fields(payload).get(1)
+            self.schedules = [(i, p) for i, p in self.schedules if i != gone]
+            return response(f_bytes(1, f_varint(1, 1)))
         elif short == "consumable/get_consumable_info":
             return response(f_bytes(1, f_bytes(1, bytes([4])) + f_bytes(2, bytes([3]))))
         elif short == "clean/start_clean":

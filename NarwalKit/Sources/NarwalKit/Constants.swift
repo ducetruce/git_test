@@ -91,6 +91,12 @@ public enum Topic {
     public static let confirmWarning = "clean_system/confirm_warning"
     public static let getCleanTimeLine = "info/get_clean_time_line"
     public static let getCleanSchedules = "schedule/clean_schedule/get"
+    public static let addCleanSchedule = "schedule/clean_schedule/add"
+    public static let updateCleanSchedule = "schedule/clean_schedule/update"
+    public static let deleteCleanSchedules = "schedule/clean_schedule/delete"
+    public static let getCleanPlans = "clean/plan/get"
+    public static let setCleanPlan = "clean/plan/set"
+    public static let deleteCleanPlan = "clean/plan/delete"
 
     // Task control
     public static let pause = "task/pause"

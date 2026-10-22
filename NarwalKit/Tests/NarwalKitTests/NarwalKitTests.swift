@@ -667,6 +667,12 @@ final class RelocalizationTests: XCTestCase {
         XCTAssertTrue(s.isRelocalizing)
     }
 
+    func testStationActivities() throws {
+        XCTAssertEqual(try status { $0.varint(1, 10); $0.varint(12, 3) }.activity, "Washing mops")
+        XCTAssertEqual(try status { $0.varint(1, 10); $0.varint(18, 1) }.activity, "Emptying the dustbin")
+        XCTAssertNil(try status { $0.varint(1, 10) }.activity)
+    }
+
     func testPlainDockedIsNotRelocalizing() throws {
         let s = try status({ $0.varint(1, 10) }, { $0.varint(47, 1) })
         XCTAssertFalse(s.isRelocalizing)
@@ -721,5 +727,131 @@ final class StationStateTests: XCTestCase {
                                           "Dust box needs cleaning"])
         XCTAssertEqual(station.readings.map(\.state), ["Empty", "Full or removed", "Needs cleaning", "Unknown", "Installed"])
         XCTAssertTrue(StationState().readings.isEmpty, "absent fields are unknown and not listed")
+    }
+}
+
+
+final class MapEditTests: XCTestCase {
+    private func map() -> RobotMap {
+        var map = RobotMap(mapId: 9, width: 20, height: 10, resolution: 60,
+                           rooms: [Room(id: 1, userName: "", roomType: 4, category: 0, instanceIndex: 0),
+                                   Room(id: 2, userName: "Den", roomType: 0, category: 0, instanceIndex: 0)],
+                           pixels: (0..<200).map { $0 % 20 < 10 ? 0x100 : 0x200 })
+        map.noGoZones = [NoGoZone(id: 3, kind: .noMop, roomId: nil, coversWholeRoom: false,
+                                  polygon: [MapPoint(x: 1, y: 1), MapPoint(x: 4, y: 1), MapPoint(x: 4, y: 4), MapPoint(x: 1, y: 4)])]
+        map.virtualWalls = [VirtualWall(id: 5, start: MapPoint(x: 12, y: 2), end: MapPoint(x: 12, y: 8))]
+        map.furniture = [Furniture(id: 7, type: 14, center: MapPoint(x: 16, y: 5), width: 4, height: 2, angle: 0)]
+        return map
+    }
+
+    func testPayloadShapes() throws {
+        let m = map()
+        func op(_ edit: MapEdit) throws -> (Int, ProtoMessage) {
+            let request = try ProtoMessage(bytes: Payloads.mapOperation(m, [edit]))
+            XCTAssertEqual(request.int(1), 9)
+            let payload = try XCTUnwrap(request.message(4))
+            let field = try XCTUnwrap(payload.fields.first?.number)
+            return (field, try XCTUnwrap(payload.message(field)))
+        }
+        let corners = RobotMap.corners(Payloads.Zone(x1: 2, y1: 6, x2: 8, y2: 9))
+        var (field, body) = try op(.addNoGoZone(id: 4, kind: .noVacuumOrMop, corners: corners))
+        XCTAssertEqual(field, 4)
+        XCTAssertEqual(body.int(1), 1)
+        XCTAssertEqual(body.message(2)?.messages(1).count, 4)
+        XCTAssertEqual(body.message(2)?.messages(1).first?.float(1), 2)
+        XCTAssertEqual(body.message(2)?.int(2), 3)
+
+        (field, body) = try op(.deleteWall(m.virtualWalls[0]))
+        XCTAssertEqual([field, body.int(1), body.message(2)?.int(1)], [13, 2, 5])
+
+        (field, body) = try op(.renameRoom(m.rooms[0], to: "Pantry"))
+        XCTAssertEqual(field, 3)
+        XCTAssertEqual(body.message(1)?.string(3), "Pantry")
+        XCTAssertEqual(body.message(1)?.int(1), 1)
+
+        (field, body) = try op(.mergeRooms(2, 1))
+        XCTAssertEqual([field, body.int(1), body.int(2), body.int(3)], [2, 2, 1, 1])
+
+        (field, body) = try op(.splitRoom(1, from: MapPoint(x: 5, y: 0), to: MapPoint(x: 5, y: 10)))
+        XCTAssertEqual(field, 1)
+        XCTAssertEqual(body.message(2)?.float(2), 10)
+
+        // Carpet grid in pixel frame: map coordinates minus origin.
+        var shifted = m
+        shifted.originX = -100
+        shifted.originY = -50
+        let request = try ProtoMessage(bytes: Payloads.mapOperation(shifted, [
+            .addCarpet(id: 2, corners: [MapPoint(x: -90, y: -45)], gridInPixels: true, origin: (x: -100, y: -50))]))
+        let carpet = try XCTUnwrap(request.message(4)?.message(6))
+        XCTAssertEqual([carpet.int(1), carpet.int(3)], [2, 1])
+        XCTAssertEqual([carpet.message(4)?.int(1), carpet.message(4)?.int(2)], [10, 5])
+
+        (field, body) = try op(.retypeFurniture(m.furniture[0], to: 15))
+        XCTAssertEqual([field, body.int(1), body.message(2)?.int(2)], [8, 1, 15])
+        XCTAssertEqual(body.message(2)?.message(3)?.float(2), 4)
+    }
+
+    func testIsApplied() {
+        let before = map()
+        var after = before
+        XCTAssertFalse(MapEdit.renameRoom(before.rooms[0], to: "Pantry").isApplied(before: before, after: after))
+        after.rooms[0].userName = "Pantry"
+        XCTAssertTrue(MapEdit.renameRoom(before.rooms[0], to: "Pantry").isApplied(before: before, after: after))
+        after.virtualWalls = []
+        XCTAssertTrue(MapEdit.deleteWall(before.virtualWalls[0]).isApplied(before: before, after: after))
+        XCTAssertFalse(MapEdit.addWall(id: 6, from: MapPoint(x: 0, y: 0), to: MapPoint(x: 1, y: 1))
+            .isApplied(before: before, after: after))
+    }
+
+    func testHitTesting() {
+        let m = map()
+        guard case .noGoZone(let zone)? = m.item(at: MapPoint(x: 2, y: 2)) else { return XCTFail("zone") }
+        XCTAssertEqual(zone.id, 3)
+        guard case .wall? = m.item(at: MapPoint(x: 13, y: 5)) else { return XCTFail("wall") }
+        guard case .furniture(let item)? = m.item(at: MapPoint(x: 17, y: 5.5)) else { return XCTFail("furniture") }
+        XCTAssertEqual(item.id, 7)
+        guard case .room(let room)? = m.item(at: MapPoint(x: 6, y: 7)) else { return XCTFail("room") }
+        XCTAssertEqual(room.id, 1)
+    }
+}
+
+final class ScheduleWriteTests: XCTestCase {
+    func testCron() {
+        XCTAssertEqual(CleanSchedule.cron(hour: 9, minute: 30, weekdays: [1, 3, 5]), "30 9 * * 1,3,5")
+        XCTAssertEqual(CleanSchedule.cron(hour: 7, minute: 0, weekdays: Set(0...6)), "0 7 * * *")
+        XCTAssertEqual(CleanSchedule.cron(hour: 7, minute: 5, weekdays: [0], like: ["0 0 8 * * 1"]), "0 5 7 * * 0")
+        var s = CleanSchedule(id: 1, cron: "0 30 9 * * 1-3", enabled: true, remindingTime: 0, planId: 2,
+                              cleanMode: 2, isCustomPlan: true, name: "x")
+        XCTAssertEqual(s.time?.hour, 9)
+        XCTAssertEqual(s.time?.weekdays, [1, 2, 3])
+        s.cron = "15 6 * * *"
+        XCTAssertEqual(s.time?.weekdays.count, 7)
+    }
+
+    func testPlanAndSchedulePayloads() throws {
+        let plan = try ProtoMessage(bytes: Payloads.setCleanPlan(
+            mapId: 9, name: "Kitchen", rooms: [4, 2],
+            settings: CleanSettings(workMode: .vacuum, fan: .strong, passes: 2)))
+        let body = try XCTUnwrap(plan.message(1))
+        XCTAssertEqual([body.int(2), body.int(3), body.int(4)], [9, 2, 1])
+        XCTAssertEqual(body.string(5), "Kitchen")
+        let options = body.messages(9)
+        XCTAssertEqual(options.map { $0.int(1) }, [4, 2])
+        XCTAssertEqual(options.first?.int(2), 1)
+        XCTAssertEqual([options.first?.message(4)?.int(1), options.first?.message(4)?.int(2)], [3, 2])
+
+        let whole = try ProtoMessage(bytes: Payloads.setCleanPlan(mapId: 9, name: "All", rooms: [], settings: CleanSettings()))
+        XCTAssertEqual(whole.message(1)?.messages(9).first?.int(2), 3)
+        XCTAssertEqual(whole.message(1)?.int(3), 4)
+
+        let add = try ProtoMessage(bytes: Payloads.addSchedule(cron: "0 9 * * 1", enabled: true, planId: 12, cleanMode: 2, name: "Kitchen"))
+        let param = try XCTUnwrap(add.message(1))
+        XCTAssertEqual(param.message(1)?.string(1), "0 9 * * 1")
+        XCTAssertEqual(param.message(1)?.int(3), 1)
+        XCTAssertEqual(param.int(2), 12)
+
+        XCTAssertEqual(Payloads.deleteSchedules([3, 4]), [0x08, 0x03, 0x08, 0x04])
+        XCTAssertEqual(ScheduleReply.failure(try ProtoMessage(bytes: [0x0A, 0x02, 0x08, 0x03])), 3)
+        XCTAssertNil(ScheduleReply.failure(try ProtoMessage(bytes: [0x0A, 0x02, 0x08, 0x01])))
     }
 }

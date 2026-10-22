@@ -16,22 +16,26 @@ logs back.
 
 ## Owner priorities
 
-From the owner's list of Narwal app frustrations, in order:
+Built in one batch from the app's schema, untested on the robot. The owner
+checks it in one pass with Settings > Diagnostics > Test checklist, which
+produces a shareable report.
 
-1. **Done:** "can't find the base station" no longer alerts while docked
-   and waits 90 s otherwise (`DockErrorFilter`). The Narwal app's "issue
-   resolved" button probably sends `clean_system/confirm_warning` (payload
-   unknown); worth capturing so the app can do it automatically.
-2. **Done (read-only):** one flat Settings screen instead of nested menus.
-3. **Built, untested:** every setting as switches behind a beta toggle;
-   test volume first.
-4. **Built, untested:** per-carpet handling (Map > Layers > Carpets) via
-   `map/operation` CarpetOperation, the first map edit. Then: never mop carpets (`Carpet.carpetCleanOption` AVOID), remove a
-   detected carpet (`StaticMapPayload.noCarpetAreas`, `NoCarpetAreaOperation`),
-   mark a whole room as carpet (`isFullRoomCarpet`).
-5. Furniture: edit pieces and set rules around them.
-6. Room split: tap a room, draw a line, confirm.
-7. Schedules.
+- **Status:** relocalization ("Finding its position"), station activities
+  (washing/drying mops, emptying, drying bags) from the task sub-statuses,
+  "Charging" from chargingStatus. Base-station alerts held back 90 s;
+  "Mark resolved" sends `clean_system/confirm_warning` (payload a guess).
+- **Settings:** every `RobotSettingKey` plus volume and quiet hours, with
+  read-back. Volume confirmed on the robot.
+- **Map editing** (`map/operation`, Map > Edit): add/delete no-go zones and
+  virtual walls, rename/split/merge rooms, per-carpet handling, add/delete
+  carpets, whole-room carpet, not-a-carpet areas, retype/delete furniture.
+  Each edit fetches the map back and `MapEdit.isApplied` checks it.
+  Guesses: split's left/right room ids, carpet `Grid` frame for new carpets.
+- **Schedules** (Home > Schedules): a routine is saved as a robot clean plan
+  (`clean/plan/set`), then scheduled (`schedule/clean_schedule/add`); toggle
+  and delete too. Guesses: cron format (5 fields, 0 = Sunday, or 6 when the
+  robot's own schedules use 6), and whether `schedule/clean_schedule/get`
+  answers at all.
 
 ## Decoded so far (Z10 Ultra)
 

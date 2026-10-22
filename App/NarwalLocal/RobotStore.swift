@@ -31,6 +31,9 @@ final class RobotStore {
     private(set) var history: CleaningHistory?
     /// config/get, read-only until writes are confirmed on the robot.
     private(set) var robotSettings: RobotSettings?
+    /// Robot-stored schedules; nil until loaded (or if the robot never answers).
+    private(set) var schedules: [CleanSchedule]?
+    private(set) var schedulesError: String?
 
     // UI
     private(set) var busyAction: String?
@@ -112,6 +115,7 @@ final class RobotStore {
         guard let status else { return "Waking robot…" }
         if !status.errors.isEmpty { return "Needs attention" }
         if status.isRelocalizing { return "Finding its position" }
+        if let activity = status.activity { return activity }
         if status.isReturning { return "Returning to dock" }
         if status.isPaused { return "Paused" }
         switch status.workingStatus {
@@ -245,6 +249,98 @@ final class RobotStore {
                 if updated.carpets.first(where: { $0.id == carpetId })?.cleanOption != option {
                     self.lastError = "The robot didn't apply the change to that carpet."
                     self.appendLog("Carpet \(carpetId): not applied after map/operation")
+                }
+            }
+        }
+    }
+
+    /// Sends one map edit, fetches the map back and checks the edit shows.
+    func applyMapEdit(_ edit: MapEdit, _ title: String) async {
+        guard allowsWrites, let before = map else { return }
+        await run(title) { connection in
+            let after = try await connection.editMap([edit], on: before)
+            await MainActor.run {
+                self.map = after
+                if !edit.isApplied(before: before, after: after) {
+                    self.lastError = "The robot didn't apply this change: \(title)."
+                    self.appendLog("\(title): not applied after map/operation")
+                }
+            }
+        }
+    }
+
+    // MARK: Schedules
+
+    /// Plans this app created for its schedules, deleted with them.
+    private var ownPlanIds: Set<Int> {
+        get { Set(UserDefaults.standard.array(forKey: "ownPlanIds") as? [Int] ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "ownPlanIds") }
+    }
+
+    func reloadSchedules() async {
+        guard let connection else { return }
+        do {
+            schedules = try await connection.cleanSchedules()
+            schedulesError = nil
+        } catch {
+            schedulesError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            appendLog("Schedules: \(schedulesError ?? "")")
+        }
+    }
+
+    /// Saves the routine on the robot as a clean plan, then schedules it.
+    func addSchedule(name: String, rooms: [Int], settings: CleanSettings, perRoom: [Int: CleanSettings],
+                     hour: Int, minute: Int, weekdays: Set<Int>) async {
+        guard allowsWrites, let map else { return }
+        let before = schedules?.count ?? 0
+        let existing = schedules?.map(\.cron) ?? []
+        await run("New schedule") { connection in
+            let planId = try await connection.saveCleanPlan(
+                Payloads.setCleanPlan(mapId: map.mapId, name: name, rooms: rooms, settings: settings, perRoom: perRoom))
+            await MainActor.run { self.ownPlanIds.insert(planId) }
+            let mode = Payloads.cleanMode(Set(rooms.isEmpty ? [settings.workMode] : rooms.map { (perRoom[$0] ?? settings).workMode }))
+            let cron = CleanSchedule.cron(hour: hour, minute: minute, weekdays: weekdays, like: existing)
+            let after = try await connection.changeSchedules(
+                Topic.addCleanSchedule,
+                Payloads.addSchedule(cron: cron, enabled: true, planId: planId, cleanMode: mode, name: name))
+            await MainActor.run {
+                self.schedules = after
+                if after.count <= before {
+                    self.lastError = "The robot didn't add the schedule."
+                    self.appendLog("New schedule: not in the list afterwards")
+                }
+            }
+        }
+    }
+
+    func setSchedule(_ schedule: CleanSchedule, enabled: Bool) async {
+        guard allowsWrites else { return }
+        var changed = schedule
+        changed.enabled = enabled
+        await run(enabled ? "Turn on schedule" : "Turn off schedule") { connection in
+            let after = try await connection.changeSchedules(Topic.updateCleanSchedule, Payloads.updateSchedule(changed))
+            await MainActor.run {
+                self.schedules = after
+                if after.first(where: { $0.id == schedule.id })?.enabled != enabled {
+                    self.lastError = "The robot didn't apply the change to that schedule."
+                }
+            }
+        }
+    }
+
+    func deleteSchedule(_ schedule: CleanSchedule) async {
+        guard allowsWrites else { return }
+        await run("Delete schedule") { connection in
+            let after = try await connection.changeSchedules(Topic.deleteCleanSchedules, Payloads.deleteSchedules([schedule.id]))
+            let ours = await MainActor.run { self.ownPlanIds.contains(schedule.planId) }
+            if ours, !after.contains(where: { $0.planId == schedule.planId }) {
+                try? await connection.deleteCleanPlan(schedule.planId)
+                await MainActor.run { self.ownPlanIds.remove(schedule.planId) }
+            }
+            await MainActor.run {
+                self.schedules = after
+                if after.contains(where: { $0.id == schedule.id }) {
+                    self.lastError = "The robot didn't delete that schedule."
                 }
             }
         }

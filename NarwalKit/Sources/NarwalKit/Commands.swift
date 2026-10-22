@@ -54,7 +54,30 @@ extension NarwalConnection {
     /// Robot-stored schedules. Read-only, but the Z10 Ultra hasn't answered
     /// this yet, so nothing in the app calls it.
     public func cleanSchedules() async throws -> [CleanSchedule] {
-        CleanSchedule.list(response: try await send(Topic.getCleanSchedules).message)
+        CleanSchedule.list(response: try await send(Topic.getCleanSchedules, timeout: 10).message)
+    }
+
+    public func cleanPlans() async throws -> [CleanPlan] {
+        CleanPlan.list(response: try await send(Topic.getCleanPlans, timeout: 10).message)
+    }
+
+    /// Saves a routine as a robot clean plan; returns its id
+    /// (SetCleanPlan.Response {1 result, 2 id}).
+    public func saveCleanPlan(_ payload: [UInt8]) async throws -> Int {
+        let response = try await perform(Topic.setCleanPlan, payload, timeout: 10)
+        guard let id = response.message.int(2), id != 0 else { throw NarwalError.rejected(Topic.setCleanPlan, -1) }
+        return id
+    }
+
+    public func deleteCleanPlan(_ id: Int) async throws {
+        try await perform(Topic.deleteCleanPlan, Payloads.singleVarint(id))
+    }
+
+    /// Sends a schedule change, then reads the schedules back.
+    public func changeSchedules(_ topic: String, _ payload: [UInt8]) async throws -> [CleanSchedule] {
+        let response = try await send(topic, payload, timeout: 10)
+        if let code = ScheduleReply.failure(response.message) { throw NarwalError.rejected(topic, code) }
+        return try await cleanSchedules()
     }
 
     public func currentCleanTask() async throws -> CommandResponse {
@@ -159,6 +182,12 @@ extension NarwalConnection {
         try await perform(Topic.mapOperation,
                           Payloads.carpetCleanOption(map, carpetId: carpetId, option: option),
                           timeout: 10)
+        return try await fetchMap()
+    }
+
+    /// Applies map edits in one map/operation, then fetches the map back.
+    public func editMap(_ edits: [MapEdit], on map: RobotMap) async throws -> RobotMap {
+        try await perform(Topic.mapOperation, Payloads.mapOperation(map, edits), timeout: 15)
         return try await fetchMap()
     }
 

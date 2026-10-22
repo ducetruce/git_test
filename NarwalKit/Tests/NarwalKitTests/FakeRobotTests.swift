@@ -86,6 +86,45 @@ final class FakeRobotTests: XCTestCase {
         let edited = try await connection.setCarpetCleanOption(1, to: 4, on: map)
         XCTAssertEqual(edited.carpets.first?.cleanOption, 4)
 
+        // More map edits, each checked against the map fetched afterwards.
+        let zone = MapEdit.addNoGoZone(id: 2, kind: .noMop,
+                                       corners: RobotMap.corners(Payloads.Zone(x1: 5, y1: 25, x2: 12, y2: 32)))
+        let withZone = try await connection.editMap([zone], on: edited)
+        XCTAssertTrue(zone.isApplied(before: edited, after: withZone))
+        XCTAssertEqual(withZone.noGoZones.count, 2)
+        let added = try XCTUnwrap(withZone.noGoZones.first { $0.id == 2 })
+        let removal = MapEdit.deleteNoGoZone(added)
+        let withoutZone = try await connection.editMap([removal], on: withZone)
+        XCTAssertTrue(removal.isApplied(before: withZone, after: withoutZone))
+        let kitchen = try XCTUnwrap(withoutZone.rooms.first { $0.id == 1 })
+        let rename = MapEdit.renameRoom(kitchen, to: "Pantry")
+        let renamed = try await connection.editMap([rename], on: withoutZone)
+        XCTAssertTrue(rename.isApplied(before: withoutZone, after: renamed))
+        XCTAssertEqual(renamed.rooms.first { $0.id == 1 }?.displayName, "Pantry")
+
+        // Schedules: a routine saved as a plan, scheduled, switched off, deleted.
+        let planId = try await connection.saveCleanPlan(
+            Payloads.setCleanPlan(mapId: renamed.mapId, name: "Kitchen", rooms: [1], settings: CleanSettings(workMode: .vacuum)))
+        XCTAssertGreaterThan(planId, 0)
+        var schedules = try await connection.changeSchedules(
+            Topic.addCleanSchedule,
+            Payloads.addSchedule(cron: "30 9 * * 1,3", enabled: true, planId: planId, cleanMode: 2, name: "Kitchen"))
+        XCTAssertEqual(schedules.map(\.summary), ["09:30, Mon Wed"])
+        var off = try XCTUnwrap(schedules.first)
+        off.enabled = false
+        schedules = try await connection.changeSchedules(Topic.updateCleanSchedule, Payloads.updateSchedule(off))
+        XCTAssertEqual(schedules.first?.enabled, false)
+        schedules = try await connection.changeSchedules(Topic.deleteCleanSchedules, Payloads.deleteSchedules([off.id]))
+        XCTAssertTrue(schedules.isEmpty)
+        do {
+            _ = try await connection.changeSchedules(
+                Topic.addCleanSchedule,
+                Payloads.addSchedule(cron: "0 8 * * *", enabled: true, planId: 999, cleanMode: 2, name: "x"))
+            XCTFail("a schedule for a missing plan was accepted")
+        } catch NarwalError.rejected(_, let code) {
+            XCTAssertEqual(code, 3)
+        }
+
         do {
             try await connection.cleanRooms([42])
             XCTFail("unknown room accepted")

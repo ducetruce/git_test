@@ -21,6 +21,7 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink("Test checklist") { ChecklistView() }
                     NavigationLink("Connection") { connection }
                     NavigationLink("Feature lab") { LabView() }
                     NavigationLink("Connection log") { LogView() }

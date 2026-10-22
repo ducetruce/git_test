@@ -66,6 +66,11 @@ public struct RobotMap: Equatable, Sendable {
     public var carpets: [CarpetArea] = []
     /// StaticMapPayload field 11.
     public var doorways: [Doorway] = []
+    /// Whether this map's carpet `Grid` points came as pixel indices, so new
+    /// carpets are sent the same way.
+    public var carpetGridInPixels = false
+    /// StaticMapPayload 51 NoCarpetArea ids.
+    public var noCarpetAreaIds: [Int] = []
 
     public enum ParseError: Error {
         case noActiveMap
@@ -105,11 +110,16 @@ public struct RobotMap: Equatable, Sendable {
         virtualWalls = map.messages(50).map(VirtualWall.init)
         furniture = map.message(32)?.messages(1).map(Furniture.init) ?? []
         let frame = (width: width, height: height, originX: originX, originY: originY)
+        var pixelCarpets = false
         carpets = map.messages(26).map(CarpetArea.init).map {
             var carpet = $0
-            carpet.polygon = Self.inMapCoordinates(carpet.polygon, frame)
+            let placed = Self.inMapCoordinates(carpet.polygon, frame)
+            if placed != carpet.polygon { pixelCarpets = true }
+            carpet.polygon = placed
             return carpet
         }
+        carpetGridInPixels = pixelCarpets
+        noCarpetAreaIds = map.messages(51).compactMap { $0.int(1) }
         doorways = map.messages(11).map(Doorway.init).map {
             var door = $0
             door.points = Self.inMapCoordinates(door.points, frame)

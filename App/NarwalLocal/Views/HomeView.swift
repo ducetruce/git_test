@@ -88,6 +88,11 @@ struct HomeView: View {
 
                 Section {
                     NavigationLink {
+                        SchedulesView()
+                    } label: {
+                        Label("Schedules", systemImage: "calendar.badge.clock")
+                    }
+                    NavigationLink {
                         HistoryView()
                     } label: {
                         Label("Cleaning history", systemImage: "clock.arrow.circlepath")

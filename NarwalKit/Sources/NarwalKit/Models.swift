@@ -171,6 +171,10 @@ public struct BaseStatus: Equatable, Sendable {
     /// RobotBaseStatus 47 chargingStatus / 11 stationContactType; nil when
     /// neither was sent.
     public var isCharging: Bool?
+    /// What the robot is doing at the station or on its way there, in plain
+    /// words (washing mops, emptying the dustbin...), from the task's
+    /// sub-statuses. Nil when none applies.
+    public var activity: String?
     /// nil when this message carried no dock evidence either way.
     public var isDocked: Bool?
     public var fanLevel: FanLevel?
@@ -214,12 +218,12 @@ public struct BaseStatus: Equatable, Sendable {
         let f47 = m.int(47)
         let presence = task?.int(3)
         let subState = task?.int(10)
-        let activity = task?.int(12)
+        let washState = task?.int(12)
         let saysDocked = (f11.map { $0 >= 2 } ?? false)
             || f47 == 1 || f47 == 3
             || presence == 1 || presence == 6
             || subState == 1
-            || (activity.map { $0 > 0 } ?? false)
+            || (washState.map { $0 > 0 } ?? false)
         let saysOffDock = f11 == 1 || f47 == 2 || presence == 2 || subState == 2
         if f47 == 1 || f11 == 3 {
             isCharging = true
@@ -235,6 +239,9 @@ public struct BaseStatus: Equatable, Sendable {
         } else {
             isDocked = nil
         }
+        // "Returning"/"parking" labels only off the dock: an older reading of
+        // these fields treats some of the same values as docked.
+        self.activity = Self.activity(task, enRoute: !(status.isOnDock || isDocked == true))
     }
 
     /// RobotTaskStatus field -> its RELOCALIZATION value (docs/schema/enums.txt,
@@ -243,6 +250,27 @@ public struct BaseStatus: Equatable, Sendable {
         1: 13, 4: 5, 5: 9, 6: 9, 7: 11, 8: 13, 9: 4, 10: 3, 11: 4,
         12: 5, 13: 3, 15: 4, 17: 13, 19: 6, 20: 8,
     ]
+
+    /// RobotTaskStatus field -> value -> label (docs/schema/enums.txt):
+    /// 12 washAndDryStatus, 18 dustGatheringStatus, 13 recallToWashStatus,
+    /// 10 recallStatus, 11 chargingStatus. Checked in this order.
+    static let activityLabels: [(field: Int, enRoute: Bool, labels: [Int: String])] = [
+        (12, false, [3: "Washing mops", 4: "Drying mops", 6: "Drying the dust bag",
+                     8: "Drying the station bag", 9: "Checking mop moisture"]),
+        (18, false, [1: "Emptying the dustbin", 4: "Drying the station bag", 5: "Sanitising the station bag"]),
+        (13, true, [1: "Going to wash mops", 2: "Parking to wash mops"]),
+        (10, true, [1: "Returning to dock", 2: "Parking on the dock"]),
+        (11, true, [1: "Going back to charge", 2: "Parking on the dock", 3: "Going back to recharge"]),
+        (12, true, [1: "Going to the station", 2: "Parking on the dock"]),
+    ]
+
+    static func activity(_ task: ProtoMessage?, enRoute: Bool) -> String? {
+        guard let task else { return nil }
+        for entry in activityLabels where enRoute || !entry.enRoute {
+            if let value = task.int(entry.field), let label = entry.labels[value] { return label }
+        }
+        return nil
+    }
 
     static func relocalizing(_ task: ProtoMessage?) -> Bool {
         guard let task else { return false }

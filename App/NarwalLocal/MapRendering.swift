@@ -104,6 +104,10 @@ struct MapCanvas: View {
     var highlightPixelType: Int?
     /// Carpet to outline, e.g. while it's being edited.
     var highlightCarpet: Int?
+    /// Edit mode: a drag draws a line (map coordinates) instead of a box.
+    var onDrawLine: ((MapPoint, MapPoint) -> Void)?
+    /// Edit mode: a tap anywhere, in map coordinates.
+    var onTapPoint: ((MapPoint) -> Void)?
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -217,10 +221,18 @@ struct MapCanvas: View {
                 }
 
                 if let start = dragStart, let end = dragEnd {
-                    Rectangle()
-                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .frame(width: abs(end.x - start.x), height: abs(end.y - start.y))
-                        .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                    if onDrawLine != nil {
+                        Path { path in
+                            path.move(to: start)
+                            path.addLine(to: end)
+                        }
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 4]))
+                    } else {
+                        Rectangle()
+                            .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .frame(width: abs(end.x - start.x), height: abs(end.y - start.y))
+                            .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                    }
                 }
 
                 ForEach(map.rooms) { room in
@@ -258,6 +270,11 @@ struct MapCanvas: View {
             .frame(width: size.width, height: size.height)
             .contentShape(Rectangle())
             .onTapGesture { location in
+                if let onTapPoint {
+                    onTapPoint(MapPoint(x: Double(location.x / scale) + Double(map.originX),
+                                        y: Double((size.height - location.y) / scale) + Double(map.originY)))
+                    return
+                }
                 guard let onTapRoom, onDrawZone == nil else { return }
                 let gx = Int(location.x / scale)
                 let gy = Int((size.height - location.y) / scale)
@@ -279,11 +296,16 @@ struct MapCanvas: View {
                         }
                         let a = world(value.startLocation)
                         let b = world(value.location)
+                        if let onDrawLine {
+                            guard hypot(Double(a.0 - b.0), Double(a.1 - b.1)) >= 3 else { return }
+                            onDrawLine(MapPoint(x: Double(a.0), y: Double(a.1)), MapPoint(x: Double(b.0), y: Double(b.1)))
+                            return
+                        }
                         // Ignore slivers: at least ~3 cells each way.
                         guard abs(a.0 - b.0) >= 3, abs(a.1 - b.1) >= 3 else { return }
                         onDrawZone?(Payloads.Zone(x1: a.0, y1: a.1, x2: b.0, y2: b.1))
                     },
-                including: onDrawZone == nil ? .subviews : .all
+                including: onDrawZone == nil && onDrawLine == nil ? .subviews : .all
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
