@@ -855,3 +855,36 @@ final class ScheduleWriteTests: XCTestCase {
         XCTAssertNil(ScheduleReply.failure(try ProtoMessage(bytes: [0x0A, 0x02, 0x08, 0x01])))
     }
 }
+
+final class ObstacleTests: XCTestCase {
+    func testObstaclesAndPhotoRequest() throws {
+        var w = ProtoWriter()
+        w.varint(1, 1)
+        w.message(2) { map in
+            map.varint(1, 7); map.varint(4, 10); map.varint(5, 10)
+            map.message(32) { vision in
+                vision.message(2) { obs in
+                    obs.varint(1, 12)
+                    obs.varint(2, 7)  // socks
+                    obs.message(3) { box in
+                        box.message(1) { c in c.float(1, 3.5); c.float(2, 4) }
+                        box.float(2, 1.5); box.float(3, 1)
+                    }
+                    obs.varint(4, 99)
+                }
+            }
+        }
+        let map = try RobotMap(response: ProtoMessage(bytes: w.bytes))
+        let obstacle = try XCTUnwrap(map.obstacles.first)
+        XCTAssertEqual(obstacle.id, 12)
+        XCTAssertEqual(obstacle.name, "Socks")
+        XCTAssertEqual(obstacle.center, MapPoint(x: 3.5, y: 4))
+        XCTAssertEqual(Payloads.obstaclePhoto(12), [0x08, 0x01, 0x10, 0x0C])
+
+        var reply = ProtoWriter()
+        reply.varint(1, 1)
+        reply.bytesField(2, Array(repeating: 0xFF, count: 100))
+        XCTAssertEqual(ObstaclePhoto.imageData(try ProtoMessage(bytes: reply.bytes))?.count, 100)
+        XCTAssertNil(ObstaclePhoto.imageData(try ProtoMessage(bytes: [0x08, 0x01])))
+    }
+}

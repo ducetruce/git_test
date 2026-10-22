@@ -38,15 +38,18 @@ struct RootView: View {
         Group {
             if store.isConfigured {
                 TabView {
-                    HomeView().tabItem { Label("Home", systemImage: "house") }
-                    MapScreen().tabItem { Label("Map", systemImage: "map") }
-                    DockView().tabItem { Label("Station", systemImage: "drop") }
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }
+                    TodayView().tabItem { Label("Today", systemImage: "circle.circle") }
+                    MapScreen().tabItem { Label("Clean", systemImage: "map") }
+                    StationView().tabItem { Label("Station", systemImage: "drop") }
+                    SettingsView().tabItem { Label("More", systemImage: "line.3.horizontal") }
                 }
             } else {
                 SetupView()
             }
         }
+        // One look everywhere: dark, with the calm teal accent.
+        .preferredColorScheme(.dark)
+        .tint(Theme.teal)
         .alert("Something went wrong", isPresented: Binding(
             get: { store.lastError != nil },
             set: { if !$0 { store.lastError = nil } }

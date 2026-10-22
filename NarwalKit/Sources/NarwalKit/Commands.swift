@@ -173,6 +173,11 @@ extension NarwalConnection {
         return try await settings()
     }
 
+    /// The robot's photo of a recognised obstacle, if it sends one locally.
+    public func obstaclePhoto(_ id: Int) async throws -> Data? {
+        ObstaclePhoto.imageData(try await send(Topic.getVisionImage, Payloads.obstaclePhoto(id), timeout: 15).message)
+    }
+
     // MARK: Map edits
 
     /// Sets how the robot treats one carpet, then fetches the map back so the

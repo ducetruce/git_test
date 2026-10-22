@@ -13,8 +13,16 @@ struct ChecklistView: View {
     }
 
     static let sections: [(String, [Item])] = [
+        ("Look", [
+            Item(id: "model", title: "3D robot and station",
+                 how: "Today and Station: does the model look like your robot? Drag to turn it. Note what's off."),
+            Item(id: "map3d", title: "3D map",
+                 how: "Clean tab in 3D: walls, furniture and the robot in the right places? Pick rooms with the chips."),
+            Item(id: "obstacles", title: "Obstacle photos",
+                 how: "More > Obstacle photos: does tapping one show the robot's photo?"),
+        ]),
         ("Status", [
-            Item(id: "status", title: "Home shows the right state",
+            Item(id: "status", title: "Today shows the right state",
                  how: "Docked, charging, cleaning, returning: compare with the Narwal app."),
             Item(id: "relocalize", title: "\"Finding its position\"",
                  how: "Shown while the robot relocates itself, not \"Charging\"."),
@@ -25,9 +33,9 @@ struct ChecklistView: View {
             Item(id: "settings", title: "Three different settings",
                  how: "Change one switch, one choice and quiet hours. Check each in the Narwal app."),
         ]),
-        ("Carpets (Map)", [
+        ("Carpets (Clean tab)", [
             Item(id: "carpet-option", title: "One carpet's handling",
-                 how: "Layers > Carpets…: set one carpet to Avoid. Check the same carpet in the Narwal app."),
+                 how: "Clean tab, switch to 2D, Layers > Carpets…: set one carpet to Avoid. Check the same carpet in the Narwal app."),
             Item(id: "carpet-add", title: "Add a carpet",
                  how: "Edit > Add carpet: drag over a rug the robot missed."),
             Item(id: "carpet-not", title: "Not a carpet",
@@ -37,7 +45,7 @@ struct ChecklistView: View {
             Item(id: "carpet-delete", title: "Delete a carpet",
                  how: "Edit > Select: tap a carpet > Delete. (Add it back afterwards if you need it.)"),
         ]),
-        ("Map", [
+        ("Map (Clean tab)", [
             Item(id: "nogo-add", title: "Add a no-go zone", how: "Edit > No-go zone: drag a rectangle."),
             Item(id: "nogo-delete", title: "Delete it", how: "Edit > Select: tap the zone > Delete."),
             Item(id: "wall-add", title: "Add a virtual wall", how: "Edit > Virtual wall: drag a line."),
@@ -49,7 +57,7 @@ struct ChecklistView: View {
             Item(id: "furniture", title: "Change a furniture type",
                  how: "Edit > Select: tap furniture > Change type. Check the Narwal app's 3D map."),
         ]),
-        ("Schedules (Home)", [
+        ("Schedules (More)", [
             Item(id: "schedule-list", title: "Schedules load",
                  how: "Any schedules made in the Narwal app appear, with the right time and days."),
             Item(id: "schedule-add", title: "Add a schedule",

@@ -12,6 +12,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    NavigationLink { SchedulesView() } label: { Label("Schedules", systemImage: "calendar") }
+                    NavigationLink { HistoryView() } label: { Label("Cleaning history", systemImage: "clock.arrow.circlepath") }
+                    NavigationLink { ObstaclesView() } label: { Label("Obstacle photos", systemImage: "camera.viewfinder") }
+                }
+
                 RobotSettingsSections()
 
                 Section("This app") {
@@ -38,7 +44,8 @@ struct SettingsView: View {
                     Text("This app talks only to your robot on your Wi-Fi. Nothing is sent to Narwal or anywhere else.")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("More")
+            .themedList()
             .refreshable { await store.reloadSettings() }
             .task { if store.robotSettings == nil { await store.reloadSettings() } }
             .confirmationDialog("Forget this robot?", isPresented: $confirmForget) {
@@ -125,7 +132,7 @@ private struct RobotSettingsSections: View {
             } else {
                 LabeledContent("Voice volume", value: settings.map { "\($0.voiceVolume)%" } ?? "–")
             }
-            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { row($0, settings, editable).disabled(busy) }
+            ForEach(RobotSettingKey.all.filter { $0.group == .sound }) { RobotSettingRow(key: $0) }
         } header: {
             Text(RobotSettingKey.Group.sound.rawValue)
         }
@@ -135,7 +142,7 @@ private struct RobotSettingsSections: View {
 
         ForEach(RobotSettingKey.Group.allCases.filter { $0 != .sound }, id: \.self) { group in
             Section {
-                ForEach(RobotSettingKey.all.filter { $0.group == group }) { row($0, settings, editable).disabled(busy) }
+                ForEach(RobotSettingKey.all.filter { $0.group == group }) { RobotSettingRow(key: $0) }
             } header: {
                 Text(group.rawValue)
             } footer: {
@@ -158,33 +165,43 @@ private struct RobotSettingsSections: View {
             Button("Turn on") { allowWrites = true }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This app hasn't changed settings on a real robot before. Start with voice volume and check the Narwal app shows the same value. Any setting can be changed back in the Narwal app.")
+            Text("Voice volume has been confirmed on your robot; other settings haven't been tried yet. Any setting can be changed back in the Narwal app.")
         }
     }
+}
 
-    @ViewBuilder
-    private func row(_ key: RobotSettingKey, _ settings: RobotSettings?, _ editable: Bool) -> some View {
-        let value = settings?.value(key)
-        if editable, let value {
-            if key.isToggle {
-                Toggle(key.title, isOn: Binding(
-                    get: { value != 0 },
-                    set: { on in Task { await store.changeSetting(key, to: on ? 1 : 0) } }
-                ))
-            } else {
-                Picker(key.title, selection: Binding(
-                    get: { value },
-                    set: { new in Task { await store.changeSetting(key, to: new) } }
-                )) {
-                    if !key.options.contains(where: { $0.value == value }) {
-                        Text("Not set").tag(value)
+/// One robot setting: a switch or a menu when changes are allowed, else
+/// its current value.
+struct RobotSettingRow: View {
+    @Environment(RobotStore.self) private var store
+    @AppStorage("allowRobotWrites") private var allowWrites = false
+    let key: RobotSettingKey
+
+    var body: some View {
+        let value = store.robotSettings?.value(key)
+        Group {
+            if allowWrites, let value {
+                if key.isToggle {
+                    Toggle(key.title, isOn: Binding(
+                        get: { value != 0 },
+                        set: { on in Task { await store.changeSetting(key, to: on ? 1 : 0) } }
+                    ))
+                } else {
+                    Picker(key.title, selection: Binding(
+                        get: { value },
+                        set: { new in Task { await store.changeSetting(key, to: new) } }
+                    )) {
+                        if !key.options.contains(where: { $0.value == value }) {
+                            Text("Not set").tag(value)
+                        }
+                        ForEach(key.options, id: \.value) { Text($0.label).tag($0.value) }
                     }
-                    ForEach(key.options, id: \.value) { Text($0.label).tag($0.value) }
                 }
+            } else {
+                LabeledContent(key.title, value: value.map { key.label(for: $0) } ?? "–")
             }
-        } else {
-            LabeledContent(key.title, value: value.map { key.label(for: $0) } ?? "–")
         }
+        .disabled(store.busyAction != nil)
     }
 }
 

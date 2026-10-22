@@ -38,6 +38,7 @@ struct MapScreen: View {
     @State private var showingSetup = false
     @AppStorage("mapShowFurniture") private var showFurniture = true
     @AppStorage("mapShowCarpets") private var showCarpets = true
+    @AppStorage("map3D") private var show3D = true
     @State private var showingPixelTypes = false
     @State private var highlightPixelType: Int?
     @State private var showingCarpets = false
@@ -71,6 +72,13 @@ struct MapScreen: View {
                     }
                     .pickerStyle(.segmented)
                     .padding([.horizontal, .top])
+                    if show3D && mode == .rooms {
+                        Map3DView(map: map, selected: selected, pose: store.pose)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .overlay(alignment: .bottom) {
+                                RoomChips(map: map, selected: $selected)
+                            }
+                    } else {
                     MapCanvas(
                         map: map,
                         selected: mode == .rooms ? selected : [],
@@ -131,6 +139,7 @@ struct MapScreen: View {
                             .accessibilityLabel("Reset zoom")
                         }
                     }
+                    }
                     if let age = poseAge, store.isCleaning, age > 30 {
                         Label("Live position is \(Int(age)) s old. Reconnecting the feed…", systemImage: "antenna.radiowaves.left.and.right.slash")
                             .font(.footnote)
@@ -149,7 +158,8 @@ struct MapScreen: View {
                     }
                 }
             }
-            .navigationTitle("Map")
+            .navigationTitle("Clean")
+            .background(Theme.background.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
@@ -167,6 +177,11 @@ struct MapScreen: View {
                         Image(systemName: "square.3.layers.3d")
                     }
                     .accessibilityLabel("Map layers")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(show3D ? "2D" : "3D") { show3D.toggle() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .accessibilityLabel(show3D ? "Show flat map" : "Show 3D map")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await store.reloadMap() } } label: { Image(systemName: "arrow.clockwise") }
@@ -399,7 +414,7 @@ struct MapScreen: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
-        .background(.bar)
+        .background(Theme.background)
         .disabled(store.busyAction != nil)
     }
 
@@ -430,7 +445,38 @@ struct MapScreen: View {
             }
         }
         .padding()
-        .background(.bar)
+        .background(Theme.background)
+    }
+}
+
+/// In 3D, rooms are picked from chips (in cleaning order) rather than taps.
+struct RoomChips: View {
+    let map: RobotMap
+    @Binding var selected: [Int]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(map.rooms) { room in
+                    let order = selected.firstIndex(of: room.id).map { $0 + 1 }
+                    Button {
+                        if let i = selected.firstIndex(of: room.id) { selected.remove(at: i) } else { selected.append(room.id) }
+                    } label: {
+                        Text(order.map { "\($0) · \(room.displayName)" } ?? room.displayName)
+                            .font(.system(size: 14, weight: order == nil ? .regular : .semibold))
+                            .foregroundStyle(order == nil ? Theme.text : Theme.background)
+                            .padding(.horizontal, 14)
+                            .frame(height: 36)
+                            .background {
+                                if order == nil { Capsule().stroke(Theme.hairline) } else { Capsule().fill(Theme.teal) }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
     }
 }
 

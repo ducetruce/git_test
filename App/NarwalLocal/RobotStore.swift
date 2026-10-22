@@ -346,6 +346,12 @@ final class RobotStore {
         }
     }
 
+    /// The robot's photo of a recognised obstacle; nil if it has none locally.
+    func obstaclePhoto(_ id: Int) async throws -> Data? {
+        guard let connection else { throw NarwalError.notConnected }
+        return try await connection.obstaclePhoto(id)
+    }
+
     func confirmWarning() async {
         let faults = Set(status?.errors.map(\.code) ?? [])
         await run("Mark resolved") { try await $0.confirmWarning() }

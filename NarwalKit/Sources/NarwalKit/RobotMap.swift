@@ -69,6 +69,8 @@ public struct RobotMap: Equatable, Sendable {
     /// Whether this map's carpet `Grid` points came as pixel indices, so new
     /// carpets are sent the same way.
     public var carpetGridInPixels = false
+    /// StaticMapPayload 32.2: obstacles the camera recognised.
+    public var obstacles: [VisionObstacle] = []
     /// StaticMapPayload 51 NoCarpetArea ids.
     public var noCarpetAreaIds: [Int] = []
 
@@ -109,6 +111,7 @@ public struct RobotMap: Equatable, Sendable {
         noGoZones = map.messages(9).map(NoGoZone.init)
         virtualWalls = map.messages(50).map(VirtualWall.init)
         furniture = map.message(32)?.messages(1).map(Furniture.init) ?? []
+        obstacles = map.message(32)?.messages(2).map(VisionObstacle.init) ?? []
         let frame = (width: width, height: height, originX: originX, originY: originY)
         var pixelCarpets = false
         carpets = map.messages(26).map(CarpetArea.init).map {

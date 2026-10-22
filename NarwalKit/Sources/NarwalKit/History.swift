@@ -115,3 +115,16 @@ extension CleaningEvent {
         cleanMode = zone?.int(4)
     }
 }
+
+extension CleaningHistory {
+    /// When each room (by id) was last cleaned successfully, from the events
+    /// that name a room and carry a usable time.
+    public func lastCleaned() -> [Int: Date] {
+        var out: [Int: Date] = [:]
+        for event in events where event.succeeded || event.result == nil {
+            guard let room = event.zoneId, room > 0, let date = event.date else { continue }
+            if out[room].map({ date > $0 }) ?? true { out[room] = date }
+        }
+        return out
+    }
+}
