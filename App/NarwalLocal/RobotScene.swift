@@ -74,6 +74,9 @@ enum RobotSceneBuilder {
             group.addChildNode(r)
             group.eulerAngles.y = -0.5
             scene.rootNode.addChildNode(group)
+            // A little wider than tight framing, so the dock's tray and
+            // shadow don't reach the edge of the view.
+            camera.camera?.fieldOfView = 29
             camera.position = SCNVector3(6.0, 5.6, 14.0)
             camera.look(at: SCNVector3(-0.2, 1.8, 0.6))
         }

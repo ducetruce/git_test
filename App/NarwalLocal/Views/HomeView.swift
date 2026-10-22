@@ -11,11 +11,17 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
+            GeometryReader { screen in
             ScrollView {
                 VStack(spacing: 0) {
                     header
+                    // The model takes whatever height the cards leave, so
+                    // the screen has no empty band above the tab bar, and
+                    // keeps clear of the rings below it.
                     RobotModelView(shot: store.isCleaning ? .robot : .docked, mood: mood)
-                        .frame(height: store.isCleaning ? 220 : 270)
+                        .frame(minHeight: store.isCleaning ? 200 : 240, maxHeight: 440)
+                        .clipped()
+                        .padding(.bottom, 16)
                         .accessibilityLabel(store.isCleaning ? "The robot, cleaning" : "The robot in its station")
 
                     VStack(spacing: 14) {
@@ -52,6 +58,8 @@ struct TodayView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 24)
                 }
+                .frame(minHeight: screen.size.height)
+            }
             }
             .background(Theme.background.ignoresSafeArea())
             .refreshable { await store.refreshAll() }
