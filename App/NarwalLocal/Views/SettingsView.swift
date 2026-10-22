@@ -75,7 +75,7 @@ struct SettingsView: View {
                     if let map = store.map {
                         LabeledContent("Map", value: "#\(map.mapId), \(map.rooms.count) rooms")
                     }
-                    Button("Reconnect") { store.connect() }
+                    Button("Reconnect") { store.connect(force: true) }
                     Button(testing ? "Testing…" : "Test connection") {
                         testing = true
                         Task {
@@ -300,6 +300,6 @@ struct SetupView: View {
 
     private func choose(_ host: String) {
         store.setHost(host)
-        store.connect()
+        store.connect(force: true)
     }
 }

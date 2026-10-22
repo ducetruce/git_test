@@ -74,15 +74,20 @@ final class RobotStore {
         guard newModel != model else { return }
         model = newModel
         UserDefaults.standard.set(newModel.rawValue, forKey: "robotModel")
-        connect()
+        connect(force: true)
     }
 
     /// Saves a device id learned from the robot without reconnecting.
-    private func rememberDeviceId(_ id: String, source: String) {
-        guard DeviceInfo.isPlausibleId(id), id != deviceIdOverride else { return }
+    /// Returns whether it was new.
+    @discardableResult
+    private func rememberDeviceId(_ id: String, source: String) -> Bool {
+        guard DeviceInfo.isPlausibleId(id), id != deviceIdOverride else { return false }
         deviceIdOverride = id
         UserDefaults.standard.set(id, forKey: "robotDeviceId")
         appendLog("Saved device ID from \(source)")
+        // The running connection already uses it; don't restart for it.
+        if connection != nil { connectedWith = "\(host)|\(model.productKey)|\(id)" }
+        return true
     }
 
     func setDeviceIdOverride(_ id: String) {
@@ -90,7 +95,7 @@ final class RobotStore {
         guard trimmed != deviceIdOverride else { return }
         deviceIdOverride = trimmed
         UserDefaults.standard.set(trimmed, forKey: "robotDeviceId")
-        connect()
+        connect(force: true)
     }
 
     func setHost(_ newHost: String) {
@@ -109,7 +114,7 @@ final class RobotStore {
     }
 
     func resumeAutoConnect() {
-        connect()
+        connect(force: true)
     }
 
     var workingStatus: WorkingStatus { status?.workingStatus ?? .unknown }
@@ -150,10 +155,22 @@ final class RobotStore {
 
     // MARK: Connection
 
-    func connect() {
+    /// The host, model and id the current connection was made with.
+    private var connectedWith: String?
+
+    /// Connects, or keeps the connection already running for the same robot:
+    /// restarting it cuts the robot off before it has identified itself, and
+    /// views and Bonjour can ask more than once. `force` always restarts.
+    func connect(force: Bool = false) {
         guard isConfigured else { return }
+        let target = "\(host)|\(model.productKey)|\(deviceIdOverride)"
+        if !force, connection != nil, connectedWith == target {
+            appendLog("Already connecting to the robot; not restarting")
+            return
+        }
         autoConnectPaused = false
         disconnect()
+        connectedWith = target
         startBonjourProbe()
         let connection = NarwalConnection(host: host, productKey: model.productKey, deviceId: deviceIdOverride)
         self.connection = connection
@@ -173,9 +190,9 @@ final class RobotStore {
             let txt = robot.txt.isEmpty ? "none"
                 : robot.txt.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
             self.appendLog("Bonjour: \(robot.name) at \(robot.host), TXT: \(txt)")
-            if robot.host == self.host, self.deviceIdOverride.isEmpty, let id = robot.deviceIdCandidate {
-                self.rememberDeviceId(id, source: "Bonjour")
-                self.connect()
+            if robot.host == self.host, self.deviceIdOverride.isEmpty, let id = robot.deviceIdCandidate,
+               self.rememberDeviceId(id, source: "Bonjour") {
+                self.connect(force: true)
             }
         }
         probe.start()
@@ -183,6 +200,7 @@ final class RobotStore {
     }
 
     func disconnect() {
+        connectedWith = nil
         eventTask?.cancel()
         eventTask = nil
         if let connection { Task { await connection.stop() } }
@@ -222,10 +240,14 @@ final class RobotStore {
         }
     }
 
+    /// Quiet: a background load, so a failure is logged, not shown as an
+    /// error, and it waits for the robot to be connected.
     func reloadHistory() async {
-        await run("Loading history") { connection in
-            let fetched = try await connection.cleaningHistory()
-            await MainActor.run { self.history = fetched }
+        guard let connection, connectionState != .disconnected, connectionState != .connecting else { return }
+        do {
+            history = try await connection.cleaningHistory()
+        } catch {
+            appendLog("Loading history: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
         }
     }
 
@@ -440,7 +462,10 @@ final class RobotStore {
             }
             appendLog("Connection: \(state)")
             if state == .awake || state == .connected {
-                Task { await refreshAll() }
+                Task {
+                    await refreshAll()
+                    if history == nil { await reloadHistory() }
+                }
             }
         case .identity(_, let id):
             rememberDeviceId(id, source: "the robot's broadcast")
