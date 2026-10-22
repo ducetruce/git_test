@@ -113,7 +113,7 @@ final class RobotStore {
         default: break
         }
         guard let status else { return "Waking robot…" }
-        if !status.errors.isEmpty { return "Needs attention" }
+        if let error = status.errors.first { return RobotErrorText.message(for: error.code) }
         if status.isRelocalizing { return "Finding its position" }
         if let activity = status.activity { return activity }
         if status.isReturning { return "Returning to dock" }
@@ -347,8 +347,15 @@ final class RobotStore {
     }
 
     func confirmWarning() async {
+        let faults = Set(status?.errors.map(\.code) ?? [])
         await run("Mark resolved") { try await $0.confirmWarning() }
+        try? await Task.sleep(for: .seconds(3))
         await refreshAll()
+        // The payload is a guess; say so plainly if the robot ignored it.
+        if !faults.isEmpty, !faults.isDisjoint(with: status?.errors.map(\.code) ?? []) {
+            lastError = "The robot still reports this fault. Use \"Go to dock\", or the Narwal app's \"issue resolved\" for now, and note it in the test checklist."
+            appendLog("Mark resolved: fault still reported afterwards")
+        }
     }
 
     /// Sends a write, then checks the read-back: the robot can accept a

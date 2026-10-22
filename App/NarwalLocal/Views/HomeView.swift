@@ -45,13 +45,8 @@ struct HomeView: View {
                                     if let code = alert.code {
                                         Text("Error \(code)").font(.caption2.monospaced()).foregroundStyle(.tertiary)
                                     }
-                                    // Beta, with the other writes: the Narwal app's
-                                    // "issue resolved" makes the robot look again.
-                                    if alert.isDockSearch, store.allowsWrites {
-                                        Button("Mark resolved") { Task { await store.confirmWarning() } }
-                                            .buttonStyle(.bordered)
-                                            .disabled(store.busyAction != nil)
-                                            .padding(.top, 4)
+                                    if alert.code != nil {
+                                        FaultActions(isDockSearch: alert.isDockSearch)
                                     }
                                 }
                             } icon: {
@@ -267,6 +262,30 @@ private struct ControlButtons: View {
         }
         .frame(maxWidth: .infinity, minHeight: 64)
         .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// What to do about a robot fault, like the Narwal app's buttons.
+private struct FaultActions: View {
+    @Environment(RobotStore.self) private var store
+    let isDockSearch: Bool
+
+    var body: some View {
+        HStack {
+            // The Narwal app's "issue resolved": the robot clears the fault
+            // and tries again.
+            Button("Mark resolved") { Task { await store.confirmWarning() } }
+                .buttonStyle(.borderedProminent)
+            if isDockSearch {
+                Button("Go to dock") { Task { await store.run("Go to dock") { try await $0.returnToDock() } } }
+                    .buttonStyle(.bordered)
+            } else if store.isPaused {
+                Button("Resume") { Task { await store.run("Resume") { try await $0.resume() } } }
+                    .buttonStyle(.bordered)
+            }
+        }
+        .disabled(store.busyAction != nil)
+        .padding(.top, 4)
     }
 }
 

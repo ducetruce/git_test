@@ -10,8 +10,9 @@ import UserNotifications
 ///   it alerts, so one-frame glitches never notify;
 /// - each condition notifies once, and again only after it has cleared;
 /// - missing fields are "unknown", never "fine" or "problem";
-/// - "can't find the base station" waits 90 s and is ignored while docked
-///   (`DockErrorFilter`), since the robot often sorts itself out.
+/// - "can't find the base station" notifies only after 90 s and never while
+///   docked (`DockErrorFilter`), since the robot often sorts itself out; the
+///   app still shows it at once.
 @MainActor
 @Observable
 final class AlertMonitor {
@@ -44,7 +45,10 @@ final class AlertMonitor {
 
     func statusChanged(_ status: BaseStatus, previousWasCleaning: Bool, roomName: String?) {
         let docked = status.isDocked ?? status.workingStatus.isOnDock
-        var current: [Alert] = dockErrors.filter(status.errors, docked: docked).map {
+        // The dock-search hold only delays the phone notification; the app
+        // itself always shows the fault, with its actions.
+        let notifiable = Set(dockErrors.filter(status.errors, docked: docked).map { "error-\($0.code)" })
+        var current: [Alert] = status.errors.map {
             // Known faults get advice; unknown ones the robot's English cause.
             // Its Chinese debug text never reaches the screen.
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
@@ -62,7 +66,8 @@ final class AlertMonitor {
         pending = ids
         active = current.filter { confirmed.contains($0.id) }
 
-        for alert in active where !notified.contains(alert.id) {
+        for alert in active where !notified.contains(alert.id)
+            && (!alert.id.hasPrefix("error-") || notifiable.contains(alert.id)) {
             notify(alert.title, alert.detail)
             notified.insert(alert.id)
         }
