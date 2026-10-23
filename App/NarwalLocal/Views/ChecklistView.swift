@@ -167,7 +167,7 @@ struct ChecklistView: View {
             lines.append("- settings not loaded")
         }
         if let station = store.status?.station {
-            lines.append("- detergent=\(station.detergent ?? -1) stain=\(station.stainRemover ?? -1)/\(station.stainRemoverPercent ?? -1)% wood=\(station.woodFloorSolution ?? -1)/used \(station.woodFloorSolutionUsedPercent ?? -1)%")
+            lines.append("- detergent=\(station.detergent ?? -1) stain=\(station.stainRemover ?? -1)/\(station.stainRemoverPercent ?? -1)% wood=\(station.woodFloorSolution ?? -1)/\(station.woodFloorSolutionPercent ?? -1)%")
         }
         for room in store.map?.rooms ?? [] {
             lines.append("- room \(room.id) \(room.displayName): floor=\(room.floor.label) angle=\(room.floorAngle) soiled=\(room.isHeavilySoiled) type=\(room.roomType)")

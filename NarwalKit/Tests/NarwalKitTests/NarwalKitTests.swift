@@ -965,7 +965,7 @@ final class FloorCareTests: XCTestCase {
         // Wood Floor Maintainer in the shared slot: the stain remover isn't
         // listed as missing.
         var station = StationState(detergent: 1, stainRemover: 1, stainRemoverPercent: nil,
-                                   woodFloorSolution: 2, woodFloorSolutionUsedPercent: 30)
+                                   woodFloorSolution: 2, woodFloorSolutionPercent: 70)
         XCTAssertEqual(station.cartridges.map(\.name), ["Detergent", "Wood Floor Maintenance Solution"])
         XCTAssertEqual(station.cartridges.last?.percent, 70)
         XCTAssertTrue(station.hasWoodFloorSolution)

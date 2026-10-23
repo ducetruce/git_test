@@ -102,8 +102,9 @@ public struct StationState: Equatable, Sendable {
     /// 33 multiLiquidStatus (Wood Floor Maintenance Solution, "curing
     /// agent"): 1 not installed, 2 installed, 3 empty, 4 running out.
     public var woodFloorSolution: Int?
-    /// 38 curingAgentConsumptionPercent.
-    public var woodFloorSolutionUsedPercent: Int?
+    /// 38 curingAgentConsumptionPercent. Despite the name it's the amount
+    /// left: a full cartridge reports 100 while the Narwal app shows "High".
+    public var woodFloorSolutionPercent: Int?
 
     /// One dock cartridge as the Narwal app names it.
     public struct Cartridge: Equatable, Sendable, Identifiable {
@@ -140,7 +141,7 @@ public struct StationState: Equatable, Sendable {
         let shared: [Int: Cartridge.Level] = [1: .notInstalled, 2: .ok, 3: .empty, 4: .low]
         let wood = woodFloorSolution.flatMap { shared[$0] }.map {
             Cartridge(name: "Wood Floor Maintenance Solution", level: $0,
-                      percent: woodFloorSolutionUsedPercent.map { max(0, 100 - $0) })
+                      percent: woodFloorSolutionPercent.map { min(100, max(0, $0)) })
         }
         let stain = stainRemover.flatMap { shared[$0] }.map {
             Cartridge(name: "Heavy-duty Stain Remover", level: $0, percent: stainRemoverPercent)
@@ -271,7 +272,7 @@ public struct BaseStatus: Equatable, Sendable {
             cleanWaterTank: m.int(23), sewageTank: m.int(24), dustBox: m.int(20),
             dustBag: m.int(21), stationBag: m.int(39),
             dustBagHealth: m.float(35), detergent: m.int(12), stainRemover: m.int(40),
-            stainRemoverPercent: m.int(41), woodFloorSolution: m.int(33), woodFloorSolutionUsedPercent: m.int(38)
+            stainRemoverPercent: m.int(41), woodFloorSolution: m.int(33), woodFloorSolutionPercent: m.int(38)
         )
 
         let task = m.message(3)
