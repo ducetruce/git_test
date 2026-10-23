@@ -301,6 +301,36 @@ final class ResponseShapeTests: XCTestCase {
         XCTAssertEqual(sent.int(path: [4, 2]), 3)
         XCTAssertEqual(sent.int(99), 7)
 
+        // Rewash as the Narwal app left it at "Every 86 ft²": the area
+        // option and the older cleanMopFreq (13) move together.
+        let rewashed = try XCTUnwrap(RobotSettings(response: try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in
+                m.varint(13, 3)
+                m.message(18) { r in r.varint(1, 1); r.varint(2, 3); r.message(4) { $0.varint(4, 1) } }
+            }
+        }))
+        let rewash = try XCTUnwrap(RobotSetting.named("rewashStrategy"))
+        XCTAssertEqual(rewashed.value(rewash), "Every 86 ft²")
+        let byRoom = try XCTUnwrap(rewash.choices.first { $0.label == "Wash mops by room" })
+        let roomRequests = RobotSetting.requests(for: byRoom, current: rewashed)
+        XCTAssertEqual(roomRequests.count, 1, "by room leaves 13 alone")
+        let strategy = try XCTUnwrap(try ProtoMessage(bytes: roomRequests[0]).message(18))
+        XCTAssertEqual([strategy.int(1), strategy.int(2), strategy.int(path: [4, 4])], [2, 3, 1])
+        let wide = try XCTUnwrap(rewash.choices.first { $0.label == "Every 129 ft²" })
+        XCTAssertEqual(RobotSetting.requests(for: wide, current: rewashed).last, [0x70, 0x01], "set 14 = cleanMopFreq")
+
+        // Heavy-duty stain remover as the Narwal app stores "Every 7 days".
+        let weekly = try XCTUnwrap(RobotSettings(response: try message { w in
+            w.varint(1, 1)
+            w.message(2) { m in m.message(29) { p in p.message(7) { $0.varint(1, 1); $0.varint(2, 2); $0.varint(3, 10_080) } } }
+        }))
+        let stain = try XCTUnwrap(RobotSetting.named("heavyDirtyClean"))
+        XCTAssertEqual(weekly.value(stain), "Every 7 days")
+        let everyTime = try XCTUnwrap(RobotSetting.requests(for: stain.choices[0], current: weekly).first)
+        let config = try XCTUnwrap(try ProtoMessage(bytes: everyTime).message(29)?.message(7))
+        XCTAssertEqual([config.int(1), config.int(2), config.int(3) ?? 0], [1, 1, 0])
+
         XCTAssertEqual(Payloads.setDoNotDisturb(.init(enabled: true, begin: 79_200, end: 28_800)),
                        [0x2A, 0x0A, 0x08, 0x01, 0x10, 0xE0, 0xEA, 0x04, 0x18, 0x80, 0xE1, 0x01])
     }

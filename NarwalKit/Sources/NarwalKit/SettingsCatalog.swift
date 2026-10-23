@@ -144,9 +144,14 @@ extension RobotSetting {
             Choice("2", [Write([29, 1, 1], 1), Write([29, 1, 2], 2)]),
             Choice("1", [Write([29, 1, 1], 1), Write([29, 1, 2], 1)]),
         ]),
+        // HeavyDirtyCleanConfig {1 enable, 2 frequencyType 1 every time /
+        // 2 by minutes, 3 minutes}, as the Narwal app writes it. 14 days is
+        // the 7-day pattern doubled.
         RobotSetting(id: "heavyDirtyClean", title: "Use Heavy-duty Floor Stain Remover", menu: .freoMind, choices: [
-            Choice("Off", [Write([29, 7, 1], 0)]),
-            Choice("Every time", [Write([29, 7, 1], 1), Write([29, 7, 2], 1)]),
+            Choice("Every time", [Write([29, 7, 1], 1), Write([29, 7, 2], 1), Write([29, 7, 3], 0)]),
+            Choice("Every 7 days", [Write([29, 7, 1], 1), Write([29, 7, 2], 2), Write([29, 7, 3], 10_080)]),
+            Choice("Every 14 days", [Write([29, 7, 1], 1), Write([29, 7, 2], 2), Write([29, 7, 3], 20_160)]),
+            Choice("Do not use", [Write([29, 7, 1], 0)]),
         ], footnote: "Adds heavy-duty stain remover while washing the mops when Freo Mind finds a heavily soiled room. Needs the stain remover in the dock's shared slot."),
         .strategy("fanLevelStrategy", "Suction", 4,
                   [("Quiet", 1), ("Standard", 2), ("Strong", 3), ("Super Powerful", 4)],
@@ -160,9 +165,11 @@ extension RobotSetting {
 
         // Floor Cleaning
         RobotSetting(id: "rewashStrategy", title: "Rewash Strategy", menu: .floorCleaning, choices: [
-            Choice("Every 86 ft²", [Write([18, 1], 1), Write([18, 2], 3)]),
-            Choice("Every 108 ft²", detail: "Default", [Write([18, 1], 1), Write([18, 2], 2)]),
-            Choice("Every 129 ft²", [Write([18, 1], 1), Write([18, 2], 1)]),
+            // The Narwal app also keeps the older cleanMopFreq (13) equal to
+            // the area option; "by room" leaves it alone.
+            Choice("Every 86 ft²", [Write([18, 1], 1), Write([18, 2], 3), Write([13], 3)]),
+            Choice("Every 108 ft²", detail: "Default", [Write([18, 1], 1), Write([18, 2], 2), Write([13], 2)]),
+            Choice("Every 129 ft²", [Write([18, 1], 1), Write([18, 2], 1), Write([13], 1)]),
             Choice("Wash mops by room", detail: "Washes after each room, so dirt isn't carried between rooms.", [Write([18, 1], 2)]),
         ], footnote: "Applies in Custom mode. Freo Mind washes after every room."),
         RobotSetting(id: "cornerCleanMode", title: "Intensive Corner Cleaning", menu: .floorCleaning, choices: [

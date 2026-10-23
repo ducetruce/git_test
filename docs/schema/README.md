@@ -35,6 +35,14 @@ field name in the same file.
   carries the cron. `RobotBaseStatus.hasTaskSchedule` (8) is 1, so the robot knows
   a schedule exists. The schedules live with Narwal's cloud (`device_shadow`), so
   the app leaves them to the Narwal app.
+- Settings confirmed by changing them in the Narwal app and diffing `config/get`:
+  granular debris is 43 alone; Rewash Strategy is 18 `{1 1=area/2=room, 2 area}`,
+  and an area choice also sets the older 13 to the same value (by room leaves it);
+  Heavy-duty Floor Stain Remover is 29.7 `{1 enable, 2 1=every time/2=by minutes,
+  3 minutes}` (7 days = 10080); Auto-empty is 27 on, 28 smart, 30 quiet.
+- `clean/easy_clean/start` is refused (3) with a full request even idle on the
+  dock; `clean/start_clean` answers 4 at 25% battery and is accepted at 65%.
+  `supply/pump_troubleshooting` runs the dock pump (task type 25) and never answers.
 - `GetBatteryInfo` on the Z10 Ultra has no `ratedCapacity` (9); `healthState` (8)
   is the health percent (84 with `fullChargeCapacity` 4393 of 5200 mAh).
 - No-go zones are `StaticMapPayload` field 9 (`ForbiddenArea`), virtual walls are
