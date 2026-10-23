@@ -275,6 +275,8 @@ class Robot:
                     info = parse_fields(raw)
                     self.names[info[1]] = info.get(3, [b""])[0].decode()
                     self.room_infos[info[1]] = raw
+        elif short == "supply/pump_troubleshooting":
+            return None  # the Z10 Ultra runs the dock pump and never answers
         elif short == "clean/easy_clean/start":
             # The Z10 Ultra refuses StartEasyClean: 2 (not applicable) when
             # empty, 3 with {1 cleanMode, 2 mapId, 3 cleanAreaOptions}.

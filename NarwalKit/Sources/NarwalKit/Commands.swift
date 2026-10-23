@@ -309,6 +309,7 @@ extension NarwalConnection {
         try await perform(Topic.continueTask, Payloads.singleVarint(resume ? 1 : 0), timeout: 10)
     }
 
-    /// Narwal's "Dock Base Drainage" (unconfirmed which pump routine).
-    public func drainDockBase() async throws { try await perform(Topic.pumpTroubleshooting, timeout: 15) }
+    /// Narwal's "Dock Base Drainage". The robot never answers it; base
+    /// status shows "Draining the dock base" while it runs.
+    public func drainDockBase() async throws { sendUnawaited(Topic.pumpTroubleshooting) }
 }

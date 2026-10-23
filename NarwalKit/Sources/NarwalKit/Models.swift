@@ -341,6 +341,7 @@ public struct BaseStatus: Equatable, Sendable {
 
     static func activity(_ task: ProtoMessage?, enRoute: Bool) -> String? {
         guard let task else { return nil }
+        if task.int(1) == 25 { return "Draining the dock base" }  // TASK_TYPE_PUMP_TROUBLESHOOTING
         for entry in activityLabels where enRoute || !entry.enRoute {
             if let value = task.int(entry.field), let label = entry.labels[value] { return label }
         }

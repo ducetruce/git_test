@@ -142,13 +142,13 @@ public enum Topic {
     public static let batteryInfo = "info/battery_info"
     public static let resetConsumable = "consumable/reset_consumable_info"
     public static let dryMopRemainTime = "supply/get_dry_mop_remain_time"
-    /// Narwal's "Dock Base Drainage". Which of the two pump routines it is
-    /// is unconfirmed; the test checklist sends this one only on request.
+    /// Narwal's "Dock Base Drainage": on the Z10 Ultra it runs the dock's
+    /// pump (task type 25, TASK_TYPE_PUMP_TROUBLESHOOTING) and never answers.
     public static let pumpTroubleshooting = "supply/pump_troubleshooting"
 
     /// The robot never answers these, so they must not take a place in the
     /// response order or they would swallow the next real answer.
-    public static let unacknowledged: Set<String> = [appHeartbeat]
+    public static let unacknowledged: Set<String> = [appHeartbeat, pumpTroubleshooting]
 }
 
 public enum CommandResult: Int, Sendable {

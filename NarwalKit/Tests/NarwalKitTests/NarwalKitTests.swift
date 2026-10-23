@@ -696,6 +696,7 @@ final class RelocalizationTests: XCTestCase {
         XCTAssertEqual(try status { $0.varint(1, 10); $0.varint(12, 3) }.activity, "Washing mops")
         XCTAssertEqual(try status { $0.varint(1, 10); $0.varint(18, 1) }.activity, "Emptying the dustbin")
         XCTAssertNil(try status { $0.varint(1, 10) }.activity)
+        XCTAssertEqual(try status { $0.varint(1, 25) }.activity, "Draining the dock base")
     }
 
     func testPlainDockedIsNotRelocalizing() throws {
