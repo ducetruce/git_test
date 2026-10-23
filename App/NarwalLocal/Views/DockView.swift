@@ -4,7 +4,6 @@ import SwiftUI
 /// The station in 3D, its supplies as rings, and its actions.
 struct StationView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("dockLight") private var dockLight = AmbientLightMode.off.rawValue
 
     var body: some View {
         NavigationStack {
@@ -193,24 +192,6 @@ struct StationView: View {
             }
             .disabled(!store.allowsWrites || store.busyAction != nil)
             .padding(.vertical, 2)
-            HStack {
-                Text("Station light").font(.system(size: 15)).foregroundStyle(Theme.text)
-                Spacer()
-                Picker("Station light", selection: Binding(
-                    get: { AmbientLightMode(rawValue: store.status?.dockLightMode ?? dockLight) ?? .off },
-                    set: { mode in
-                        dockLight = mode.rawValue
-                        Task { await store.run("Station light") { try await $0.setAmbientLight(mode) } }
-                    }
-                )) {
-                    Text("Off").tag(AmbientLightMode.off)
-                    Text("Night light").tag(AmbientLightMode.nightLight)
-                    Text("Warm").tag(AmbientLightMode.winterWarmth)
-                    Text("Purple").tag(AmbientLightMode.purple)
-                }
-                .pickerStyle(.menu)
-                .tint(Theme.secondary)
-            }
         }
         .task { if store.robotSettings == nil { await store.reloadSettings() } }
     }

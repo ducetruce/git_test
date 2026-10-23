@@ -122,6 +122,9 @@ final class FakeRobotTests: XCTestCase {
         let marked = try await connection.editMap([soiled], on: floored)
         XCTAssertTrue(marked.rooms.first { $0.id == 1 }?.isHeavilySoiled == true)
         XCTAssertEqual(marked.rooms.first { $0.id == 1 }?.floor, .wood)
+        // Quick clean needs a mode, map and area; an empty one is refused.
+        let refused = try await connection.send(Topic.easyClean)
+        XCTAssertFalse(refused.accepted)
         // Wood floor maintenance on its own.
         try await connection.startFloorMaintenance(rooms: [1], cleanFirst: false)
 

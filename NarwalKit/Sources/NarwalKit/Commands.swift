@@ -92,7 +92,14 @@ extension NarwalConnection {
     /// force_end answers only after the robot physically stops (10-15 s).
     public func stopTask() async throws { try await perform(Topic.forceEnd, timeout: 20) }
     public func returnToDock() async throws { try await perform(Topic.recall) }
-    public func quickClean() async throws { try await perform(Topic.easyClean) }
+    /// Narwal's one-tap start (clean/easy_clean/start): the whole house in
+    /// one mode. The robot refuses it without a mode, a map and an area.
+    @discardableResult
+    public func quickClean(settings: CleanSettings = CleanSettings()) async throws -> RobotMap {
+        let map = try await fetchMap()
+        try await perform(Topic.easyClean, Payloads.easyClean(mapId: map.mapId, settings: settings), timeout: 10)
+        return map
+    }
 
     public func setFanLevel(_ level: FanLevel) async throws {
         try await perform(Topic.setFanLevel, Payloads.setFanLevel(level))

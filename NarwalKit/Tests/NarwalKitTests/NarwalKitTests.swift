@@ -946,6 +946,14 @@ final class FloorCareTests: XCTestCase {
         XCTAssertEqual(task.message(2)?.message(2)?.int(9), 1)
     }
 
+    func testQuickCleanSendsModeMapAndArea() throws {
+        let m = try ProtoMessage(bytes: Payloads.easyClean(mapId: 9, settings: CleanSettings(workMode: .vacuumThenMop)))
+        XCTAssertEqual(m.int(1), 5, "CLEAN_MODE_SWEEP_THEN_MOP")
+        XCTAssertEqual(m.int(2), 9)
+        XCTAssertEqual(m.message(3)?.int(2), 3, "whole house")
+        XCTAssertNotNil(m.message(3)?.message(7), "vacuum-then-mop options")
+    }
+
     func testRoomEditsSendTheRoomsOwnInfo() throws {
         let info = try message { $0.varint(1, 4); $0.varint(2, 3); $0.string(3, "Den"); $0.varint(9, 12) }
         let room = Room(id: 4, userName: "Den", roomType: 3, category: 0, instanceIndex: 0, info: info)
