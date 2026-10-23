@@ -76,11 +76,13 @@ struct MapScreen: View {
                     .pickerStyle(.segmented)
                     .padding([.horizontal, .top])
                     if show3D && mode == .rooms {
+                        // The room tiles get their own row under the map, never
+                        // on top of it.
                         Map3DView(map: map, selected: selected, pose: store.pose)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .overlay(alignment: .bottom) {
-                                RoomChips(map: map, selected: $selected)
-                            }
+                            .clipped()
+                        RoomChips(map: map, selected: $selected)
+                            .background(Theme.background)
                     } else {
                     MapCanvas(
                         map: map,
