@@ -80,9 +80,8 @@ struct ChecklistView: View {
             Item(id: "rotate", title: "Rotate map", how: "Map management > Rotate map 90°. Rotate back the same way."),
         ]),
         ("Schedules", [
-            Item(id: "schedule-list", title: "Schedules load", how: "Your 07:00 schedule appears on the right days."),
-            Item(id: "schedule-add", title: "Add one", how: "Add one for a few minutes from now, with Freo Mind. Does it run?"),
-            Item(id: "schedule-toggle", title: "Turn it off and on, then delete it", how: "Switch, then swipe left."),
+            Item(id: "schedule-note", title: "Points to the Narwal app",
+                 how: "More > Schedules says schedules are managed in the Narwal app. Your 07:00 schedule still runs."),
         ]),
         ("Device and parts", [
             Item(id: "device", title: "Device", how: "More > Device: firmware matches v01.07.01.02, battery shows."),

@@ -985,6 +985,15 @@ final class FloorCareTests: XCTestCase {
         XCTAssertEqual(station.cartridges.map(\.label), ["Not installed"], "an empty shared slot shows once")
     }
 
+    func testBatteryHealthWithoutRatedCapacity() throws {
+        // What the Z10 Ultra sends: no ratedCapacity (9), healthState 84.
+        let z10 = try message { $0.varint(1, 4393); $0.varint(2, 131); $0.varint(4, 21); $0.varint(8, 84) }
+        XCTAssertEqual(BatteryHealth(z10)?.capacityPercent, 84)
+        XCTAssertEqual(BatteryHealth(z10)?.cycles, 131)
+        let rated = try message { $0.varint(1, 4500); $0.varint(8, 84); $0.varint(9, 5000) }
+        XCTAssertEqual(BatteryHealth(rated)?.capacityPercent, 90, "rated capacity wins when sent")
+    }
+
     func testMapsAndNoStairs() throws {
         let response = try message { w in
             w.varint(1, 1)

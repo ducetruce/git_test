@@ -76,6 +76,10 @@ public struct BatteryHealth: Equatable, Sendable {
         cycles = m.int(2)
         if let full = m.int(1), let rated = m.int(9), rated > 0 {
             capacityPercent = min(100, Int((Double(full) / Double(rated) * 100).rounded()))
+        } else if let health = m.int(8), (1...100).contains(health) {
+            // The Z10 Ultra leaves out ratedCapacity and sends healthState
+            // as a percent (84 with 4393 of its 5200 mAh).
+            capacityPercent = health
         } else {
             capacityPercent = nil
         }

@@ -29,8 +29,14 @@ field name in the same file.
   seconds after midnight.
 - Schedules: `CleanSchedule {1 taskId, 2 CleanScheduleParam}`, where
   `CleanScheduleParam.crontab` is `Crontab {1 cron string, 2 remindingTime, 3 enabled}`.
-  The Z10 Ultra didn't answer `schedule/clean_schedule/get` (empty request), and
-  `clean/plan/get` returned no plans; open question.
+  On the Z10 Ultra (firmware v01.07.01.02), `schedule/clean_schedule/get` (empty
+  request) gets no answer even after 25 s, `clean/plan/get` returns `{1: 1}` (no
+  plans), `clean/cur_plan/get` returns result 2 while idle, and no local reply
+  carries the cron. `RobotBaseStatus.hasTaskSchedule` (8) is 1, so the robot knows
+  a schedule exists. The schedules live with Narwal's cloud (`device_shadow`), so
+  the app leaves them to the Narwal app.
+- `GetBatteryInfo` on the Z10 Ultra has no `ratedCapacity` (9); `healthState` (8)
+  is the health percent (84 with `fullChargeCapacity` 4393 of 5200 mAh).
 - No-go zones are `StaticMapPayload` field 9 (`ForbiddenArea`), virtual walls are
   field 50 (`VirtualWallData`). Edits go through `map/operation`: a
   `MapOperation.Request` whose `operations` (4) are `MapOperationPayload`s
