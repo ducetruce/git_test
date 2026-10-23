@@ -29,7 +29,8 @@ public enum NarwalError: Error, LocalizedError, Equatable {
             switch CommandResult(rawValue: code) {
             case .notApplicable: return "The robot can't do that right now (\(t))."
             case .conflict: return "That's already in progress (\(t))."
-            case .notReady: return "The robot isn't ready (\(t)). Room cleans must start from the dock."
+            // The Z10 Ultra answers 4 to a clean at 25% battery, docked.
+            case .notReady: return "The robot isn't ready (\(t)). Let it charge, and start cleans from the dock."
             default: return "The robot refused \(t) (code \(code))."
             }
         case .noMap: return "No saved map yet. Run a mapping clean in the Narwal app first."

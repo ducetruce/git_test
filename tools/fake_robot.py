@@ -276,12 +276,9 @@ class Robot:
                     self.names[info[1]] = info.get(3, [b""])[0].decode()
                     self.room_infos[info[1]] = raw
         elif short == "clean/easy_clean/start":
-            # StartEasyClean.Request {1 cleanMode, 2 mapId, 3 cleanAreaOptions}:
-            # the Z10 Ultra answers 2 (not applicable) without them.
-            f = parse_fields(payload)
-            if not f.get(1) or f.get(2) != MAP_ID or not f.get(3) or self.cleaning:
-                return response(f_varint(1, 2))
-            self.status, self.paused, self.started = 4, False, time.time()
+            # The Z10 Ultra refuses StartEasyClean: 2 (not applicable) when
+            # empty, 3 with {1 cleanMode, 2 mapId, 3 cleanAreaOptions}.
+            return response(f_varint(1, 3 if parse_fields(payload).get(1) else 2))
         elif short == "clean/floor_maintenance/start":
             # StartMaintainFloor.Request {1 roomIds (packed)}
             raw = parse_fields(payload).get(1, [b""])

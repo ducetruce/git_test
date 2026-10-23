@@ -110,6 +110,9 @@ public enum Topic {
     /// Never use it for room cleaning; see `startClean`.
     public static let planStart = "clean/plan/start"
     public static let startClean = "clean/start_clean"
+    /// Refused by the Z10 Ultra: 2 when empty, 3 with {1 cleanMode, 2 mapId,
+    /// 3 whole-house CleanAreaOption}, even idle on the dock. Whole-house
+    /// cleans use `startClean` with every room instead.
     public static let easyClean = "clean/easy_clean/start"
     public static let setFanLevel = "clean/set_fan_level"
     public static let setMopHumidity = "clean/set_mop_humidity"

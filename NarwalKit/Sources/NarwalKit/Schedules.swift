@@ -154,20 +154,6 @@ extension Payloads {
         return w.bytes
     }
 
-    /// StartEasyClean.Request {1 cleanMode, 2 mapId, 3 cleanAreaOptions}:
-    /// the whole house (CleanAreaOption 2 = CLEAN_ZONE_TYPE_WHOLE_HOUSE) in
-    /// one mode, with that mode's suction, water and passes.
-    public static func easyClean(mapId: Int, settings: CleanSettings) -> [UInt8] {
-        var w = ProtoWriter()
-        w.varint(1, cleanMode([settings.workMode]))
-        w.varint(2, mapId)
-        w.message(3) { option in
-            option.varint(2, 3)
-            areaOption(&option, settings)
-        }
-        return w.bytes
-    }
-
     /// CleanAreaOption 4-7: the per-mode option (SweepAreaOption {1 fan,
     /// 2 count}, MopAreaOption {1 strength, 2 humidity, 3 count},
     /// SweepMopSyncAreaOption {1 fan, 2 strength, 3 humidity, 4 count},

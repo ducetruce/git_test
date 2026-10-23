@@ -192,10 +192,6 @@ struct TodayView: View {
                 RoundAction(title: "Clean all", icon: "play.fill") {
                     Task { await store.cleanAll(settings: CleanSettings(workMode: currentMode)) }
                 }
-                RoundAction(title: "Quick", icon: "hare") {
-                    let settings = CleanSettings(workMode: currentMode)
-                    run("Quick clean") { try await $0.quickClean(settings: settings) }
-                }
             }
             RoundAction(title: "Dock", icon: "house") { run("Dock") { try await $0.returnToDock() } }
             RoundAction(title: "Locate", icon: "speaker.wave.2") { run("Locate") { try await $0.locate() } }
