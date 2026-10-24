@@ -460,7 +460,13 @@ public actor NarwalConnection {
         if !failed { pingSentAt = nil }
     }
 
+    /// Holds the command slot: replies carry no topic, so these answers
+    /// sent while a command waits could be taken as its answer (a query the
+    /// robot ignores accepts any reply), leaving their own places to take
+    /// the answers after them.
     private func sendWakeBurst() async {
+        await acquireCommandSlot()
+        defer { releaseCommandSlot() }
         sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(1))
         try? await Task.sleep(nanoseconds: 200_000_000)
         sendUnawaited(Topic.activeRobotPublish, Payloads.topicSubscription())
@@ -502,7 +508,10 @@ public actor NarwalConnection {
                 continue
             }
             if now.timeIntervalSince(lastSubscription) > NarwalDefaults.subscriptionRenewInterval {
+                // Answered, so it waits for the command slot like the wake burst.
+                await acquireCommandSlot()
                 sendUnawaited(Topic.activeRobotPublish, Payloads.topicSubscription())
+                releaseCommandSlot()
             }
             // The live map can stop mid-clean while status keeps flowing;
             // a wake burst restores the display_map subscription.
