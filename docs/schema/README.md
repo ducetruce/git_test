@@ -43,6 +43,12 @@ field name in the same file.
 - `clean/easy_clean/start` is refused (3) with a full request even idle on the
   dock; `clean/start_clean` answers 4 at 25% battery and is accepted at 65%.
   `supply/pump_troubleshooting` runs the dock pump (task type 25) and never answers.
+- `config/get`'s `language` (2) is stale on the Z10 Ultra (1, Simplified Chinese,
+  while it speaks English). `config/language/get` answers `{1: 1, 2: 3}`, the
+  current voice info says "en", and `config/supported_languages/get` lists 1, 6, 3,
+  10, 9, 7, 8, 5, 4, 11.
+- Replies carry no topic and are matched to requests in order, so a query the robot
+  never answers must be sent with no late grace, or it takes the next answer.
 - `GetBatteryInfo` on the Z10 Ultra has no `ratedCapacity` (9); `healthState` (8)
   is the health percent (84 with `fullChargeCapacity` 4393 of 5200 mAh).
 - No-go zones are `StaticMapPayload` field 9 (`ForbiddenArea`), virtual walls are

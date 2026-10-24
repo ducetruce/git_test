@@ -394,7 +394,7 @@ public actor NarwalConnection {
         let id = nextId
         let timer = Task {
             try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-            self.fail(id, NarwalError.timeout(short))
+            self.fail(id, NarwalError.timeout(short), keepPlace: lateGrace > 0)
         }
         defer { timer.cancel() }
 
@@ -429,9 +429,12 @@ public actor NarwalConnection {
         return true
     }
 
-    private func fail(_ id: UInt64, _ error: Error) {
+    private func fail(_ id: UInt64, _ error: Error, keepPlace: Bool = true) {
         // The Expected entry stays queued until it expires, so a late answer
-        // is discarded instead of misrouted.
+        // is discarded instead of misrouted. With no late grace it goes now:
+        // it was recorded just after the timer started, so it would outlive
+        // the timeout and could take the next request's answer.
+        if !keepPlace { expected.removeAll { $0.id == id } }
         waiting.removeValue(forKey: id)?.resume(throwing: error)
     }
 
