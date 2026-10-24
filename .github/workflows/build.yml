@@ -93,6 +93,30 @@ jobs:
       - name: Launch in Simulator
         run: tools/sim_smoke.sh simbuild/Build/Products/Debug-iphonesimulator/NarwalLocal.app
 
+      # Taps through the main screens and saves a screenshot of each.
+      - name: Screenshots
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")))')
+          xcodebuild test \
+            -project App/NarwalLocal.xcodeproj \
+            -scheme NarwalLocal \
+            -destination "id=$UDID" \
+            -derivedDataPath simbuild \
+            -resultBundlePath screenshots.xcresult \
+            -only-testing:NarwalLocalUITests \
+            CODE_SIGNING_ALLOWED=NO | tail -20
+          xcrun xcresulttool export attachments --path screenshots.xcresult --output-path shots
+          python3 tools/name_screenshots.py shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots
+
       - name: Fake robot log
         if: always()
         run: cat fake_robot.log || true
