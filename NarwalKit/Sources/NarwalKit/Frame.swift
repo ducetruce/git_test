@@ -38,13 +38,13 @@ public struct NarwalFrame: Equatable, Sendable {
     /// The device id embedded in a broadcast topic, if any.
     public var topicDeviceId: String? {
         let parts = topic.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count >= 4, !parts[2].isEmpty else { return nil }
+        guard parts.count >= 4, DeviceInfo.isPlausibleId(String(parts[2])) else { return nil }
         return String(parts[2])
     }
 
     public var topicProductKey: String? {
         let parts = topic.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count >= 4, !parts[1].isEmpty else { return nil }
+        guard parts.count >= 4, DeviceInfo.isPlausibleId(String(parts[1])) else { return nil }
         return String(parts[1])
     }
 
@@ -67,9 +67,11 @@ public struct NarwalFrame: Equatable, Sendable {
         self.payload = Array(bytes[topicEnd...])
     }
 
-    public func encoded() -> [UInt8] {
+    /// Nil when the topic doesn't fit the one-byte length (never trap: a
+    /// bad device id once crashed the app on every send).
+    public func encoded() -> [UInt8]? {
         let topicBytes = Array(topic.utf8)
-        precondition(topicBytes.count <= 253, "topic too long for a one-byte length")
+        guard topicBytes.count <= 253 else { return nil }
         return [Self.frameTypeByte, UInt8(topicBytes.count + 2), kind.rawValue, UInt8(topicBytes.count)]
             + topicBytes + payload
     }

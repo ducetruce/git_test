@@ -39,6 +39,55 @@ extension NarwalConnection {
         ConsumableAlerts(response: try await send(Topic.getConsumableInfo, timeout: 15).message)
     }
 
+    public func settings() async throws -> RobotSettings? {
+        guard var settings = RobotSettings(response: try await send(Topic.getConfig).message) else { return nil }
+        // The Z10 Ultra's config/get reports 1 (Simplified Chinese) while it
+        // speaks English; config/language/get has the live language.
+        if let reply = try? await send(Topic.getLanguage, lateGrace: 0), reply.accepted,
+           let language = reply.message.int(2), language != 0 {
+            settings.setLanguage(language)
+        }
+        return settings
+    }
+
+    /// Recent cleaning events. An empty answer means no history.
+    public func cleaningHistory() async throws -> CleaningHistory {
+        let response = try await send(Topic.getCleanTimeLine, timeout: 10)
+        if let history = CleaningHistory(response: response.message) { return history }
+        guard response.accepted else { throw NarwalError.rejected(Topic.getCleanTimeLine, response.resultCode) }
+        return CleaningHistory(events: [])
+    }
+
+    /// Robot-stored schedules. Read-only, but the Z10 Ultra never answers
+    /// it, so nothing in the app calls it. No late grace: a request the
+    /// robot ignores would otherwise take the next query's answer.
+    public func cleanSchedules() async throws -> [CleanSchedule] {
+        CleanSchedule.list(response: try await send(Topic.getCleanSchedules, timeout: 10, lateGrace: 0).message)
+    }
+
+    public func cleanPlans() async throws -> [CleanPlan] {
+        CleanPlan.list(response: try await send(Topic.getCleanPlans, timeout: 10).message)
+    }
+
+    /// Saves a routine as a robot clean plan; returns its id
+    /// (SetCleanPlan.Response {1 result, 2 id}).
+    public func saveCleanPlan(_ payload: [UInt8]) async throws -> Int {
+        let response = try await perform(Topic.setCleanPlan, payload, timeout: 10)
+        guard let id = response.message.int(2), id != 0 else { throw NarwalError.rejected(Topic.setCleanPlan, -1) }
+        return id
+    }
+
+    public func deleteCleanPlan(_ id: Int) async throws {
+        try await perform(Topic.deleteCleanPlan, Payloads.singleVarint(id))
+    }
+
+    /// Sends a schedule change, then reads the schedules back.
+    public func changeSchedules(_ topic: String, _ payload: [UInt8]) async throws -> [CleanSchedule] {
+        let response = try await send(topic, payload, timeout: 10)
+        if let code = ScheduleReply.failure(response.message) { throw NarwalError.rejected(topic, code) }
+        return try await cleanSchedules()
+    }
+
     public func currentCleanTask() async throws -> CommandResponse {
         try await send(Topic.currentCleanTask)
     }
@@ -51,8 +100,6 @@ extension NarwalConnection {
     /// force_end answers only after the robot physically stops (10-15 s).
     public func stopTask() async throws { try await perform(Topic.forceEnd, timeout: 20) }
     public func returnToDock() async throws { try await perform(Topic.recall) }
-    public func quickClean() async throws { try await perform(Topic.easyClean) }
-
     public func setFanLevel(_ level: FanLevel) async throws {
         try await perform(Topic.setFanLevel, Payloads.setFanLevel(level))
     }
@@ -71,14 +118,16 @@ extension NarwalConnection {
     /// the room list. Returns the map the task was built against.
     @discardableResult
     public func cleanRooms(_ rooms: [Int], settings: CleanSettings = CleanSettings(),
-                           perRoom: [Int: CleanSettings] = [:]) async throws -> RobotMap {
+                           perRoom: [Int: CleanSettings] = [:],
+                           options: CleanOptions = CleanOptions()) async throws -> RobotMap {
         guard !rooms.isEmpty else { throw RoomCleanError.noRoomsSelected }
         let map = try await fetchMap()
         let known = Set(map.rooms.map(\.id))
         let unknown = rooms.filter { !known.contains($0) }
         guard unknown.isEmpty else { throw RoomCleanError.unknownRooms(unknown) }
         try await perform(Topic.startClean,
-                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings, perRoom: perRoom),
+                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings,
+                                              perRoom: perRoom, options: options),
                           timeout: 10)
         return map
     }
@@ -86,12 +135,14 @@ extension NarwalConnection {
     /// Whole house: every room, through the same verified path as room cleans.
     @discardableResult
     public func cleanAll(settings: CleanSettings = CleanSettings(),
-                         perRoom: [Int: CleanSettings] = [:]) async throws -> RobotMap {
+                         perRoom: [Int: CleanSettings] = [:],
+                         options: CleanOptions = CleanOptions()) async throws -> RobotMap {
         let map = try await fetchMap()
         let rooms = map.rooms.map(\.id)
         guard !rooms.isEmpty else { throw NarwalError.noMap }
         try await perform(Topic.startClean,
-                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings, perRoom: perRoom),
+                          Payloads.startClean(mapId: map.mapId, rooms: rooms, settings: settings,
+                                              perRoom: perRoom, options: options),
                           timeout: 10)
         return map
     }
@@ -105,6 +156,70 @@ extension NarwalConnection {
                           Payloads.zoneClean(mapId: map.mapId, zones: zones, settings: settings),
                           timeout: 10)
         return map
+    }
+
+    // MARK: Settings (writes)
+
+    // Each write reads the settings back, so a silently ignored write shows
+    // up. Not yet tried on a robot: the app only sends these once the owner
+    // turns on Settings > Change robot settings.
+
+    /// Sets the robot's voice volume (0-100) via config/set.
+    @discardableResult
+    public func setVoiceVolume(_ percent: Int) async throws -> RobotSettings? {
+        try await perform(Topic.setConfig, Payloads.setVoiceVolume(percent))
+        return try await settings()
+    }
+
+    @discardableResult
+    public func setSetting(_ choice: RobotSetting.Choice) async throws -> RobotSettings? {
+        // Nested settings are written from the robot's current config, so
+        // read it fresh rather than trust what the app last saw.
+        guard let current = try await settings() else { throw NarwalError.timeout("config/get") }
+        // The language has its own topic; config/get's copy of it goes stale.
+        if let language = choice.writes.first(where: { $0.path == [2] }) {
+            try await perform(Topic.setLanguage, Payloads.singleVarint(language.value), timeout: 10)
+        }
+        let rest = RobotSetting.Choice(choice.label, choice.writes.filter { $0.path != [2] })
+        for request in RobotSetting.requests(for: rest, current: current) {
+            try await perform(Topic.setConfig, request)
+        }
+        return try await settings()
+    }
+
+    @discardableResult
+    public func setDoNotDisturb(_ dnd: RobotSettings.DoNotDisturb) async throws -> RobotSettings? {
+        try await perform(Topic.setConfig, Payloads.setDoNotDisturb(dnd))
+        return try await settings()
+    }
+
+    /// The robot's photo of a recognised obstacle, if it sends one locally.
+    public func obstaclePhoto(_ id: Int) async throws -> Data? {
+        ObstaclePhoto.imageData(try await send(Topic.getVisionImage, Payloads.obstaclePhoto(id), timeout: 15).message)
+    }
+
+    // MARK: Map edits
+
+    /// Sets how the robot treats one carpet, then fetches the map back so the
+    /// change can be checked. (The reply may carry a map too, but possibly
+    /// without its pixels.)
+    public func setCarpetCleanOption(_ carpetId: Int, to option: Int, on map: RobotMap) async throws -> RobotMap {
+        try await perform(Topic.mapOperation,
+                          Payloads.carpetCleanOption(map, carpetId: carpetId, option: option),
+                          timeout: 10)
+        return try await fetchMap()
+    }
+
+    /// Applies map edits in one map/operation, then fetches the map back.
+    public func editMap(_ edits: [MapEdit], on map: RobotMap) async throws -> RobotMap {
+        try await perform(Topic.mapOperation, Payloads.mapOperation(map, edits), timeout: 15)
+        return try await fetchMap()
+    }
+
+    /// Acknowledges the robot's current warning, as the Narwal app's
+    /// "issue resolved" button seems to. Untried; the payload is a guess.
+    public func confirmWarning() async throws {
+        try await perform(Topic.confirmWarning)
     }
 
     // MARK: Dock
@@ -121,4 +236,93 @@ extension NarwalConnection {
             throw NarwalError.rejected(Topic.ambientLight, response.resultCode)
         }
     }
+
+    // MARK: Wood floor care
+
+    /// Narwal's Floor maintenance. With `cleanFirst` the robot first runs
+    /// Vacuum and mop with Freo Mind on the same rooms ("Cleaning before
+    /// maintenance"), as the Narwal app does; otherwise it only maintains.
+    /// The robot skips rooms not set to Wood Floor.
+    @discardableResult
+    public func startFloorMaintenance(rooms: [Int], cleanFirst: Bool) async throws -> RobotMap? {
+        guard !rooms.isEmpty else { throw RoomCleanError.noRoomsSelected }
+        if cleanFirst {
+            return try await cleanRooms(rooms, settings: CleanSettings(workMode: .vacuumAndMop),
+                                        options: CleanOptions(freoMind: true, maintainFloorsAfter: true))
+        }
+        try await perform(Topic.startFloorMaintenance, Payloads.startFloorMaintenance(rooms: rooms), timeout: 10)
+        return nil
+    }
+
+    // MARK: Maps
+
+    public func allMaps() async throws -> [MapSummary] {
+        MapSummary.list(try await send(Topic.getAllMaps, timeout: 15).message)
+    }
+
+    public func switchMap(to id: Int) async throws {
+        try await perform(Topic.switchMap, Payloads.singleVarint(id), timeout: 15)
+    }
+
+    public func deleteMap(_ id: Int) async throws {
+        try await perform(Topic.deleteMap, Payloads.singleVarint(id), timeout: 15)
+    }
+
+    /// Starts mapping: a new secondary map from where the robot stands, or
+    /// `rebuildCurrent` to remap the map in use (Narwal's "Remapping").
+    public func startMapping(rebuildCurrent: Bool, hasStairs: Bool) async throws {
+        try await perform(Topic.buildMap, Payloads.buildMap(rebuildCurrent: rebuildCurrent, hasStairs: hasStairs),
+                          timeout: 15)
+    }
+
+    @discardableResult
+    public func setNoStairs(_ on: Bool, mapId: Int) async throws -> RobotSettings? {
+        guard let current = try await settings() else { throw NarwalError.timeout("config/get") }
+        try await perform(Topic.setConfig, Payloads.setNoStairs(on, mapId: mapId, current: current))
+        return try await settings()
+    }
+
+    @discardableResult
+    public func setCleaningOrder(_ rooms: [Int], mapId: Int) async throws -> RobotSettings? {
+        guard let current = try await settings() else { throw NarwalError.timeout("config/get") }
+        try await perform(Topic.setConfig, Payloads.setCleaningOrder(rooms, mapId: mapId, current: current))
+        return try await settings()
+    }
+
+    // MARK: Device and parts
+
+    public func reboot() async throws { try await perform(Topic.reboot) }
+
+    public func firmwareVersions() async throws -> FirmwareVersions? {
+        FirmwareVersions(try await send(Topic.getFirmwareVersion).message)
+    }
+
+    public func batteryHealth() async throws -> BatteryHealth? {
+        BatteryHealth(try await send(Topic.batteryInfo).message)
+    }
+
+    /// Tells the robot a part was replaced (ConsumableReplaceItem).
+    public func resetConsumable(_ item: Int) async throws {
+        try await perform(Topic.resetConsumable, Payloads.resetConsumable(item))
+    }
+
+    /// Minutes of mop drying left, or nil when the robot isn't drying.
+    public func dryingTimeLeft() async throws -> Int? {
+        let m = try await send(Topic.dryMopRemainTime).message
+        guard let seconds = m.int(2), seconds > 0 else { return nil }
+        return Int((Double(seconds) / 60).rounded(.up))
+    }
+
+    public func continuableTask() async throws -> ContinuableTask? {
+        ContinuableTask(try await send(Topic.getContinueTask).message)
+    }
+
+    /// Resumes (`true`) or discards (`false`) an interrupted clean.
+    public func continueTask(_ resume: Bool) async throws {
+        try await perform(Topic.continueTask, Payloads.singleVarint(resume ? 1 : 0), timeout: 10)
+    }
+
+    /// Narwal's "Dock Base Drainage". The robot never answers it; base
+    /// status shows "Draining the dock base" while it runs.
+    public func drainDockBase() async throws { sendUnawaited(Topic.pumpTroubleshooting) }
 }

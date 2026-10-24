@@ -73,7 +73,15 @@ W, H = 60, 40
 ROOMS = [(1, 4, "", 0, 20), (2, 3, "", 20, 40), (3, 5, "Ensuite", 40, 60)]
 
 
-def map_payload() -> bytes:
+DEFAULT_NOGO = (b"".join(f_bytes(1, f_float(1, x) + f_float(2, y))
+                         for x, y in [(25, 10), (35, 10), (35, 18), (25, 18)])
+                + f_varint(2, 3) + f_varint(3, 1))
+
+
+def map_payload(carpet_option: int = 0, nogo: list | None = None, names: dict | None = None,
+                infos: dict | None = None) -> bytes:
+    nogo = [DEFAULT_NOGO] if nogo is None else nogo
+    names = names or {}
     pixels = []
     for y in range(H):
         for x in range(W):
@@ -83,12 +91,15 @@ def map_payload() -> bytes:
             for rid, _, _, x0, x1 in ROOMS:
                 if x0 <= x < x1:
                     wall = x in (x0, x1 - 1) and not (15 <= y <= 22)
-                    pixels.append(rid << 8 | (0x10 if wall else 0))
+                    rug = 0x04 if 25 <= x < 35 and 26 <= y < 34 else 0  # a carpet patch
+                    pixels.append(rid << 8 | (0x10 if wall else 0) | rug)
                     break
     grid = zlib.compress(f_bytes(1, b"".join(varint(p) for p in pixels)))
+    infos = infos or {}
     rooms = b"".join(
-        f_bytes(12, f_varint(1, rid) + f_varint(2, rtype) + (f_bytes(3, name.encode()) if name else b"")
-                + f_varint(4, 1))
+        f_bytes(12, infos.get(rid) or (f_varint(1, rid) + f_varint(2, rtype)
+                + (f_bytes(3, names.get(rid, name).encode()) if names.get(rid, name) else b"")
+                + f_varint(4, 1)))
         for rid, rtype, name, _, _ in ROOMS
     )
     body = (
@@ -96,8 +107,81 @@ def map_payload() -> bytes:
         + f_bytes(6, f_varint(1, 0) + f_varint(3, 0) + f_varint(4, 60))
         + f_bytes(8, f_bytes(1, f_float(1, 5.0) + f_float(2, 5.0)))
         + rooms + f_bytes(17, grid)
+        # 9: a no-go zone (ForbiddenArea, float polygon), 50: a virtual wall
+        + b"".join(f_bytes(9, zone) for zone in nogo)
+        + f_bytes(50, f_varint(1, 2) + f_bytes(2, f_float(1, 45) + f_float(2, 25))
+                  + f_bytes(3, f_float(1, 45) + f_float(2, 35)))
+        # 26: a carpet (Grid polygon), 32.1: a sofa, 11: a doorway (Grid points)
+        + f_bytes(26, f_varint(1, 1) + b"".join(f_bytes(2, f_varint(1, x) + f_varint(2, y))
+                                                  for x, y in [(4, 4), (14, 4), (14, 12), (4, 12)])
+                  + f_varint(4, carpet_option) + f_varint(12, 1))
+        + f_bytes(32, f_bytes(1, f_varint(1, 5) + f_varint(2, 14)
+                              + f_bytes(3, f_bytes(1, f_float(1, 30) + f_float(2, 30)) + f_float(2, 12) + f_float(3, 4))
+                              + f_float(4, 15)))
+        + f_bytes(11, f_bytes(1, varint(1) + varint(2)) + f_bytes(2, f_varint(1, 20) + f_varint(2, 15))
+                  + f_bytes(2, f_varint(1, 20) + f_varint(2, 22)))
     )
     return f_varint(1, 1) + f_bytes(2, body)
+
+
+def set_to_get(field: int) -> int | None:
+    """SetConfig.Request field -> GetConfig.Response.Config field."""
+    if 1 <= field <= 3 or 15 <= field <= 44:
+        return field
+    if 5 <= field <= 14:
+        return field - 1
+    if field in (45, 46):
+        return field + 1
+    if 47 <= field <= 54:
+        return field + 2
+    return None
+
+
+def parse_single_field(data: bytes) -> tuple[int, int, int | bytes]:
+    def read_varint(pos: int) -> tuple[int, int]:
+        value = shift = 0
+        while True:
+            b = data[pos]
+            pos += 1
+            value |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                return value, pos
+    tag, pos = read_varint(0)
+    if tag & 7 == 2:
+        length, pos = read_varint(pos)
+        return tag >> 3, 2, data[pos:pos + length]
+    value, _ = read_varint(pos)
+    return tag >> 3, tag & 7, value
+
+
+def parse_fields(data: bytes) -> dict:
+    """Varint fields as ints; repeated length-delimited fields as lists of bytes."""
+    out: dict = {}
+    pos = 0
+
+    def read_varint() -> int:
+        nonlocal pos
+        value = shift = 0
+        while True:
+            b = data[pos]
+            pos += 1
+            value |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                return value
+
+    while pos < len(data):
+        tag = read_varint()
+        if tag & 7 == 0:
+            out[tag >> 3] = read_varint()
+        elif tag & 7 == 2:
+            length = read_varint()
+            out.setdefault(tag >> 3, []).append(data[pos:pos + length])
+            pos += length
+        else:
+            break
+    return out
 
 
 class Robot:
@@ -110,6 +194,22 @@ class Robot:
         self.rooms: list[int] = []
         self.started = 0.0
         self.x, self.y, self.heading = 5.0, 5.0, 0.0
+        # config/get varint fields by get number, plus DisturbMode bytes.
+        # Like the Z10 Ultra: language (2) is a stale 1 (Simplified Chinese);
+        # config/language/get has the live one. 12 drying Smart, 13 and 18
+        # rewash every 108 ft², 41 corners Wiggle.
+        self.config: dict[int, int] = {1: 29, 2: 1, 6: 1, 12: 3, 13: 2, 41: 2}
+        self.language = 3
+        self.carpet_option = 0
+        self.nogo: list[bytes] = [DEFAULT_NOGO]
+        self.names: dict[int, str] = {}
+        self.room_infos: dict[int, bytes] = {}
+        self.maintaining: list[int] = []
+        self.plans: dict[int, bytes] = {}
+        self.schedules: list[tuple[int, bytes]] = []
+        self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
+        # Message-valued config fields by get number, e.g. 29 smartCleanParam.
+        self.config_messages: dict[int, bytes] = {29: f_bytes(99, b"keep"), 18: f_varint(1, 1) + f_varint(2, 2)}
 
     @property
     def cleaning(self) -> bool:
@@ -133,7 +233,94 @@ class Robot:
         elif short == "status/get_device_base_status":
             return response(f_varint(1, 1) + f_bytes(2, self.base_status()))
         elif short == "map/get_map":
-            return response(map_payload())
+            return response(map_payload(self.carpet_option, self.nogo, self.names, self.room_infos))
+        elif short == "info/get_clean_time_line":
+            # GetCleanTimeLine.Response {1 result, 2 TimeLineStatus {1 RobotEventNode...}}
+            start = int(time.time() * 1000) - 3_600_000
+            clean = (f_varint(1, start) + f_varint(2, 4) + f_bytes(3, f_bytes(2, f_varint(2, 2) + f_varint(4, 4)))
+                     + f_varint(5, 1) + f_varint(7, 1) + f_varint(8, 1))
+            dust = f_varint(1, start + 1_800_000) + f_varint(2, 9) + f_varint(7, 1) + f_varint(8, 2)
+            return response(f_varint(1, 1) + f_bytes(2, f_bytes(1, clean) + f_bytes(1, dust)))
+        elif short == "config/get":
+            body = b"".join(f_varint(k, v) for k, v in sorted(self.config.items()) if v)
+            body += b"".join(f_bytes(k, v) for k, v in sorted(self.config_messages.items()))
+            return response(f_varint(1, 1) + f_bytes(2, body + f_bytes(4, self.disturb)))
+        elif short == "config/language/get":
+            return response(f_varint(1, 1) + f_varint(2, self.language))
+        elif short == "config/language/set":
+            self.language = parse_fields(payload).get(1, self.language)
+        elif short == "info/battery_info":
+            # The Z10 Ultra's shape: no ratedCapacity (9); healthState (8) is a percent.
+            return response(f_varint(1, 4393) + f_varint(2, 131) + f_varint(4, int(self.battery)) + f_varint(8, 84))
+        elif short == "config/set":
+            # SetConfig.Request: one field, numbered differently from config/get.
+            field, wire, value = parse_single_field(payload)
+            if field == 5 and wire == 2:
+                self.disturb = value
+            elif wire == 0 and (get := set_to_get(field)) is not None:
+                self.config[get] = value
+            elif wire == 2 and (get := set_to_get(field)) is not None:
+                self.config_messages[get] = value
+            else:
+                return response(f_varint(1, 2))
+        elif short == "map/operation":
+            # MapOperation.Request {1 mapId, 4 MapOperationPayload {6 CarpetOperation}}
+            fields = parse_fields(payload)
+            if fields.get(1) != MAP_ID:
+                return response(f_varint(1, 2))
+            for op in fields.get(4, []):
+                ops = parse_fields(op)
+                if ops.get(6):
+                    c = parse_fields(ops[6][0])
+                    if c.get(1) == 1 and c.get(3, 0) == 0:
+                        self.carpet_option = c.get(2, 0)
+                if ops.get(4):  # ForbiddenAreaOperation {1 op, 2 ForbiddenArea}
+                    f = parse_fields(ops[4][0])
+                    area = f.get(2, [b""])[0]
+                    zone_id = parse_fields(area).get(3)
+                    self.nogo = [z for z in self.nogo if parse_fields(z).get(3) != zone_id]
+                    if f.get(1) == 1:
+                        self.nogo.append(area)
+                if ops.get(3):  # RoomInfoOperation {1 RoomInfo {1 roomId, 3 customName}}
+                    raw = parse_fields(ops[3][0])[1][0]
+                    info = parse_fields(raw)
+                    self.names[info[1]] = info.get(3, [b""])[0].decode()
+                    self.room_infos[info[1]] = raw
+        elif short == "supply/pump_troubleshooting":
+            return None  # the Z10 Ultra runs the dock pump and never answers
+        elif short == "clean/easy_clean/start":
+            # The Z10 Ultra refuses StartEasyClean: 2 (not applicable) when
+            # empty, 3 with {1 cleanMode, 2 mapId, 3 cleanAreaOptions}.
+            return response(f_varint(1, 3 if parse_fields(payload).get(1) else 2))
+        elif short == "clean/floor_maintenance/start":
+            # StartMaintainFloor.Request {1 roomIds (packed)}
+            raw = parse_fields(payload).get(1, [b""])
+            self.maintaining = list(raw[0]) if isinstance(raw, list) else [raw]
+            if not self.maintaining:
+                return response(f_varint(1, 2))
+        elif short == "clean/plan/set":
+            plan_id = max(self.plans, default=0) + 1
+            self.plans[plan_id] = parse_fields(payload)[1][0]
+            return response(f_varint(1, 1) + f_varint(2, plan_id))
+        elif short == "clean/plan/delete":
+            self.plans.pop(parse_fields(payload).get(1), None)
+        elif short == "schedule/clean_schedule/get":
+            body = b"".join(f_bytes(2, f_varint(1, i) + f_bytes(2, p)) for i, p in self.schedules)
+            return response(f_bytes(1, f_varint(1, 1)) + body)
+        elif short == "schedule/clean_schedule/add":
+            param = parse_fields(payload)[1][0]
+            if parse_fields(param).get(2) not in self.plans:
+                return response(f_bytes(1, f_varint(1, 3)))  # CLEAN_PLAN_MISSED
+            self.schedules.append((max((i for i, _ in self.schedules), default=0) + 1, param))
+            return response(f_bytes(1, f_varint(1, 1)))
+        elif short == "schedule/clean_schedule/update":
+            sched = parse_fields(parse_fields(payload)[1][0])
+            self.schedules = [(i, sched[2][0] if i == sched[1] else p) for i, p in self.schedules]
+            return response(f_bytes(1, f_varint(1, 1)))
+        elif short == "schedule/clean_schedule/delete":
+            gone = parse_fields(payload).get(1)
+            self.schedules = [(i, p) for i, p in self.schedules if i != gone]
+            return response(f_bytes(1, f_varint(1, 1)))
         elif short == "consumable/get_consumable_info":
             return response(f_bytes(1, f_bytes(1, bytes([4])) + f_bytes(2, bytes([3]))))
         elif short == "clean/start_clean":

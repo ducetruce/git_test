@@ -29,7 +29,8 @@ public enum NarwalError: Error, LocalizedError, Equatable {
             switch CommandResult(rawValue: code) {
             case .notApplicable: return "The robot can't do that right now (\(t))."
             case .conflict: return "That's already in progress (\(t))."
-            case .notReady: return "The robot isn't ready (\(t)). Room cleans must start from the dock."
+            // The Z10 Ultra answers 4 to a clean at 25% battery, docked.
+            case .notReady: return "The robot isn't ready (\(t)). Let it charge, and start cleans from the dock."
             default: return "The robot refused \(t) (code \(code))."
             }
         case .noMap: return "No saved map yet. Run a mapping clean in the Narwal app first."
@@ -54,6 +55,8 @@ public enum NarwalEvent: Sendable {
     case identity(productKey: String, deviceId: String)
     case baseStatus(BaseStatus)
     case progress(WorkingProgress)
+    /// status/time_line_status: the robot's event list for recent tasks.
+    case history(CleaningHistory)
     case pose(LivePose)
     case broadcast(NarwalFrame)
     case log(String)
@@ -108,7 +111,7 @@ public actor NarwalConnection {
         self.host = Self.normalizedHost(host)
         self.port = port
         self.productKey = productKey
-        self.deviceId = deviceId
+        self.deviceId = DeviceInfo.isPlausibleId(deviceId) ? deviceId : ""
         let (stream, continuation) = AsyncStream<NarwalEvent>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.events = stream
         self.continuation = continuation
@@ -300,6 +303,8 @@ public actor NarwalConnection {
             continuation.yield(.baseStatus(status))
         case Topic.workingStatus:
             continuation.yield(.progress(WorkingProgress(message)))
+        case Topic.timelineStatus:
+            continuation.yield(.history(CleaningHistory(timeLine: message)))
         case Topic.displayMap:
             lastDisplayMap = Date()
             if let pose = LivePose(message) { continuation.yield(.pose(pose)) }
@@ -348,8 +353,11 @@ public actor NarwalConnection {
             onError(NarwalError.notConnected)
             return
         }
-        let frame = NarwalFrame(topic: fullTopic(short), payload: payload)
-        ws.send(.data(Data(frame.encoded()))) { error in
+        guard let bytes = NarwalFrame(topic: fullTopic(short), payload: payload).encoded() else {
+            onError(NarwalError.rejected(short, -1))
+            return
+        }
+        ws.send(.data(Data(bytes))) { error in
             if let error { onError(error) }
         }
         if short == Topic.activeRobotPublish { lastSubscription = Date() }
@@ -376,7 +384,9 @@ public actor NarwalConnection {
     public func send(_ short: String, _ payload: [UInt8] = [],
                      timeout: TimeInterval = NarwalDefaults.commandTimeout,
                      lateGrace: TimeInterval = NarwalDefaults.lateResponseGrace) async throws -> CommandResponse {
-        guard socket != nil else { throw NarwalError.notConnected }
+        // Between a dropped socket and the reconnect there's a short gap; a
+        // command sent then waits for the new socket instead of failing.
+        guard await waitForSocket(timeout: NarwalDefaults.reconnectWait) else { throw NarwalError.notConnected }
         await acquireCommandSlot()
         defer { releaseCommandSlot() }
 
@@ -384,7 +394,7 @@ public actor NarwalConnection {
         let id = nextId
         let timer = Task {
             try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-            self.fail(id, NarwalError.timeout(short))
+            self.fail(id, NarwalError.timeout(short), keepPlace: lateGrace > 0)
         }
         defer { timer.cancel() }
 
@@ -410,9 +420,21 @@ public actor NarwalConnection {
         return response
     }
 
-    private func fail(_ id: UInt64, _ error: Error) {
+    private func waitForSocket(timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while socket == nil {
+            guard runTask != nil, Date() < deadline, !Task.isCancelled else { return false }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return true
+    }
+
+    private func fail(_ id: UInt64, _ error: Error, keepPlace: Bool = true) {
         // The Expected entry stays queued until it expires, so a late answer
-        // is discarded instead of misrouted.
+        // is discarded instead of misrouted. With no late grace it goes now:
+        // it was recorded just after the timer started, so it would outlive
+        // the timeout and could take the next request's answer.
+        if !keepPlace { expected.removeAll { $0.id == id } }
         waiting.removeValue(forKey: id)?.resume(throwing: error)
     }
 
@@ -438,7 +460,13 @@ public actor NarwalConnection {
         if !failed { pingSentAt = nil }
     }
 
+    /// Holds the command slot: replies carry no topic, so these answers
+    /// sent while a command waits could be taken as its answer (a query the
+    /// robot ignores accepts any reply), leaving their own places to take
+    /// the answers after them.
     private func sendWakeBurst() async {
+        await acquireCommandSlot()
+        defer { releaseCommandSlot() }
         sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(1))
         try? await Task.sleep(nanoseconds: 200_000_000)
         sendUnawaited(Topic.activeRobotPublish, Payloads.topicSubscription())
@@ -480,7 +508,10 @@ public actor NarwalConnection {
                 continue
             }
             if now.timeIntervalSince(lastSubscription) > NarwalDefaults.subscriptionRenewInterval {
+                // Answered, so it waits for the command slot like the wake burst.
+                await acquireCommandSlot()
                 sendUnawaited(Topic.activeRobotPublish, Payloads.topicSubscription())
+                releaseCommandSlot()
             }
             // The live map can stop mid-clean while status keeps flowing;
             // a wake burst restores the display_map subscription.
@@ -542,7 +573,8 @@ struct ResponseShape: Sendable {
     init(topic: String, fireAndForget: Bool) {
         switch topic {
         case Topic.getDeviceInfo: kind = .deviceInfo
-        case Topic.getMap: kind = .map
+        // Both answer with their payload in field 2.
+        case Topic.getMap, Topic.getConfig: kind = .map
         case Topic.getBaseStatus: kind = .baseStatus
         default: kind = fireAndForget ? .ack : .any
         }
@@ -565,7 +597,7 @@ struct ResponseShape: Sendable {
         case .ack:
             return Self.isStatusOnly(m) || m.fields.isEmpty
         case .deviceInfo:
-            return !(m.string(2)?.isEmpty ?? true) || Self.isErrorStatus(m)
+            return DeviceInfo(response: m) != nil || Self.isErrorStatus(m)
         case .map:
             // Not a bare number in field 2: that's a status reply (#108).
             return m.message(2) != nil || Self.isErrorStatus(m)

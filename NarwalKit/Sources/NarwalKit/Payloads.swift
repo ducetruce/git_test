@@ -53,6 +53,52 @@ public enum Payloads {
         singleVarint(level.rawValue)
     }
 
+    /// config/set with SetConfig.Request field 1, `volumePercentage`.
+    /// SetConfig.Request is a oneof (one setting per request), so 0 is still
+    /// sent explicitly.
+    public static func setVoiceVolume(_ percent: Int) -> [UInt8] {
+        singleVarint(min(max(percent, 0), 100), field: 1)
+    }
+
+    /// config/set for one catalog setting. Off (0) is sent explicitly, or
+    /// the request would be empty.
+
+    /// map/operation: MapOperation.Request {1 mapId, 2 mapVersion,
+    /// 3 editVersion, 4 operations: MapOperationPayload}. Each operation is
+    /// one MapOperationPayload (a oneof: field number = kind of edit).
+    public static func mapOperation(_ map: RobotMap, _ operations: [(field: Int, body: [UInt8])]) -> [UInt8] {
+        var w = ProtoWriter()
+        w.varint(1, map.mapId)
+        if map.mapVersion != 0 { w.varint(2, map.mapVersion) }
+        if map.editVersion != 0 { w.varint(3, map.editVersion) }
+        for op in operations {
+            w.message(4) { payload in payload.bytesField(op.field, op.body) }
+        }
+        return w.bytes
+    }
+
+    /// MapOperationPayload 6, CarpetOperation {1 carpetId, 2 carpetCleanOption,
+    /// 3 operation = OPERATION_CARPET_CLEAN_OPTION (0)}: one carpet's handling.
+    public static func carpetCleanOption(_ map: RobotMap, carpetId: Int, option: Int) -> [UInt8] {
+        var op = ProtoWriter()
+        op.varint(1, carpetId)
+        op.varint(2, option)
+        op.varint(3, 0)
+        return mapOperation(map, [(field: 6, body: op.bytes)])
+    }
+
+    /// config/set field 5, DisturbMode {1 enabled, 2 beginTime, 3 endTime},
+    /// times in seconds after midnight.
+    public static func setDoNotDisturb(_ dnd: RobotSettings.DoNotDisturb) -> [UInt8] {
+        var w = ProtoWriter()
+        w.message(5) { m in
+            m.varint(1, dnd.enabled ? 1 : 0)
+            m.varint(2, dnd.begin)
+            m.varint(3, dnd.end)
+        }
+        return w.bytes
+    }
+
     /// The app's taskType for a job whose rooms use different work modes.
     static let customTaskType = 6
 
@@ -69,7 +115,8 @@ public enum Payloads {
         mapId: Int,
         rooms: [Int],
         settings: CleanSettings = CleanSettings(),
-        perRoom: [Int: CleanSettings] = [:]
+        perRoom: [Int: CleanSettings] = [:],
+        options: CleanOptions = CleanOptions()
     ) -> [UInt8] {
         let resolved = rooms.map { perRoom[$0] ?? settings }
         let modes = Set(resolved.map(\.workMode))
@@ -86,11 +133,15 @@ public enum Payloads {
                     }
                     item.message(2) { param in
                         writeCleanParam(&param, resolved[index])
+                        if options.freoMind { param.varint(9, 1) }
                     }
                     item.varint(3, index + 1)
                 }
             }
-            task.message(3) { _ in }
+            task.message(3) { option in
+                if options.freoMind { option.varint(1, 1) }
+                if options.maintainFloorsAfter { option.varint(5, 1) }
+            }
             task.varint(5, taskType)
         }
         return w.bytes

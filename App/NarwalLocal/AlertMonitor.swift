@@ -9,7 +9,10 @@ import UserNotifications
 /// - a condition must appear in two consecutive status reports (~3 s) before
 ///   it alerts, so one-frame glitches never notify;
 /// - each condition notifies once, and again only after it has cleared;
-/// - missing fields are "unknown", never "fine" or "problem".
+/// - missing fields are "unknown", never "fine" or "problem";
+/// - "can't find the base station" notifies only after 90 s and never while
+///   docked (`DockErrorFilter`), since the robot often sorts itself out; the
+///   app still shows it at once.
 @MainActor
 @Observable
 final class AlertMonitor {
@@ -17,6 +20,11 @@ final class AlertMonitor {
         let id: String
         let title: String
         let detail: String
+        /// Fault code for support, shown small.
+        var code: String?
+        /// A "can't find the base station" fault, which the robot sits on
+        /// until it's acknowledged.
+        var isDockSearch = false
     }
 
     private(set) var active: [Alert] = []
@@ -25,6 +33,7 @@ final class AlertMonitor {
     /// Conditions already notified; persisted so relaunching doesn't re-alert.
     @ObservationIgnored private var notified = Set(UserDefaults.standard.stringArray(forKey: "notifiedAlerts") ?? [])
     @ObservationIgnored private var cleanStartedAt: Date?
+    @ObservationIgnored private var dockErrors = DockErrorFilter()
 
     private func saveNotified() {
         UserDefaults.standard.set(Array(notified), forKey: "notifiedAlerts")
@@ -35,18 +44,30 @@ final class AlertMonitor {
     }
 
     func statusChanged(_ status: BaseStatus, previousWasCleaning: Bool, roomName: String?) {
+        let docked = status.isDocked ?? status.workingStatus.isOnDock
+        // The dock-search hold only delays the phone notification; the app
+        // itself always shows the fault, with its actions.
+        let notifiable = Set(dockErrors.filter(status.errors, docked: docked).map { "error-\($0.code)" })
         var current: [Alert] = status.errors.map {
+            // Known faults get advice; unknown ones the robot's English cause.
+            // Its Chinese debug text never reaches the screen.
             Alert(id: "error-\($0.code)", title: RobotErrorText.message(for: $0.code),
-                  detail: $0.detail.isEmpty ? "Code \($0.code)" : "Code \($0.code): \($0.detail)")
+                  detail: RobotErrorText.advice(for: $0.code) ?? RobotErrorText.reason(fromDetail: $0.detail) ?? "",
+                  code: RobotErrorText.hexCode($0.code),
+                  isDockSearch: DockErrorFilter.dockSearchCodes.contains($0.code))
         }
-        current += status.station.problems.map { Alert(id: "station-\($0)", title: $0, detail: "") }
+        // Keyed by part, not text: the text can include a changing health %.
+        current += status.station.readings.compactMap { reading in
+            reading.alert.map { Alert(id: "station-\(reading.part)-\(reading.state)", title: $0, detail: "") }
+        }
 
         let ids = Set(current.map(\.id))
         let confirmed = ids.intersection(pending)
         pending = ids
         active = current.filter { confirmed.contains($0.id) }
 
-        for alert in active where !notified.contains(alert.id) {
+        for alert in active where !notified.contains(alert.id)
+            && (!alert.id.hasPrefix("error-") || notifiable.contains(alert.id)) {
             notify(alert.title, alert.detail)
             notified.insert(alert.id)
         }
@@ -73,9 +94,9 @@ final class AlertMonitor {
         let fresh = current.subtracting(notified)
         if !fresh.isEmpty {
             let names = alerts.maintain.filter { fresh.contains("maintain-\($0)") }
-                .map { ConsumableAlerts.maintainNames[$0] ?? "Part \($0)" }
+                .map { ConsumableAlerts.maintainNames[$0] ?? "Another part" }
                 + alerts.replace.filter { fresh.contains("replace-\($0)") }
-                .map { ConsumableAlerts.replaceNames[$0] ?? "Part \($0)" }
+                .map { ConsumableAlerts.replaceNames[$0] ?? "Another part" }
             notify("Maintenance due", names.joined(separator: ", "))
         }
         notified = notified.filter { !($0.hasPrefix("maintain-") || $0.hasPrefix("replace-")) || current.contains($0) }

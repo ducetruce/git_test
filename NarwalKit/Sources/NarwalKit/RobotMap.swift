@@ -9,6 +9,18 @@ public struct Room: Equatable, Hashable, Sendable, Identifiable {
     public var roomType: Int
     public var category: Int
     public var instanceIndex: Int
+    /// The robot's RoomInfo as received, so an edit changes one value and
+    /// keeps the rest.
+    public var info: ProtoMessage = ProtoMessage(fields: [])
+
+    /// RoomInfo 4 texture (RoomInfo_FloorTexture): 0 default, 1 wood,
+    /// 2 tile, 3 cobblestone, 4 tatami, 5 marble.
+    public var floor: FloorMaterial { FloorMaterial(rawValue: info.int(4) ?? 0) ?? .defaultMaterial }
+    /// RoomInfo 5 textureDirectionAngle, degrees.
+    public var floorAngle: Int { info.int(5) ?? 0 }
+    /// RoomInfo 7 isCustomizeHeavyDirtyRoom: Narwal's Room character
+    /// "Heavily Soiled Room".
+    public var isHeavilySoiled: Bool { (info.int(7) ?? 0) != 0 }
 
     /// The user's name, else the app's room-type name, numbered for duplicates.
     public var displayName: String {
@@ -16,6 +28,30 @@ public struct Room: Equatable, Hashable, Sendable, Identifiable {
         let base = RoomType.names[roomType] ?? "Room"
         return instanceIndex > 1 ? "\(base) \(instanceIndex)" : base
     }
+}
+
+/// Narwal's Floor material choices (RoomInfo_FloorTexture).
+public enum FloorMaterial: Int, CaseIterable, Sendable, Hashable {
+    case defaultMaterial = 0
+    case wood = 1
+    case tile = 2
+    case cobblestone = 3
+    case tatami = 4
+    case marble = 5
+
+    public var label: String {
+        switch self {
+        case .defaultMaterial: return "Default material"
+        case .wood: return "Wood Floor"
+        case .tile: return "Tile"
+        case .cobblestone: return "Cobblestone"
+        case .tatami: return "Tatami"
+        case .marble: return "Marble"
+        }
+    }
+
+    /// The order the Narwal app lists them.
+    public static let narwalOrder: [FloorMaterial] = [.defaultMaterial, .wood, .tile, .tatami, .marble, .cobblestone]
 }
 
 /// One map pixel. Values are `roomId << 8 | type`.
@@ -41,6 +77,16 @@ public enum MapPixel: Equatable, Sendable {
 /// The saved house map from map/get_map.
 public struct RobotMap: Equatable, Sendable {
     public var mapId: Int
+    /// StaticMapPayload 2 and 33: echoed in map/operation so the robot can
+    /// refuse an edit made against an outdated map.
+    public var mapVersion = 0
+    public var editVersion = 0
+    /// StaticMapPayload 25 rotateAngle (degrees), 28 customName,
+    /// 30 isMainMap, 8 station (absent on a secondary map without a dock).
+    public var rotation = 0
+    public var customName = ""
+    public var isMainMap = false
+    public var hasStation = false
     public var width: Int
     public var height: Int
     /// Millimetres per pixel.
@@ -52,6 +98,23 @@ public struct RobotMap: Equatable, Sendable {
     public var dock: MapPoint?
     /// Row-major pixels, row 0 at the BOTTOM (map y grows upward).
     public var pixels: [UInt32]
+    /// StaticMapPayload field 9, in map coordinates (see `gridPoint(for:)`).
+    public var noGoZones: [NoGoZone] = []
+    /// StaticMapPayload field 50, in map coordinates.
+    public var virtualWalls: [VirtualWall] = []
+    /// StaticMapPayload 32.1 (VisionData.furnitures).
+    public var furniture: [Furniture] = []
+    /// StaticMapPayload field 26.
+    public var carpets: [CarpetArea] = []
+    /// StaticMapPayload field 11.
+    public var doorways: [Doorway] = []
+    /// Whether this map's carpet `Grid` points came as pixel indices, so new
+    /// carpets are sent the same way.
+    public var carpetGridInPixels = false
+    /// StaticMapPayload 32.2: obstacles the camera recognised.
+    public var obstacles: [VisionObstacle] = []
+    /// StaticMapPayload 51 NoCarpetArea ids.
+    public var noCarpetAreaIds: [Int] = []
 
     public enum ParseError: Error {
         case noActiveMap
@@ -63,6 +126,12 @@ public struct RobotMap: Equatable, Sendable {
             throw ParseError.noActiveMap
         }
         mapId = id
+        mapVersion = map.int(2) ?? 0
+        editVersion = map.int(33) ?? 0
+        rotation = map.int(25) ?? 0
+        customName = map.string(28) ?? ""
+        isMainMap = (map.int(30) ?? 0) != 0
+        hasStation = map.message(8) != nil
         resolution = map.int(3) ?? 0
         width = map.int(4) ?? 0
         height = map.int(5) ?? 0
@@ -74,7 +143,7 @@ public struct RobotMap: Equatable, Sendable {
             guard let id = r.int(1), id > 0 else { return nil }
             return Room(
                 id: id, userName: r.string(3) ?? "", roomType: r.int(2) ?? 0,
-                category: r.int(4) ?? 0, instanceIndex: r.int(8) ?? 0
+                category: r.int(4) ?? 0, instanceIndex: r.int(8) ?? 0, info: r
             )
         }
 
@@ -83,6 +152,27 @@ public struct RobotMap: Equatable, Sendable {
             dock = MapPoint(x: Double(x) - Double(originX), y: Double(y) - Double(originY))
         } else {
             dock = nil
+        }
+
+        noGoZones = map.messages(9).map(NoGoZone.init)
+        virtualWalls = map.messages(50).map(VirtualWall.init)
+        furniture = map.message(32)?.messages(1).map(Furniture.init) ?? []
+        obstacles = map.message(32)?.messages(2).map(VisionObstacle.init) ?? []
+        let frame = (width: width, height: height, originX: originX, originY: originY)
+        var pixelCarpets = false
+        carpets = map.messages(26).map(CarpetArea.init).map {
+            var carpet = $0
+            let placed = Self.inMapCoordinates(carpet.polygon, frame)
+            if placed != carpet.polygon { pixelCarpets = true }
+            carpet.polygon = placed
+            return carpet
+        }
+        carpetGridInPixels = pixelCarpets
+        noCarpetAreaIds = map.messages(51).compactMap { $0.int(1) }
+        doorways = map.messages(11).map(Doorway.init).map {
+            var door = $0
+            door.points = Self.inMapCoordinates(door.points, frame)
+            return door
         }
 
         let count = width * height
@@ -104,6 +194,28 @@ public struct RobotMap: Equatable, Sendable {
         self.originY = originY
         self.dock = dock
         self.pixels = pixels
+    }
+
+    /// Low-byte bit the robot sets on carpet cells (as the sytchi
+    /// NarwalIntegration found for lidar cells; assumed to hold for the
+    /// saved map too until checked against the Narwal app).
+    public static let carpetFlag: UInt32 = 0x04
+
+    /// Whether the cell is marked as carpet.
+    public func isCarpet(x: Int, y: Int) -> Bool {
+        guard x >= 0, y >= 0, x < width, y < height else { return false }
+        return pixels[y * width + x] & Self.carpetFlag != 0
+    }
+
+    /// Cells per low-byte pixel type, for working out what each type means.
+    public func pixelTypeCounts() -> [(type: Int, count: Int)] {
+        var counts: [Int: Int] = [:]
+        for raw in pixels where raw != 0 { counts[Int(raw & 0xFF), default: 0] += 1 }
+        return counts.sorted { $0.key < $1.key }.map { (type: $0.key, count: $0.value) }
+    }
+
+    public var carpetCellCount: Int {
+        pixels.reduce(0) { $0 + ($1 & Self.carpetFlag != 0 ? 1 : 0) }
     }
 
     public func pixel(x: Int, y: Int) -> MapPixel {
@@ -136,6 +248,21 @@ public struct RobotMap: Equatable, Sendable {
             }
         }
         return sums.mapValues { MapPoint(x: Double($0.x) / Double($0.n), y: Double($0.y) / Double($0.n)) }
+    }
+
+    /// `Grid` polygons (carpets, doors) may be pixel indices rather than map
+    /// coordinates. Keep whichever reading lands on the map, returned in map
+    /// coordinates like everything else.
+    static func inMapCoordinates(
+        _ points: [MapPoint], _ f: (width: Int, height: Int, originX: Int, originY: Int)
+    ) -> [MapPoint] {
+        func onMap(_ p: MapPoint) -> Bool {
+            p.x >= 0 && p.y >= 0 && p.x <= Double(f.width) && p.y <= Double(f.height)
+        }
+        let asMap = points.filter { onMap(MapPoint(x: $0.x - Double(f.originX), y: $0.y - Double(f.originY))) }.count
+        let asPixels = points.filter(onMap).count
+        guard asPixels > asMap else { return points }
+        return points.map { MapPoint(x: $0.x + Double(f.originX), y: $0.y + Double(f.originY)) }
     }
 
     /// The grid is a zlib stream holding a protobuf packed varint field.

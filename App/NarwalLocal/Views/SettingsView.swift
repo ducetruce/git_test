@@ -7,9 +7,55 @@ struct SettingsView: View {
     @State private var testResult: String?
     @State private var testing = false
     @State private var deviceIdText = ""
+    @AppStorage(AreaFormat.unitKey) private var areaUnit = AreaFormat.Unit.automatic
 
     var body: some View {
         NavigationStack {
+            List {
+                Section {
+                    NavigationLink { SchedulesView() } label: { Label("Schedules", systemImage: "calendar") }
+                    NavigationLink { HistoryView() } label: { Label("Cleaning history", systemImage: "clock.arrow.circlepath") }
+                    NavigationLink { ObstaclesView() } label: { Label("Obstacle photos", systemImage: "camera.viewfinder") }
+                }
+
+                RobotSettingsSections()
+
+                Section("This app") {
+                    Picker("Area units", selection: $areaUnit) {
+                        ForEach(AreaFormat.Unit.allCases) { Text($0.label).tag($0) }
+                    }
+                }
+
+                Section {
+                    NavigationLink("Test checklist") { ChecklistView() }
+                    NavigationLink("Connection") { connection }
+                    NavigationLink("Feature lab") { LabView() }
+                    NavigationLink("Hidden settings") { HiddenSettingsView() }
+                    NavigationLink("Connection log") { LogView() }
+                    NavigationLink("Crash reports") { CrashReportsView() }
+                } header: {
+                    Text("Diagnostics")
+                } footer: {
+                    Text("The feature lab helps decode settings this app doesn't support yet.")
+                }
+
+                Section {
+                    Button("Forget this robot", role: .destructive) { confirmForget = true }
+                } footer: {
+                    Text("This app talks only to your robot on your Wi-Fi. Nothing is sent to Narwal or anywhere else.")
+                }
+            }
+            .navigationTitle("More")
+            .themedList()
+            .refreshable { await store.reloadSettings() }
+            .task { if store.robotSettings == nil { await store.reloadSettings() } }
+            .confirmationDialog("Forget this robot?", isPresented: $confirmForget) {
+                Button("Forget", role: .destructive) { store.forgetRobot() }
+            }
+        }
+    }
+
+    private var connection: some View {
             List {
                 Section {
                     LabeledContent("Address", value: store.host)
@@ -29,7 +75,7 @@ struct SettingsView: View {
                     if let map = store.map {
                         LabeledContent("Map", value: "#\(map.mapId), \(map.rooms.count) rooms")
                     }
-                    Button("Reconnect") { store.connect() }
+                    Button("Reconnect") { store.connect(force: true) }
                     Button(testing ? "Testing…" : "Test connection") {
                         testing = true
                         Task {
@@ -50,27 +96,148 @@ struct SettingsView: View {
                 } footer: {
                     Text("The model must match your robot: a Z10 Ultra disconnects apps that address it as another model. Leave Device ID empty unless asked; it's learned from the robot.")
                 }
-
-                Section {
-                    NavigationLink("Feature lab") { LabView() }
-                    NavigationLink("Connection log") { LogView() }
-                } header: {
-                    Text("Diagnostics")
-                } footer: {
-                    Text("The feature lab helps decode settings this app doesn't support yet.")
-                }
-
-                Section {
-                    Button("Forget this robot", role: .destructive) { confirmForget = true }
-                } footer: {
-                    Text("This app talks only to your robot on your Wi-Fi. Nothing is sent to Narwal or anywhere else.")
-                }
             }
-            .navigationTitle("Settings")
-            .confirmationDialog("Forget this robot?", isPresented: $confirmForget) {
-                Button("Forget", role: .destructive) { store.forgetRobot() }
+            .navigationTitle("Connection")
+    }
+}
+
+/// The robot's settings, in the Narwal app's menus and order.
+private struct RobotSettingsSections: View {
+    @Environment(RobotStore.self) private var store
+    @AppStorage("allowRobotWrites") private var allowWrites = false
+    @State private var confirmWrites = false
+
+    var body: some View {
+        Section {
+            NavigationLink { RobotMenuView(menu: .freoMind) } label: { Label("Freo Mind Mode", systemImage: "drop.circle") }
+            NavigationLink { RobotMenuView(menu: .floorCleaning) } label: { Label("Floor Cleaning", systemImage: "bubbles.and.sparkles") }
+            NavigationLink { RobotMenuView(menu: .carpet) } label: { Label("Carpet Detection and Cleaning", systemImage: "square.grid.3x3") }
+            NavigationLink { GeneralMenuView() } label: { Label("General", systemImage: "gearshape") }
+            NavigationLink { RobotMenuView(menu: .dock) } label: { Label("Dock", systemImage: "square.bottomhalf.filled") }
+            NavigationLink { RobotMenuView(menu: .pet) } label: { Label("Pet-friendly Mode", systemImage: "pawprint") }
+            NavigationLink { MapManagementView() } label: { Label("Map management", systemImage: "map") }
+            NavigationLink { PartsView() } label: { Label("Parts and Consumables", systemImage: "wrench.and.screwdriver") }
+        } header: {
+            Text("Robot")
+        }
+
+        Section {
+            NavigationLink { VoiceMenuView() } label: { Label("Navo Voice Assistant", systemImage: "waveform") }
+            NavigationLink { RobotMenuView(menu: .ai) } label: { Label("AI Recognition", systemImage: "eye") }
+            NavigationLink { DeviceView() } label: { Label("Device", systemImage: "info.circle") }
+        }
+
+        Section {
+            Toggle("Change robot settings", isOn: Binding(
+                get: { allowWrites },
+                set: { on in if on { confirmWrites = true } else { allowWrites = false } }
+            ))
+        } footer: {
+            Text(store.robotSettings == nil
+                 ? "Pull down to load the robot's settings."
+                 : "After each change the app reads the setting back and tells you if the robot didn't apply it.")
+        }
+        .alert("Change robot settings?", isPresented: $confirmWrites) {
+            Button("Turn on") { allowWrites = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Voice volume has been confirmed on your robot; the rest is part of this test round. Any setting can be changed back in the Narwal app.")
+        }
+    }
+}
+
+/// Every stored setting the Narwal app doesn't show for this robot, for
+/// diagnostics.
+struct HiddenSettingsView: View {
+    @Environment(RobotStore.self) private var store
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(RobotSetting.menu(.hidden)) { SettingRow(setting: $0) }
+            } footer: {
+                Text("The robot stores these, but the Narwal app doesn't show them for the Freo Z10 Ultra, so they may do nothing.")
             }
         }
+        .navigationTitle("Hidden settings")
+        .themedList()
+        .task { if store.robotSettings == nil { await store.reloadSettings() } }
+    }
+}
+
+struct QuietHoursSection: View {
+    @Environment(RobotStore.self) private var store
+    let settings: RobotSettings?
+    let editable: Bool
+
+    var body: some View {
+        let dnd = settings?.doNotDisturb ?? .init(enabled: false, begin: 22 * 3600, end: 8 * 3600)
+        Section {
+            if editable {
+                Toggle("Do Not Disturb Mode", isOn: Binding(
+                    get: { dnd.enabled },
+                    set: { on in change(dnd, enabled: on) }
+                ))
+                if dnd.enabled {
+                    DatePicker("From", selection: time(dnd.begin) { change(dnd, begin: $0) },
+                               displayedComponents: .hourAndMinute)
+                    DatePicker("Until", selection: time(dnd.end) { change(dnd, end: $0) },
+                               displayedComponents: .hourAndMinute)
+                }
+            } else {
+                LabeledContent("Do Not Disturb Mode", value: settings == nil ? "–"
+                               : dnd.enabled ? "\(clock(dnd.begin)) – \(clock(dnd.end))" : "Off")
+            }
+            if let zone = settings?.timeZone {
+                LabeledContent("Time zone", value: zone)
+            }
+        } footer: {
+            Text("Some robot voices and dock lights are turned off during these hours.")
+        }
+    }
+
+    private func change(_ dnd: RobotSettings.DoNotDisturb, enabled: Bool? = nil, begin: Int? = nil, end: Int? = nil) {
+        var new = dnd
+        new.enabled = enabled ?? dnd.enabled
+        new.begin = begin ?? dnd.begin
+        new.end = end ?? dnd.end
+        Task { await store.changeDoNotDisturb(to: new) }
+    }
+
+    /// Seconds after midnight <-> a Date today; committed on each change.
+    private func time(_ seconds: Int, _ commit: @escaping (Int) -> Void) -> Binding<Date> {
+        Binding(
+            get: { Calendar.current.startOfDay(for: Date()).addingTimeInterval(TimeInterval(seconds)) },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                commit((parts.hour ?? 0) * 3600 + (parts.minute ?? 0) * 60)
+            }
+        )
+    }
+
+    /// Seconds after midnight -> "22:00".
+    private func clock(_ seconds: Int) -> String {
+        String(format: "%02ld:%02ld", seconds / 3600 % 24, seconds / 60 % 60)
+    }
+}
+
+private struct CrashReportsView: View {
+    @State private var files = CrashReports.all()
+
+    var body: some View {
+        List {
+            if files.isEmpty {
+                Text("No crashes recorded. iOS hands a crash over the next time the app opens, so open it once after a crash.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(files, id: \.self) { file in
+                ShareLink(item: file) {
+                    Label(file.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
+                }
+            }
+        }
+        .navigationTitle("Crash reports")
+        .onAppear { files = CrashReports.all() }
     }
 }
 
@@ -133,6 +300,6 @@ struct SetupView: View {
 
     private func choose(_ host: String) {
         store.setHost(host)
-        store.connect()
+        store.connect(force: true)
     }
 }

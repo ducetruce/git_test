@@ -1,0 +1,3934 @@
+// core/CarpetChangeEvent.pb.dart
+message CarpetChangeEvent {
+    1 carpetChangeData: repeated message
+    2 index: uint32
+}
+message CarpetChangeData {
+    1 type: enum
+    2 carpetRegion: message CarpetRegion
+}
+message CarpetRegion {
+    1 grids: repeated message
+}
+
+// core/CleanCornerSetting.pb.dart
+message CleanCornerSetting {
+    1 cleanCornerFreq: enum
+    2 interval: uint32
+}
+
+// core/CleanOption.pb.dart
+message CleanAreaOption {
+    1 zoneId: uint32
+    2 cleanZoneType: enum CleanZoneType
+    3 cleanZoneArea: message CleanZoneArea
+    4 sweepAreaOption: message SweepAreaOption
+    5 mopAreaOption: message MopAreaOption
+    6 sweepMopSyncAreaOption: message SweepMopSyncAreaOption
+    7 sweepThenMopAreaOption: message SweepThenMopAreaOption
+}
+message SweepThenMopAreaOption {
+    1 sweepAreaOption: message
+    2 mopAreaOption: message MopAreaOption
+}
+message SweepMopSyncAreaOption {
+    1 sweepFanLevel: enum
+    2 mopStrengthLevel: enum MopStrengthLevel
+    3 mopHumidityLevel: enum MopHumidityLevel
+    4 cleanCount: uint32
+}
+message MopAreaOption {
+    1 mopStrengthLevel: enum
+    2 mopHumidityLevel: enum MopHumidityLevel
+    3 cleanCount: uint32
+}
+message SweepAreaOption {
+    1 sweepFanLevel: enum
+    2 cleanCount: uint32
+}
+message CleanZoneArea {
+    1 actualZone: repeated message
+    2 originalZone: repeated message GridPoint
+}
+message GridPoint {
+    1 x: int32
+    2 y: int32
+}
+message CleanTaskParam {
+    1 enableSmartClean: bool
+    2 enableSmartDeepClean: bool
+}
+
+// core/CleanPlan.pb.dart
+message CleanPlan {
+    1 id: uint32
+    2 mapId: uint32
+    3 cleanMode: enum CleanMode
+    4 isCustomPlan: bool
+    5 customName: string
+    6 shownInStation: bool
+    7 performTimes: uint32
+    8 order: int32
+    9 cleanAreaOptions: repeated message CleanAreaOption
+   10 cleanParam: message CleanTaskParam
+}
+
+// core/CleanTask.pb.dart
+message CleanTask {
+    1 mapId: uint32
+    2 items: repeated message CleanItem
+    3 option: message TaskOption
+    4 extra: string
+    5 taskType: enum TaskType
+    6 debugOption: message DebugOption
+    7 maintainFloorItems: repeated message MaintainFloorItem
+    8 excludedRoomIds: repeated uint32
+    9 aiInfo: message AIInfo
+}
+message AIInfo {
+    1 thinkingContent: string
+}
+message MaintainFloorItem {
+    1 zone: message
+    2 order: int32
+}
+message DebugOption {
+    1 enableOnlyCleanDoor: bool
+}
+message TaskOption {
+    1 enableSmartMode: bool
+    2 isNeedRebuildMap: bool
+    3 isCalibration: bool
+    4 enableSmartDeepClean: bool
+    5 enableMaintainAfterClean: bool
+    6 buildNewMapBeforeClean: bool
+    7 enableMassiveDirtyClean: bool
+    8 buildMapExistStairs: bool
+    9 mapStairType: enum MapStairType
+   10 isCleanWithMapping: bool
+   11 isNavoClean: bool
+}
+message CleanItem {
+    1 zone: message
+    2 param: message CleanParam
+    3 order: int32
+}
+message CleanParam {
+    1 mode: enum
+    2 fanLevel: enum FanLevel
+    3 mopStrengthLevel: enum MopStrengthLevel
+    4 mopHumidity: enum MopHumidity
+    5 sweepTime: int32
+    6 mopTime: int32
+    7 sweepMopSyncTime: int32
+    8 overlapLevel: enum OverlapLevel
+    9 enableSmartMode: bool
+   10 enableHeavyDirtyClean: bool
+   11 sweepIntensityLevel: enum SweepIntensityLevel
+}
+message ZoneOption {
+    1 zoneType: enum
+    2 zoneId: int32
+    3 selectionBounds: repeated message GridPoint
+    4 cleaningBounds: repeated message GridPoint
+}
+message GridPoint {
+    1 x: int32
+    2 y: int32
+}
+
+// core/CustomCleanStrategy.pb.dart
+message CustomCleanStrategy {
+    1 strategy: enum
+    2 areaOption: enum CleanMopFreq
+    3 cleanOrder: message CustomCleanOrder
+    4 cleanOrders: repeated message CustomCleanOrder
+}
+message CustomCleanOrder {
+    1 isModified: bool
+    2 roomCleanOrder: repeated uint32
+    3 defaultRoomCleanOrder: repeated uint32
+    4 mapId: uint32
+}
+
+// core/CustomInfo.pb.dart
+message CustomInfo {
+    1 startVoice: string
+}
+
+// core/DebugData.pb.dart
+message StringPairs {
+    1 key: string
+    2 value: repeated message StringPair
+}
+message StringPair {
+    1 key: string
+    2 value: string
+}
+
+// core/DeviceStatusCode.pb.dart
+message DeviceStatusCode {
+    1 codeType: uint32
+    2 code: uint32
+}
+
+// core/DisturbMode.pb.dart
+message DisturbMode {
+    1 enabled: bool
+    2 beginTime: uint32
+    3 endTime: uint32
+}
+
+// core/ExceptionInfo.pb.dart
+message ExceptionInfo {
+    1 errorCode: uint32
+    2 exceptionPoint: message Point
+    3 exceptionTime: uint32
+}
+
+// core/Language.pb.dart
+message WakeUpWord {
+    1 language: string
+    2 word: string
+}
+
+// core/MapConfiguration.pb.dart
+message MapConfiguration {
+    1 configs: repeated message
+}
+message MapConfigUnit {
+    1 mapId: uint32
+    2 boostCrossingModeEnabled: bool
+}
+
+// core/Region.pb.dart
+message Region {
+    1 timeZone: string
+    2 offset: string
+    3 country: string
+    4 city: string
+    5 timeZonePosix: string
+}
+
+// core/ReportBaseTypes.pb.dart
+message RestoreTaskInfo {
+    1 restoreTaskDuration: uint32
+    2 restoreTaskArea: float
+}
+message UncleanedZone {
+    1 zoneId: uint32
+    2 uncleanedZoneType: enum UncleanedZoneType
+}
+message MaintainFloorTimes {
+    1 zoneId: uint32
+    2 times: uint32
+}
+message VideoResources {
+    1 videoUrls: repeated string
+    2 videoInfos: repeated message VideoInfos
+}
+message VideoInfos {
+    1 id: uint32
+    2 position: message Point
+}
+message ImageResources {
+    1 obsImages: repeated message
+    2 dirtyImages: repeated message ImageUrls
+    3 abnormalSceneImages: repeated message ImageUrls
+}
+message ImageUrls {
+    1 id: uint32
+    2 url: string
+    3 imageRoi: message ImageROI
+    4 box: message BoundingBox
+    5 position: message Point
+    6 fileName: string
+    7 perceptionRoi: message ImageROI
+}
+message ErrorCode {
+    1 identityCode: uint32
+    2 level: uint32
+    3 debugDetail: string
+}
+message UpdateMapResult {
+    1 roomId: int32
+    2 area: float
+}
+message CleanTimes {
+    1 zoneId: uint32
+    2 sweepTimes: uint32
+    3 mopTimes: uint32
+}
+message CleanParam {
+    1 zoneId: uint32
+    2 sweepTimes: uint32
+    3 mopTimes: uint32
+    4 mode: enum CleanParam_CleanMode
+    5 mopMode: enum CleanParam_MopMode
+    6 sweepMode: enum CleanParam_SweepMode
+}
+
+// core/RoomCleanEvent.pb.dart
+message RoomCleanEvent {
+    1 roomCleanEventType: enum
+    2 roomId: uint32
+    3 index: uint32
+    4 cleanTimes: uint32
+    5 secondCleanRegion: repeated message SecondCleanRegion
+    6 subRoomId: uint32
+}
+message SecondCleanRegion {
+    1 grids: repeated message
+}
+
+// core/SmartCleanParam.pb.dart
+message SmartCleanParam {
+    1 maxRemopCountStrategy: message
+    2 overlapLevelStrategy: message OverlapLevelStrategy
+    3 cleanCornerSetting: message CleanCornerSetting
+    4 fanLevelStrategy: message FanLevelStrategy
+    5 mopHumidityStrategy: message MopHumidityStrategy
+    6 heavyDirtyRoomConfig: repeated message HeavyDirtyRoomConfig
+    7 heavyDirtyCleanConfig: message HeavyDirtyCleanConfig
+}
+message HeavyDirtyCleanConfig {
+    1 enableHeavyDirtyClean: bool
+    2 heavyDirtyCleanFrequencyType: enum HeavyDirtyCleanConfig_HeavyDirtyCleanFrequencyType
+    3 heavyDirtyCleanFrequencyMinutes: uint32
+}
+message HeavyDirtyRoomConfig {
+    1 isCustomizeMode: bool
+    2 mapId: uint32
+}
+message MopHumidityStrategy {
+    1 isCustomizeMode: bool
+    2 mopHumidity: enum MopHumidity
+}
+message FanLevelStrategy {
+    1 isCustomizeMode: bool
+    2 fanLevel: enum FanLevel
+}
+message OverlapLevelStrategy {
+    1 isCustomizeMode: bool
+    2 overlapLevel: enum OverlapLevel
+}
+message MaxReMopCountStrategy {
+    1 isCustomizeMode: bool
+    2 maxRemopCount: uint32
+}
+
+// core/ValleyCharging.pb.dart
+message ValleyCharging {
+    1 enabled: bool
+    2 beginTime: uint32
+    3 duration: uint32
+}
+
+// core/VideoCruiseTask.pb.dart
+message VideoCruiseTask {
+    1 mapId: uint32
+    2 videoCruisePoints: repeated message Point
+    3 extra: string
+}
+
+// core/config/KeyMap.pb.dart
+message KeyMap {
+    1 event: message
+    2 functions: repeated message Function_
+    3 customCommands: repeated message CustomCommand
+}
+message CustomCommand {
+    1 id: string
+    2 function: message Function_
+}
+message KeyPressEvent {
+    1 key: enum
+    2 pressType: enum PressType
+    3 clickCount: uint32
+    4 pressDurationMs: uint32
+    5 keys: repeated enum Key
+}
+
+// core/device_shadow/DebugVoiceSwitch.pb.dart
+message DebugVoiceSwitch {
+    1 enable: bool
+}
+
+// core/device_shadow/DevelopOptions.pb.dart
+message DevelopOptions {
+    1 skipZigzag: bool
+    2 skipMargin: bool
+    3 skipFirstWashMop: bool
+    4 disableLowPowerMode: bool
+    5 disablePostureProtect: bool
+    6 disableAutoParking: bool
+    7 disableWashMop: bool
+    8 disableRecallWashMop: bool
+    9 disableRobotMotorError: bool
+}
+
+// core/device_shadow/KeyMapConfig.pb.dart
+message KeyMapConfig {
+    1 keyMaps: repeated message
+}
+
+// core/device_shadow/ScheduledCleaningTask.pb.dart
+message ScheduledCleaningTask {
+    1 task: message
+    2 cron: string
+    3 enable: bool
+    4 disabledCron: repeated string
+    5 triggerType: enum ScheduleTriggerType
+    6 cycleTriggerOption: message CycleTriggerOption
+    7 enabledCron: repeated string
+}
+message CycleTriggerOption {
+    1 repeatSeconds: uint32
+    2 startTaskTimestamp: uint64
+}
+
+// core/device_shadow/ScheduledVideoCruiseTask.pb.dart
+message ScheduledVideoCruiseTask {
+    1 task: message
+    2 cron: string
+    3 enable: bool
+    4 disabledCron: repeated string
+    5 triggerType: enum ScheduleTriggerType
+    6 cycleTriggerOption: message CycleTriggerOption
+    7 enabledCron: repeated string
+}
+
+// core/device_shadow/UploadConfiguration.pb.dart
+message UploadConfiguration {
+    1 tracingEvent: bool
+    2 log: bool
+    3 bag: bool
+    4 minidump: bool
+    5 coreDump: bool
+    6 data: bool
+    7 idc: bool
+}
+
+// core/drive/CleanModule.pb.dart
+message CleanModule {
+    1 rollBrushRatio: int32
+    2 fanRatio: int32
+    3 leftSideBrushRatio: int32
+    4 rightSideBrushRatio: int32
+    5 wormRatio: int32
+    6 mopUplift: int32
+    7 sweepUplift: enum CleanModule_SweepUpliftState
+    8 leftSideBrushDockPosition: enum CleanModule_SideBrushDockPosition
+    9 rightSideBrushDockPosition: enum CleanModule_SideBrushDockPosition
+   10 mopExpansion: int32
+   11 intakePortLift: enum CleanModule_IntakePortLiftState
+   12 enableRollBrushControl: bool
+   13 enableFanControl: bool
+   14 enableLeftSideBrushControl: bool
+   15 enableRightSideBrushControl: bool
+   16 enableWormControl: bool
+   17 enableMopUpliftControl: bool
+   18 enableSweepUpliftControl: bool
+   19 enableLeftSideBrushDockPositionControl: bool
+   20 enableRightSideBrushDockPositionControl: bool
+   21 enableMopExpansionControl: bool
+   22 enableIntakePortLiftControl: bool
+   23 enableSewageStirControl: bool
+   24 sewageStir: int32
+   25 enableCleanWaterPumpControl: bool
+   26 cleanWaterPumpRatio: int32
+   27 enableSewagePumpControl: bool
+   28 sewagePumpRatio: int32
+   29 enableSewageDrainValveControl: bool
+   30 sewageDrainValve: enum CleanModule_SewageDrainValveStatus
+   31 enableMopExpansionLevelControl: bool
+   32 mopExpansionLevel: enum CleanModule_MopExpansionLevel
+   33 enableSideBrushExpansionControl: bool
+   34 sideBrushExpansionValue: enum CleanModule_SideBrushExpansionStatus
+   35 sideBrushExpansionGearValue: int32
+   36 enableMopOcclusionControl: bool
+   37 mopOcclusionValue: enum CleanModule_MopOcclusionStatus
+   38 enableRightSideBrushUpliftControl: bool
+   39 rightSideBrushUplift: int32
+   40 enableLeftSideBrushUpliftControl: bool
+   41 leftSideBrushUplift: int32
+}
+
+// core/drive/Motion.pb.dart
+message Motion {
+    1 moveToPoint: message PoseData
+    2 brake: message Brake
+    3 turning: message Turning
+    4 moving: message Moving
+    5 following: message Following
+}
+message Following {
+    1 enableRotatePatch: bool
+}
+message Moving {
+    1 type: enum
+    2 moveDistance: float
+    3 moveRadius: float
+    4 linearVelocity: float
+    5 movingDurationMs: uint32
+    6 closedLoopPose: bool
+}
+message Turning {
+    1 type: enum
+    2 relativeAngle: float
+    3 angularVelocity: float
+    4 turningDurationMs: uint32
+}
+message Brake {
+    1 enable: bool
+    2 type: enum Brake_BrakeType
+}
+
+// core/drive/MotionModule.pb.dart
+message MotionModule {
+    1 enableWheelSuspensionControl: bool
+    2 wheelSuspension: enum MotionModule_WheelSuspensionState
+    3 wheelSuspensionGear: int32
+    4 enableCasterLiftControl: bool
+    5 casterLift: enum MotionModule_CasterLiftState
+    6 casterLiftGear: int32
+}
+
+// core/drive/StationLed.pb.dart
+message StationLed {
+    1 buttonLeds: repeated message
+    2 stateLeds: repeated message StationStateLed
+}
+message StationStateLed {
+    1 mode: enum
+    2 rgba: uint32
+    3 speed: uint32
+}
+message StationButonLed {
+    1 button: enum
+    2 mode: enum StationButonLed_LedMode
+    3 rgba: uint32
+}
+
+// core/drive/StationLedFreeControl.pb.dart
+message StationLedFreeControl {
+    1 leds: repeated message
+}
+message StationStateLedUnit {
+    1 rgba: uint32
+    2 ratio: int32
+}
+
+// core/drive/StationModule.pb.dart
+message StationModule {
+    1 enableAutoFillWaterModuleControl: bool
+    2 autoFillWaterModule: message AutoFillWaterModule
+    3 enableCleanWaterPumpControl: bool
+    4 cleanWaterPump: message CleanWaterPump
+    5 enableSewagePumpControl: bool
+    6 sewagePump: message SewagePump
+    7 enableCuringAgentPumpControl: bool
+    8 curingAgentPump: message CuringAgentPump
+    9 enableDetergentPumpControl: bool
+   10 detergentPump: message DetergentPump
+   11 enableDryMopFanControl: bool
+   12 dryMopFan: message DryMopFan
+   13 enableWaterElectrolyzedModuleControl: bool
+   14 waterElectrolyzedModule: message WaterElectrolyzedModule
+   15 enableWaterElectrolyzedLedControl: bool
+   16 waterElectrolyzedLed: message WaterElectrolyzedLed
+   17 enableChargerControl: bool
+   18 charger: message StationCharger
+   19 enableMopFanHeaterControl: bool
+   20 mopFanHeater: message MopFanHeater
+   21 enableDustGatheringFanControl: bool
+   22 dustGatheringFan: message DustGatheringFan
+   23 enableDustBagHeaterControl: bool
+   24 dustBagHeater: message DustBagHeater
+   25 enableUvLampControl: bool
+   26 uvLamp: message UVLamp
+   27 enableDryBagFanControl: bool
+   28 dryBagFan: message DryBagFan
+   29 enableAirPumpControl: bool
+   30 airPump: message AirPumpCtrl
+   31 tubeBinderEnable: bool
+   32 tubeBinderCtrl: message TubeBinderCtrl
+   33 enableCleanWaterPumpControl2: bool
+   34 waterPumpCtrl: message WaterPumpCtrl
+}
+message AirPumpCtrl {
+    1 cmd: enum
+    2 upWorkTimeCount: int32
+    3 dnWorkTimeCount: int32
+    4 workDuty: int32
+}
+message WaterPumpCtrl {
+    1 cmd: enum
+    2 workTimeCount: int32
+    3 waterHeater: int32
+    4 workDuty: int32
+}
+message UVLamp {
+    1 action: enum
+    2 seconds: int32
+}
+message DustBagHeater {
+    1 action: enum
+    2 seconds: int32
+    3 temperature: int32
+}
+message DustGatheringFan {
+    1 action: enum
+    2 seconds: int32
+    3 ratio: int32
+}
+message MopFanHeater {
+    1 action: enum
+    2 seconds: int32
+    3 temperature: int32
+}
+message StationCharger {
+    1 action: enum
+}
+message WaterElectrolyzedLed {
+    1 action: enum
+    2 seconds: int32
+}
+message WaterElectrolyzedModule {
+    1 action: enum
+    2 seconds: int32
+}
+message TubeBinderCtrl {
+    1 action: enum
+    2 workTimeCount: int32
+    3 workDuty: int32
+}
+message DryBagFan {
+    1 action: enum
+    2 seconds: int32
+}
+message DryMopFan {
+    1 action: enum
+    2 seconds: int32
+}
+message DetergentPump {
+    1 action: enum
+    2 seconds: int32
+}
+message CuringAgentPump {
+    1 action: enum
+    2 seconds: int32
+    3 ratio: int32
+}
+message SewagePump {
+    1 action: enum
+    2 seconds: int32
+    3 drainTimeSec: int32
+}
+message CleanWaterPump {
+    1 action: enum
+    2 seconds: int32
+    3 temprature: int32
+}
+message AutoFillWaterModule {
+    1 action: enum
+    2 seconds: int32
+}
+
+// core/feature/FillRobotCleanWaterTank.pb.dart
+message FillRobotCleanWaterTank {
+    1 temperature: int32
+}
+
+// core/media/Audio.pb.dart
+message Audio {
+    1 text: string
+}
+
+// core/media/CameraFillLight.pb.dart
+message CameraFillLight {
+    1 brightness: int32
+}
+
+// core/media/LedFreeControl.pb.dart
+message LedFreeControl {
+    1 mode: enum
+    2 normalLed: message LedState
+    3 customLeds: repeated message LedArray
+}
+message LedArray {
+    1 duration: uint32
+    2 leds: repeated message LedUnit
+}
+message LedUnit {
+    1 color: uint32
+    2 brightness: int32
+    3 ratio: int32
+}
+message LedState {
+    1 mode: enum
+    2 color: uint32
+    3 brightness: int32
+}
+
+// core/product_test/BiasVoltage.pb.dart
+message BiasVoltage {
+    1 infraLf: float
+    2 infraLb: float
+    3 infraRb: float
+    4 infraRf: float
+    5 infraMf: float
+    6 sweepUpliftSw: float
+    7 mopUpliftSw: float
+    8 dustBoxHall: float
+    9 leftMopHall: float
+   10 rightMopHall: float
+   11 hardwareV1: float
+   12 hardwareV2: float
+   13 leftCoverPos: float
+   14 rightCoverPos: float
+   15 dustBagInfrared: float
+   16 noWaterSensor: float
+}
+
+// core/product_test/ProductInfo.pb.dart
+message PackageColorInfo {
+    1 bodyColor: string
+}
+message IdentificationInfo {
+    1 isSpeechEnabled: bool
+    2 isHuaweiEcoEnabled: bool
+    3 isStationBagUltravioletEnabled: bool
+    4 cpuLoadingOptEnabled: bool
+}
+message ProductInfo {
+    1 country: string
+    2 activateCode: string
+    3 otaVerify: message OtaVerify
+    4 optionalConfiguration: message OptionalConfiguration
+    5 domain: message Domain
+    6 sn: string
+    7 countryConfig: message CountryConfig
+    8 productId: string
+    9 deviceId: string
+   10 auth: message Auth
+}
+message Auth {
+    1 secret: string
+}
+message OptionalConfiguration {
+    1 firmwareEncryptKeyKcv: string
+    2 firmwareEncryptKey: string
+}
+message OtaVerify {
+    1 secret: string
+}
+message CountryConfig {
+    1 dataReportUrl: string
+    2 mqttUrl: string
+    3 activeUrl: string
+    4 apDistributionNetworkUrl: string
+    5 sweeperUrl: string
+    6 bindUserUrl: string
+    7 openApiUrl: string
+}
+message Domain {
+    1 dataReportUrl: string
+    2 deviceBootstrapUrl: string
+    3 activeUrl: string
+    4 apDistributionNetworkUrl: string
+    5 bindUserUrl: string
+    6 activeCodeUrl: string
+    7 deviceBusinessUrl: string
+}
+
+// core/product_test/ProductTestGeneralMessage.pb.dart
+message ProductTestGeneralMessage {
+    1 type: enum
+    2 datas: bytes
+}
+
+// core/product_test/RobotInfo.pb.dart
+message RobotInfo {
+    1 sn: string
+    2 version: string
+    3 model: string
+}
+
+// core/product_test/self_check.pb.dart
+message SelfCheckReportSet {
+    1 startTime: aQM
+    2 result: aQM SelfCheckResult
+    3 battery: message BatteryCheckReport
+    4 baseInfo: message SimpleCheckReport
+    5 irCliff: message IrCliffCheckReport
+    6 dust: message SimpleCheckReport
+    7 chassisWheel: message CommonMotorCheckReport
+    8 sideBrush: message CommonMotorCheckReport
+    9 rollBrush: message CommonMotorCheckReport
+   10 mop: message CommonMotorCheckReport
+   11 fan: message FanCheckReport
+   12 wifi: message WifiCheckReport
+   13 bt: message BtCheckReport
+   14 mr813: message Mr813CheckReport
+   15 bumper: message BumperCheckReport
+   16 ultrasonic: message UltrasonicCheckReport
+   17 tempHumid: message SimpleCheckReport
+   18 lidar: message LidarCheckReport
+   19 imu: message ImuCheckReport
+   20 frontLineLidar: message FrontLineLidarCheckReport
+   21 audio: message AudioCheckReport
+   22 dustSensor: message DustSensorCheckReport
+   23 cameraBaseInfo: message CameraBaseInfoCheckReport
+   24 cameraBoard: message CameraBoardCheckReport
+   25 cameraFan: message CameraFanCheckReport
+   26 rollBrushLift: message LiftMotorCheckReport
+   27 mopLift: message MopLiftCheckReport
+   28 sideLineLidar: message SideLineLidarCheckReport
+   29 cameraLed: message CameraLedCheckReport
+   30 peristalticPumps: message PeristalticPumpsCheckReport
+   31 fqcMode: message FqcModeCheckReport
+   32 crawlerMopLift: message CrawlerMopLiftCheckReport
+   33 crawlerWaterMotor: message CrawlerWaterMotorCheckReport
+   34 chassisWheelUpLift: message ChassisWheelUpLiftCheckReport
+   35 rightSideBrushExp: message RightSideBrushExpCheckReport
+   36 cliffTof: message CliffTofCheckReport
+   37 nowatersensor: message NowaterSensorCheckReport
+   38 swivelCasterUpLift: message SwivelCasterUpLiftCheckReport
+   39 irCharge: message IrChargeReport
+  100 reportFile: string
+}
+message SelfCheckConfSet {
+    1 basics: message
+    2 battery: message BatteryCheck
+    3 baseInfo: message BaseInfoCheck
+    4 irCliff: message IrCliffCheck
+    5 dust: message DustCheck
+    6 chassisWheel: message CommonWheelCheck
+    7 sideBrush: message CommonWheelCheck
+    8 rollBrush: message CommonWheelCheck
+    9 mop: message CommonWheelCheck
+   10 fan: message FanCheck
+   11 wifi: message WifiCheck
+   12 bt: message BtCheck
+   13 mr813: message Mr813Check
+   14 bumper: message BumperCheck
+   15 ultrasonic: message UltrasonicCheck
+   16 lidar: message LidarCheck
+   17 imu: message ImuCheck
+   18 frontLineLidar: message FrontLineLidarCheck
+   19 tempHumid: message TempHumidCheck
+   20 audio: message AudioCheck
+   21 dustSensor: message DustSensorCheck
+   22 cameraBaseInfo: message CameraBaseInfoCheck
+   23 cameraBoard: message CameraBoardCheck
+   24 cameraFan: message CameraFanCheck
+   25 rollBrushLift: message RollBrushLiftCheck
+   26 mopLift: message MopLiftCheck
+   27 sideLineLidar: message SideLineLidarCheck
+   28 cameraLed: message CameraLedCheck
+   29 peristalticPumps: message PeristalticPumpsCheck
+   30 fqcMode: message FqcModeCheck
+   31 crawlerMopLift: message CrawlerMopLiftCheck
+   32 crawlerWaterMotor: message CrawlerWaterMotorCheck
+   33 chassisWheelUpLift: message ChassisWheelUpLiftCheck
+   34 rightSideBrushExp: message RightSideBrushExpCheck
+   35 cliffTof: message CliffTofCheck
+   36 nowatersensor: message NowaterSensorCheck
+   37 swivelCasterUpLift: message SwivelCasterUpLiftCheck
+   38 irCharge: message IrChargeCheck
+}
+message IrChargeReport {
+    1 result: aQM
+    2 position: int32
+}
+message IrChargeCheck {
+    1 condition: message
+}
+message IrChargeCheck.Condition {
+    1 position: message
+    2 delayCheck: uint32
+}
+message SwivelCasterUpLiftCheckReport {
+    1 result: aQM
+    2 upCurrent: message ValueThreshold
+    3 downCurrent: message ValueThreshold
+    4 upPosition: message ValueThreshold
+    5 downPosition: message ValueThreshold
+}
+message SwivelCasterUpLiftCheck {
+    1 condition: message
+}
+message SwivelCasterUpLiftCheck.Condition {
+    1 up: message
+    2 down: message SwivelCasterUpLiftCheck_ActionGroup
+}
+message SwivelCasterUpLiftCheck.ActionGroup {
+    1 min: float
+    2 max: float
+    3 delayCheck: uint32
+    4 targetHeight: uint32
+}
+message FqcModeCheckReport {
+    1 result: aQM
+    2 fqcMode: message ValueThreshold
+}
+message FqcModeCheck {
+    1 condition: message
+}
+message FqcModeCheck.Condition {
+    1 delayCheck: uint32
+    2 fqcMode: uint32
+}
+message PeristalticPumpsCheckReport {
+    1 result: aQM
+    2 averageCurrent: message ValueThreshold
+}
+message PeristalticPumpsCheck {
+    1 condition: message
+}
+message PeristalticPumpsCheck.Condition {
+    1 averageCurrent: message
+    2 delayCheck: uint32
+    3 count: uint32
+    4 ratio: uint32
+}
+message CameraLedCheckReport {
+    1 result: aQM
+}
+message CameraLedCheck {
+    1 condition: message
+}
+message CameraLedCheck.Condition {
+    1 delay: int32
+}
+message CameraFanCheckReport {
+    1 result: aQM
+    2 speed: message ValueThreshold
+}
+message CameraFanCheck {
+    1 condition: message
+    2 control: message CameraFanCheck_Control
+}
+message CameraFanCheck.Control {
+    1 delay: int32
+}
+message CameraFanCheck.Condition {
+    1 speed: message
+}
+message CameraBoardCheckReport {
+    1 result: aQM
+    2 ioClock: uint32
+    3 sync: uint32
+    4 ntc1Temp: message ValueThreshold
+    5 ntc2Temp: message ValueThreshold
+    6 cpuCoreNum: message ValueThreshold
+    7 cpuTemp: message ValueThreshold
+    8 flashSpeed: message ValueThreshold
+}
+message CameraBoardCheck {
+    1 condition: message
+}
+message CameraBoardCheck.Condition {
+    1 ioClock: uint32
+    2 sync: uint32
+    3 ntc1Temp: message CheckRange
+    4 ntc2Temp: message CheckRange
+    5 cpuCoreNum: uint32
+    6 cpuTemp: message CheckRange
+    7 flashSpeed: message CheckRange
+}
+message CameraBaseInfoCheckReport {
+    1 result: aQM
+    2 softVersion: string
+    3 hardwareVersion: string
+    4 snL: string
+    5 snR: string
+}
+message CameraBaseInfoCheck {
+    1 condition: message
+}
+message CameraBaseInfoCheck.Condition {
+    1 softVersion: string
+    2 hardwareVersion: string
+    3 snL: string
+    4 snR: string
+}
+message DustSensorCheckReport {
+    1 result: aQM
+    2 firstTrigger: uint32
+    3 secondTrigger: uint32
+    4 bothFirst: uint32
+    5 bothSecond: uint32
+}
+message DustSensorCheck {
+    1 condition: message
+    2 control: message DustSensorCheck_Control
+}
+message DustSensorCheck.Control {
+    1 delay1: float
+    2 delay2: float
+    3 delay3: float
+}
+message DustSensorCheck.Condition {
+    1 firstTrigger: message
+    2 secondTrigger: message CheckRange
+    3 bothFirst: message CheckRange
+    4 bothSecond: message CheckRange
+}
+message AudioCheckReport {
+    1 result: aQM
+    2 frequency: message ValueThreshold
+    3 amplitude: message ValueThreshold
+}
+message AudioCheck {
+    1 condition: message
+}
+message AudioCheck.Condition {
+    1 frequency: message
+    2 amplitude: message CheckRange
+    3 volume: int32
+}
+message TempHumidCheck {
+    1 condition: message
+}
+message TempHumidCheck.Condition {
+}
+message UltrasonicCheckReport {
+    1 result: aQM
+    2 distance: float
+}
+message UltrasonicCheck {
+    1 condition: message
+}
+message UltrasonicCheck.Condition {
+    1 distance: message
+}
+message SideLineLidarCheckReport {
+    1 result: aQM
+    2 sideDataAve: message ValueThreshold
+    3 pointsSize: message ValueThreshold
+    4 abnormalPointCount: message ValueThreshold
+}
+message SideLineLidarCheck {
+    1 condition: message
+}
+message SideLineLidarCheck.Condition {
+    1 sideDataAve: message
+    2 abnormalConfidence: int32
+    3 abnormalDistanceZ: float
+    4 pointsSize: message CheckRange
+    5 abnormalPointCount: message CheckRange
+    6 delayCheck: int32
+}
+message FrontLineLidarCheckReport {
+    1 result: aQM
+    2 frontDataAve: message ValueThreshold
+    3 pointsSize: message ValueThreshold
+    4 abnormalPointCount: message ValueThreshold
+}
+message FrontLineLidarCheck {
+    1 condition: message
+}
+message FrontLineLidarCheck.Condition {
+    1 frontDataAve: message
+    2 abnormalConfidence: int32
+    3 abnormalDistanceZ: float
+    4 pointsSize: message CheckRange
+    5 abnormalPointCount: message CheckRange
+    6 delayCheck: int32
+}
+message LidarCheckReport {
+    1 result: aQM
+    2 rangeLen: message ValueThreshold
+}
+message LidarCheck {
+    1 condition: message
+}
+message LidarCheck.Condition {
+    1 rangeLen: message
+}
+message BumperCheckReport {
+    1 result: aQM
+    2 leftBumper: int32
+    3 rightBumper: int32
+    4 rightLidarBumper: int32
+    5 topLidarBumper: int32
+    6 leftLidarBumper: int32
+    7 leftCoverPos: int32
+    8 rightCoverPos: int32
+    9 resetButton: int32
+   10 callbackButton: int32
+   11 powerButton: int32
+}
+message BumperCheck {
+    1 condition: message
+}
+message BumperCheck.Condition {
+    1 leftBumper: int32
+    2 rightBumper: int32
+    3 rightLidarBumper: int32
+    5 topLidarBumper: int32
+    6 leftLidarBumper: int32
+    7 leftCoverPos: int32
+    8 rightCoverPos: int32
+    9 resetButton: message BumperCheck_GpioCondition
+   10 callbackButton: message BumperCheck_GpioCondition
+   11 powerButton: message BumperCheck_GpioCondition
+}
+message BumperCheck.GpioCondition {
+    1 gpio: int32
+    2 value: bool
+}
+message Mr813CheckReport {
+    1 result: aQM
+    2 cpuTemp: float
+}
+message Mr813Check {
+    1 condition: message
+}
+message Mr813Check.Condition {
+    1 cpuTemp: message
+}
+message ImuCheckReport {
+    1 result: aQM
+    2 accelerationZ: message ValueThreshold
+    3 resetAccelerationZ: message ValueThreshold
+    4 versionFlag: int32
+    5 selfImuSn: string
+}
+message ImuCheck {
+    1 condition: message
+}
+message ImuCheck.Condition {
+    1 accelerationZ: message
+    2 resetAccelerationZ: message CheckRange
+    3 versionFlag: message CheckRange
+    4 delayCheck: int32
+}
+message BtCheckReport {
+    1 result: aQM
+    2 mac: string
+    3 rssi: message ValueThreshold
+}
+message BtCheck {
+    1 condition: message
+}
+message BtCheck.Condition {
+    1 rssi: message
+    2 mac: string
+}
+message WifiCheckReport {
+    1 result: aQM
+    2 ssid: string
+    3 password: string
+    4 rssi: int32
+}
+message WifiCheck {
+    1 condition: message
+}
+message WifiCheck.Condition {
+    1 rssi: message
+    2 ssid: string
+    3 password: string
+}
+message FanCheckReport {
+    1 result: aQM
+    2 averageCurrent: message ValueThreshold
+    3 averageSpeed: message ValueThreshold
+}
+message FanCheck {
+    1 condition: message
+}
+message FanCheck.Condition {
+    1 averageCurrent: message
+    2 averageSpeed: message CheckRange
+    3 delayCheck: uint32
+    4 count: uint32
+    5 ratio: uint32
+}
+message IrCliffCheckReport {
+    1 result: aQM
+    2 infraLfVolt: int32
+    3 infraLbVolt: int32
+    4 infraRbVolt: int32
+    5 infraRfVolt: int32
+    6 infraFbVolt: int32
+    7 dustBoxHallVolt: int32
+}
+message IrCliffCheck {
+    1 condition: message
+}
+message IrCliffCheck.Condition {
+    1 infraLfVolt: message
+    2 infraLbVolt: message CheckRange
+    3 infraRbVolt: message CheckRange
+    4 infraRfVolt: message CheckRange
+    5 infraFbVolt: message CheckRange
+    6 dustBoxHallVolt: message CheckRange
+}
+message LiftMotorCheckReport {
+    1 result: aQM
+    2 biasvoltMotorUplift: message ValueThreshold
+    3 currentMotorUplift: message ValueThreshold
+    4 positionThreshold: message ValueThreshold
+}
+message RollBrushLiftCheck {
+    1 condition: message
+}
+message RollBrushLiftCheck.Condition {
+    1 biasvoltWheelUplift: message
+    2 currentWheelUplift: message CheckRange
+    3 upliftPosition: message CheckRange
+    4 downPosition: message CheckRange
+    5 delayCheck: uint32
+}
+message NowaterSensorCheckReport {
+    1 result: aQM
+    2 noWater: uint32
+    3 values: repeated float
+    4 average: float
+    5 last: float
+}
+message NowaterSensorCheck {
+    1 condition: message
+}
+message NowaterSensorCheck.Condition {
+    1 volt: message
+    2 delayCheck: uint32
+    3 noWater: uint32
+}
+message CliffTofCheckReport {
+    1 result: aQM
+    2 fb: message ValueThreshold
+}
+message CliffTofCheck {
+    1 condition: message
+}
+message CliffTofCheck.Condition {
+    1 delayCheck: uint32
+}
+message RightSideBrushExpCheckReport {
+    1 result: aQM
+    2 expandWidth: message ValueThreshold
+    3 expandGrating: message ValueThreshold
+    4 retractGrating: message ValueThreshold
+}
+message RightSideBrushExpCheck {
+    1 condition: message
+}
+message RightSideBrushExpCheck.Condition {
+    1 expand: message
+    2 retract: message RightSideBrushExpCheck_ActionGroup
+}
+message RightSideBrushExpCheck.ActionGroup {
+    1 delayCheck: uint32
+    2 min: float
+    3 max: float
+}
+message ChassisWheelUpLiftCheckReport {
+    1 result: aQM
+    2 wheelUpCurrent: message ValueThreshold
+    3 wheelDownCurrent: message ValueThreshold
+    4 wheelUpPosition: message ValueThreshold
+    5 wheelDownPosition: message ValueThreshold
+}
+message ChassisWheelUpLiftCheck {
+    1 condition: message
+}
+message ChassisWheelUpLiftCheck.Condition {
+    1 wheelUp: message
+    2 wheelDown: message ChassisWheelUpLiftCheck_ActionGroup
+}
+message ChassisWheelUpLiftCheck.ActionGroup {
+    1 min: float
+    2 max: float
+    3 delayCheck: uint32
+}
+message CrawlerWaterMotorCheckReport {
+    1 result: aQM
+    2 waterChurn: message ValueThreshold
+    3 sewagePump: message ValueThreshold
+    4 feedWate: message ValueThreshold
+}
+message CrawlerWaterMotorCheck {
+    1 condition: message
+}
+message CrawlerWaterMotorCheck.Condition {
+    1 waterChurn: message
+    2 sewagePump: message CrawlerWaterMotorCheck_ActionGroup
+    3 feedWate: message CrawlerWaterMotorCheck_ActionGroup
+    4 delayCheck: uint32
+    5 processTime: uint32
+}
+message CrawlerWaterMotorCheck.ActionGroup {
+    1 pwm: uint32
+    2 min: float
+    3 max: float
+}
+message CrawlerMopLiftCheckReport {
+    1 result: aQM
+    2 upCurrent: message ValueThreshold
+    3 downCurrent: message ValueThreshold
+    4 expansionCurrent: message ValueThreshold
+    5 inCurrent: message ValueThreshold
+    6 upPosition: message ValueThreshold
+    7 downPosition: message ValueThreshold
+    8 expansionPosition: message ValueThreshold
+    9 inPosition: message ValueThreshold
+}
+message CrawlerMopLiftCheck {
+    1 condition: message
+}
+message CrawlerMopLiftCheck.Condition {
+    1 up: message
+    2 down: message CrawlerMopLiftCheck_ActionGroup
+    3 expansion: message CrawlerMopLiftCheck_ActionGroup
+    4 in: message CrawlerMopLiftCheck_ActionGroup
+}
+message CrawlerMopLiftCheck.ActionGroup {
+    1 delayCheck: uint32
+    2 min: float
+    3 max: float
+}
+message MopLiftCheckReport {
+    1 result: aQM
+    2 expansionWidth: message ValueThreshold
+    3 leftMopHall: message ValueThreshold
+    4 rightMopHall: message ValueThreshold
+    5 biasvoltWheelUplift: message ValueThreshold
+    6 currentWheelUplift: message ValueThreshold
+    7 positionThreshold: message ValueThreshold
+    8 upliftHeight: message ValueThreshold
+}
+message MopLiftCheck {
+    1 condition: message
+}
+message MopLiftCheck.Condition {
+    1 biasvoltWheelUplift: message
+    2 currentWheelUplift: message CheckRange
+    3 positionThreshold: float
+    4 positionThresholdExpansion: float
+    5 delayCheck: uint32
+    6 leftMopHall: message CheckRange
+    7 rightMopHall: message CheckRange
+}
+message CommonMotorCheckReport {
+    1 result: aQM
+    2 leftMotorSpeed: message ValueThreshold
+    3 leftMotorCurrent: message ValueThreshold
+    4 rightMotorSpeed: message ValueThreshold
+    5 rightMotorCurrent: message ValueThreshold
+    6 reverseLeftMotorSpeed: message ValueThreshold
+    7 reverseLeftMotorCurrent: message ValueThreshold
+    8 reverseRightMotorSpeed: message ValueThreshold
+    9 reverseRightMotorCurrent: message ValueThreshold
+   10 biasvoltLeftMotor: message ValueThreshold
+   11 biasvoltRightMotor: message ValueThreshold
+}
+message CommonWheelCheck {
+    1 condition: message
+}
+message CommonWheelCheck.Condition {
+    1 wheelLeftSpeed: message
+    2 wheelLeftCurrent: message CheckRange
+    3 wheelRightSpeed: message CheckRange
+    4 wheelRightCurrent: message CheckRange
+    5 reverseWheelLeftSpeed: message CheckRange
+    6 reverseWheelLeftCurrent: message CheckRange
+    7 reverseWheelRightSpeed: message CheckRange
+    8 reverseWheelRightCurrent: message CheckRange
+    9 biasvoltWheelLeft: message CheckRange
+   10 biasvoltWheelRight: message CheckRange
+   11 delayCheck: uint32
+   12 forwardSpeed: double
+   13 reverseSpeed: double
+   14 count: uint32
+}
+message DustCheck {
+    1 condition: message
+}
+message DustCheck.Condition {
+    1 notInPosition: message
+    2 inPosition: message CheckRange
+}
+message BaseInfoCheck {
+    1 condition: message
+}
+message BaseInfoCheck.Condition {
+    1 mcuHardwareVersion: string
+    2 mainboradHardwareVersion: string
+}
+message BatteryCheckReport {
+    1 result: aQM
+    2 bmsVoltage: message ValueThreshold
+    3 vbatV: message ValueThreshold
+    4 chargeMcu: enum CheckState
+    5 charge813: enum CheckState
+    6 chargeCurrent: message ValueThreshold
+}
+message SimpleCheckReport {
+    1 result: aQM
+}
+message BatteryCheck {
+    1 condition: message
+}
+message BatteryCheck.Condition {
+    1 bmsVoltage: message
+    2 vbatV: message CheckRange
+    3 chargeMcu: enum CheckState
+    4 charge813: enum CheckState
+    5 chargeCurrent: message CheckRange
+}
+message Basic {
+    1 productTestDir: string
+    2 selfCheckConf: message Basic_SelfCheckConf
+    3 selfCheckStopMode: bool
+}
+message Basic.SelfCheckConf {
+    1 selfCheckDir: string
+    2 confDir: string
+    3 confFile: string
+    4 reportDir: string
+    5 reportFileNameTimeFmt: string
+    6 logDir: string
+    7 logDuration: float
+}
+message SelfCheckResult {
+    1 resultCode: enum
+}
+message DateStamp {
+    1 timestamp: int64
+    2 datetime: string
+}
+message ValueThreshold {
+    1 value: float
+    2 min: float
+    3 max: float
+}
+message CheckRange {
+    1 min: float
+    2 max: float
+}
+
+// core/program/Statement.pb.dart
+message Function {
+    1 statements: repeated message Function_
+}
+message Statement {
+    1 loop: message LoopStatement
+    2 condition: message ConditionalStatement
+    3 action: message CustomAction
+}
+message ConditionalStatement {
+    1 ifFunction: message
+    2 elseFunction: message Function_
+}
+message LoopStatement {
+    1 loopCount: uint32
+    2 loopMs: uint32
+    3 function: message Function_
+}
+
+// core/program/actions/CustomAction.pb.dart
+message CustomAction {
+    1 wait: message Wait
+    2 cleanModule: message CleanModule
+    3 motion: message Motion
+    4 audio: message Audio
+    5 stationModule: message StationModule
+    6 motionModule: message MotionModule
+    7 stationLed: message StationLed
+    8 fillRobotCleanWaterTank: message FillRobotCleanWaterTank
+    9 cameraFillLight: message CameraFillLight
+   10 ledFreeControl: message LedFreeControl
+   11 stationLedFreeControl: message StationLedFreeControl
+}
+
+// core/program/actions/Wait.pb.dart
+message Wait {
+    1 milliseconds: uint32
+}
+
+// core/sensor_data/RobotSensorData.pb.dart
+message RobotSensorData {
+    1 bumperLeft: bool
+    2 bumperRight: bool
+    3 lidarBumperLeft: bool
+    4 lidarBumperRight: bool
+    5 lidarBumperFront: bool
+    6 cliffFront: bool
+    7 cliffLeftFront: bool
+    8 cliffLeftBack: bool
+    9 cliffRightFront: bool
+   10 cliffRightBack: bool
+   11 rotateMopLeftInstalled: bool
+   12 rotateMopRightInstalled: bool
+   13 rollBrushInstalled: bool
+   14 ultrasoundData: message UltrasoundData
+   15 dustBag: bool
+   16 dustBox: bool
+   17 humidity: float
+   18 temperature: float
+   19 upperCoverLeftInstalled: bool
+   20 upperCoverRightInstalled: bool
+   21 dustSize: int32
+   22 dustDensity: int32
+   23 chargerContact: bool
+   24 frontIr: bool
+   25 frontTofCliffDistance: int32
+   26 sideTofDistance: float
+   27 robotCleanWaterTankState: enum RobotSensorData_RobotCleanWaterTankState
+   28 robotSewageTankState: enum RobotSensorData_RobotSewageTankState
+}
+
+// core/sensor_data/UltrasoundData.pb.dart
+message UltrasoundData {
+    1 supplierType: enum
+    2 materialType: enum UltrasoundData_MaterialType
+    3 echoDistance1st: int32
+    5 echoIntensity1st: int32
+}
+
+// mqtt/msg/Topic.pb.dart
+message Topic {
+    1 innerUrl: string
+    2 data: bytes
+}
+
+// mqtt/msg/developer/DebugMessage.pb.dart
+message AppToRobotDebugMessage {
+    1 msg: message
+}
+message RobotToAppDebugMessage {
+    1 msg: message
+}
+message DebugMessage {
+    1 url: string
+    2 correctionData: string
+    3 payload: bytes
+}
+
+// mqtt/msg/developer/PlanningDebugInfo.pb.dart
+message PlanningDebugInfo {
+    1 data: repeated message
+}
+
+// mqtt/msg/developer/RobotSensorInfo.pb.dart
+message RobotSensorInfo {
+    1 data: message
+}
+
+// mqtt/msg/map/DisplayMap.pb.dart
+message DisplayMap {
+    1 robot: message
+    2 trajectory: message RobotTrajectory
+    3 trajectoryFirstIndex: uint32
+    4 currentCleanZoneId: uint32
+    5 station: message PoseData
+    6 mapType: enum DisplayMap_MapType
+    7 incrementalMapData: message IncrementalMapData
+    8 entireMapData: message EntireMapData
+    9 trajectoryInfos: repeated message RobotTrajectoryInfo
+   10 robotPoseUpdateTime: uint64
+   11 planningTrajectory: message RobotTrajectory
+   12 addtionalTrajectorys: repeated message RobotTrajectoryWithInfo
+   13 rssiLocation: message PoseData
+   14 multiRssiLocation: repeated message PoseData
+   15 trajectoryArcs: repeated message RobotTrajectoryArc
+}
+message EntireMapData {
+    1 seqId: uint32
+    2 mapVersion: int64
+    3 resolution: int32
+    4 border: message Border
+    5 origin: message PoseData
+    6 compressedEntireMapDataStr: bytes
+    7 isRotated: bool
+    8 visionData: message VisionData
+    9 carpets: repeated message Carpet
+   10 doors: repeated message Door
+}
+message IncrementalMapData {
+    1 startEqId: uint32
+    2 currentSeqId: uint32
+    3 compressedIncrementalMapData: bytes
+    4 addFunitures: repeated message Furniture
+    5 addVisionObs: repeated message VisionObs
+    6 deleteVisionObs: repeated message VisionObs
+    7 compressedDebugIncrementalMapData: bytes
+    8 addVisionDirty: repeated message VisionDirty
+    9 deleteVisionDirty: repeated message VisionDirty
+   10 videoCruisePointData: repeated message VideoCruisePointData
+}
+
+// mqtt/msg/map/MapBaseType.pb.dart
+message NoCarpetArea {
+    1 id: uint32
+    2 polygon: repeated message Grid
+}
+message VirtualWallData {
+    1 id: uint32
+    2 startPoint: message Point
+    3 endPoint: message Point
+}
+message SlopeData {
+    1 id: uint32
+    2 points: repeated message Point
+    3 height: uint32
+}
+message Window {
+    1 windowId: uint32
+    2 windowType: uint32
+    3 box3d: message BoundingBox3D
+    4 color: uint32
+}
+message VideoCruisePointData {
+    1 cruisePointId: uint32
+    2 videoCruisePoint: message Point
+    3 cruisePointStatus: enum VideoCruisePointData_CruisePointStatus
+    4 cruisePointRoomId: uint32
+    5 cruisePointRoomType: uint32
+    6 videoCruiseTaskId: uint64
+}
+message RoomContour {
+    1 roomId: uint32
+    2 contourPoints: repeated message Grid
+    3 edgeType: repeated enum RoomContour_EdgeEditable
+    4 reachableContourPoints: repeated message Grid
+}
+message ImageROI {
+    1 origin: message
+    2 width: uint32
+    3 height: uint32
+}
+message VisionData {
+    1 funitures: repeated message
+    2 visionObs: repeated message VisionObs
+    3 visionDirty: repeated message VisionDirty
+}
+message VisionDirty {
+    1 id: int32
+    2 label: enum VisionDirtyLabel
+    3 box: message BoundingBox
+    4 status: enum VisionDirtyStatus
+}
+message VisionObs {
+    1 id: int32
+    2 label: enum VisionObsLabel
+    3 box: message BoundingBox
+    4 taskId: uint64
+    5 objectNames: string String, String
+}
+message Furniture {
+    1 id: int32
+    2 furnitureType: uint32
+    3 box: message BoundingBox
+    4 angle: float
+    5 isMirrored: bool
+    6 box3d: message BoundingBox3D
+    7 color: uint32
+    8 texture: enum Furniture_FurnitureTexture
+    9 ISSFurnitureType: uint32
+}
+message BoundingBox3D {
+    1 center: message
+    2 size: message Vector3D
+}
+message BoundingBox {
+    1 center: message
+    2 width: float
+    3 height: float
+}
+message RobotTrajectoryInfo {
+    1 trajectoryType: enum
+    2 index: uint32
+    3 groupId: uint32
+    4 cleanCount: uint32
+    5 direction: enum CleanTrajectoryDirection
+}
+message RobotTrajectoryArc {
+    1 index: uint32
+    3 clockwise: bool
+    4 centerx: float
+    5 centery: float
+}
+message RobotTrajectoryWithInfo {
+    1 trajectory: message
+    2 trajectoryInfos: repeated message RobotTrajectoryInfo
+    3 addtionalTrajectoryType: enum AddtionalTrajectoryType
+}
+message SubRoomInfo {
+    1 roomId: uint32
+    2 subRoomId: uint32
+    3 contours: repeated message SubRoomContour
+}
+message SubRoomContour {
+    1 grids: repeated message
+}
+message ReducedMap {
+    1 roomContours: int32
+    4 indexes: repeated uint32
+}
+message UpdateMapRegion {
+    1 region: repeated message
+    2 id: uint32
+    3 displayPose: message PoseData
+    4 updateReason: enum UpdateMapRegion_RegionUpdateReason
+}
+message MapCenterAlign {
+    1 x: int32
+    2 y: int32
+    3 width: uint32
+    4 height: uint32
+}
+message CleanEventMsg {
+    1 cleanEvent: enum
+    2 index: uint32
+}
+message RobotTrajectory {
+    1 ptsX: repeated float
+    2 ptsY: repeated float
+}
+message GridData {
+    1 gridsIdx: repeated uint32
+    2 datas: repeated uint32
+}
+message MapData {
+    1 grids: repeated uint32
+    2 debugGrids: repeated uint32
+}
+message Border {
+    1 bottom: int32
+    2 top: int32
+    3 left: int32
+    4 right: int32
+}
+message ZoneInfo {
+    1 mode: enum
+    2 actualZone: repeated message Grid
+    3 originalZone: repeated message Grid
+}
+message RoomInfo {
+    1 roomId: uint32
+    2 type: uint32
+    3 customName: string
+    4 texture: enum RoomInfo_FloorTexture
+    5 textureDirectionAngle: uint32
+    6 isDefaultHeavyDirtyRoom: bool
+    7 isCustomizeHeavyDirtyRoom: bool
+    8 roomTypeId: uint32
+    9 color: uint32
+   10 isCustomizeReduceNoise: bool
+   11 needTipsSilentRoom: bool
+}
+message Door {
+    1 roomIds: repeated uint32
+    2 doorPts: repeated message Grid
+    3 hasDoorSill: bool
+    4 height: uint32
+    5 type: uint32
+    6 color: uint32
+    7 theta: float
+}
+message Carpet {
+    1 id: uint32
+    2 polygon: repeated message Grid
+    3 center: message Grid
+    4 carpetCleanOption: enum CarpetCleanOption
+    5 source: enum Carpet_CarpetSource
+    6 carpetModifyPolygon: repeated message Grid
+    7 material: enum Carpet_CarpetMaterial
+    8 color: uint32
+    9 isFullRoomCarpet: bool
+   10 enableDeepClean: bool
+   11 sideBrushCleanEnabled: bool
+   12 roomId: uint32
+}
+message PetHeatArea {
+    1 polygon: repeated message
+    2 id: uint32
+    3 furnitureId: uint32
+    4 bindFurniture: bool
+}
+message ThresholdData {
+    1 id: uint32
+    2 startPoint: message Point
+    3 endPoint: message Point
+    4 height: uint32
+    5 color: uint32
+    6 setByUser: bool
+    7 ignoreCliffEnable: bool
+    8 isUserConfirmed: bool
+}
+message ForbiddenArea {
+    1 polygon: repeated message
+    2 type: enum ForbiddenArea_ForbiddenType
+    3 id: uint32
+    4 roomId: uint32
+    5 mode: enum ForbiddenArea_ForbiddenMode
+}
+message Contour {
+    1 pts: repeated message
+    2 center: message Grid
+}
+message PoseData {
+    1 location: message
+    2 theta: float
+}
+message Grid {
+    1 x: int32
+    2 y: int32
+}
+message Point {
+    1 x: float
+    2 y: float
+}
+message Vector3D {
+    1 x: float
+    2 y: float
+    3 z: float
+}
+
+// mqtt/msg/map/StaticMapPayload.pb.dart
+message StaticMapPayload {
+    1 mapId: int32
+    2 mapVersion: uint32
+    3 resolution: int32
+    4 width: int32
+    5 height: int32
+    6 border: message Border
+    7 origin: message PoseData
+    8 station: message PoseData
+    9 forbiddens: repeated message ForbiddenArea
+   10 zoneInfos: repeated message ZoneInfo
+   11 doors: repeated message Door
+   12 roomInfos: repeated message RoomInfo
+   13 trajectory: message RobotTrajectory
+   14 robotTrajectory: bytes
+   15 robotTrajectoryFormat: enum StaticMapPayload_RobotTrajectoryFormat
+   16 map: message MapData
+   17 mapData: bytes
+   18 mapDataFormat: enum StaticMapPayload_MapDataFormat
+   19 isBuildingMap: bool
+   20 mapValidBit: uint32
+   21 mapCenterAlignData: message MapCenterAlign
+   22 seqId: uint32
+   23 showStationDirection: bool
+   24 robotPose: message PoseData
+   25 rotateAngle: int32
+   26 carpets: repeated message Carpet
+   27 updateMapRegions: repeated message UpdateMapRegion
+   28 customName: string
+   29 reducedMap: message ReducedMap
+   30 isMainMap: bool
+   31 trajectoryInfos: repeated message RobotTrajectoryInfo
+   32 visionData: message VisionData
+   33 editVersion: uint32
+   34 mapGenerateTime: uint64
+   35 enableCleanTrajectoryDisplay: bool
+   36 robotPoseUpdateTime: uint64
+   37 isTempMap: bool
+   38 roomContours: repeated message RoomContour
+   39 videoCruisePointData: repeated message VideoCruisePointData
+   40 petHeatAreas: repeated message PetHeatArea
+   41 thresholds: repeated message ThresholdData
+   42 windows: repeated message Window
+   43 trajectoryArcs: repeated message RobotTrajectoryArc
+   44 originTrajectory: message RobotTrajectory
+   45 originRobotTrajectory: bytes
+   46 originTrajectoryInfos: repeated message RobotTrajectoryInfo
+   47 robotTrappedPoints: repeated message Point
+   48 exceptionInfoList: repeated message ExceptionInfo
+   49 slopes: repeated message SlopeData
+   50 virtualWalls: repeated message VirtualWallData
+   51 noCarpetAreas: repeated message NoCarpetArea
+}
+
+// mqtt/msg/multimedia/AgoraVideoStartResult.pb.dart
+message AgoraVideoStartResult {
+    1 sessionId: string
+    2 channel: string
+    3 errCode: uint32
+    4 errMsg: string
+}
+
+// mqtt/msg/multimedia/AiotToAppEvent.pb.dart
+message AiotToAppEvent {
+    1 evnetId: uint32
+    2 payload: string
+}
+
+// mqtt/msg/multimedia/StreamingHeartbeat.pb.dart
+message StreamingHeartbeat {
+    1 timestamp: int64
+    2 isPostProcessing: bool
+    3 runStatus: uint32
+    4 isVideoLinkConnected: bool
+    5 isMicOpen: bool
+}
+
+// mqtt/msg/report/CleanReportSubmit.pb.dart
+message CleanReportSubmit {
+    1 percent: uint32
+    2 area: float
+    3 duration: uint32
+    4 regionType: enum RegionType
+    5 taskType: enum TaskType
+    6 startTime: uint32
+    7 endTime: uint32
+    8 taskRes: enum TaskResult
+    9 roomOrder: repeated uint32
+   10 cleanTriggerType: enum MissionTriggerType
+   11 cleanParams: repeated message CleanParam
+   12 map: message StaticMapPayload
+   13 cleanTimes: repeated message CleanTimes
+   14 trajectoryStartIndices: repeated uint32
+   15 cleanEventMsgs: repeated message CleanEventMsg
+   16 roomCleanEvents: repeated message RoomCleanEvent
+   17 carpetChangeEvents: repeated message CarpetChangeEvent
+   18 maxDirtyLevel: uint32
+   19 errorCode: uint32
+   20 robotTrappedPoints: repeated message Point
+   21 missionId: uint64
+   22 carpetUpdated: bool
+   23 isContinuedTask: bool
+   24 subRoomInfos: repeated message SubRoomInfo
+   25 initCleanParam: message CleanTaskParam
+   26 timeLineStatus: message TimeLineStatus
+   28 cleanTask: message CleanTask
+   29 scheduleTaskId: string
+   30 exceptionInfoList: repeated message ExceptionInfo
+   31 imageResources: message ImageResources
+   32 visionDirtyList: repeated message VisionDirty
+   33 debugDetail: string
+   34 heavyDirtyRoomUpdated: bool
+   35 scheduleTaskResult: enum ServiceResult
+   36 uncleanedZones: repeated message UncleanedZone
+   37 upObstacleDetected: bool
+   38 cleanWithMappingResult: enum CleanWithMappingResult
+   39 typeForPauseTooLongEnd: enum PauseType
+   40 restoreTaskInfo: message RestoreTaskInfo
+   41 scenarioErrorCode: uint32
+   42 exceptionVideoResources: message VideoResources
+   43 tzOffset: string
+}
+
+// mqtt/msg/report/ExplorerReportSubmit.pb.dart
+message ExplorerReportSubmit {
+    1 area: float
+    2 duration: uint32
+    3 startTime: uint32
+    4 endTime: uint32
+    5 taskRes: enum TaskResult
+    6 buildMapTriggerType: enum MissionTriggerType
+    7 map: message StaticMapPayload
+    8 errorCode: uint32
+    9 buildType: enum BuildType
+   10 updateMapResults: repeated message UpdateMapResult
+   11 imageResources: message ImageResources
+   12 debugDetail: string
+   13 upObstacleDetected: bool
+   14 missionId: uint64
+   15 typeForPauseTooLongEnd: enum PauseType
+   16 failedUpdateMapRegions: repeated message UpdateMapRegion
+}
+
+// mqtt/msg/report/MaintainReportSubmit.pb.dart
+message MaintainFloorReportSubmit {
+    1 area: float
+    2 duration: uint32
+    3 startTime: uint32
+    4 endTime: uint32
+    5 taskRes: enum TaskResult
+    6 map: message StaticMapPayload
+    7 errorCode: uint32
+    8 maintainFloorTimes: repeated message MaintainFloorTimes
+    9 scheduleTaskId: string
+   10 taskType: enum TaskType
+   11 maintainFloorTaskType: enum MaintainFloorTaskType
+   12 debugDetail: string
+   13 taskId: uint64
+   14 upObstacleDetected: bool
+   15 typeForPauseTooLongEnd: enum PauseType
+}
+
+// mqtt/msg/report/SearchPetReportSubmit.pb.dart
+message SearchPetReportSubmit {
+    1 searchPetTaskId: uint64
+    2 duration: uint32
+    3 startTime: uint32
+    4 endTime: uint32
+    5 taskRes: enum TaskResult
+    6 roomOrder: repeated uint32
+    7 map: message StaticMapPayload
+    8 trajectoryStartIndices: repeated uint32
+    9 errorCode: uint32
+   10 exceptionInfoList: repeated message ExceptionInfo
+   11 resourceNumber: uint32
+   12 imageResources: message ImageResources
+   13 videoResources: message VideoResources
+   14 scenarioErrorCode: uint32
+   15 missionId: uint64
+}
+
+// mqtt/msg/status/DownloadStatus.pb.dart
+message DownloadStatus {
+    1 type: int32
+    2 progress: int32
+    3 state: int32
+    4 errorCode: int32
+    5 language: string
+    6 timbreId: string
+}
+
+// mqtt/msg/status/PointNaviPlanTraj.pb.dart
+message PointNaviPlanTraj {
+    1 planTraj: repeated message
+}
+
+// mqtt/msg/status/RobotBaseStatus.pb.dart
+message RobotBaseStatus {
+    1 errorCode: repeated message
+    2 batteryPercentage: float
+    3 robotTaskStatus: message RobotTaskStatus
+    5 supplyAndDrainageModuleState: enum RobotBaseStatus_SupplyAndDrainageModuleState
+    6 inDisturbMode: bool
+    7 triggerType: enum MissionTriggerType
+    8 hasTaskSchedule: bool
+   11 stationContactType: enum RobotBaseStatus_StationContactType
+   12 detergentState: enum RobotBaseStatus_DetergentState
+   13 bindedUuid: string
+   14 stationSupplyWaterModuleState: enum RobotBaseStatus_StationWaterSupplyModuleState
+   15 terminateReason: enum TaskResult
+   16 autoAddDetergentEnabled: bool
+   17 telecontrolCleanStage: enum RobotBaseStatus_TelecontrolCleanState
+   18 dustBoxStatus: bool
+   19 dustBagStatus: bool
+   20 dustBoxState: enum RobotBaseStatus_DustBoxState
+   21 dustBagState: enum RobotBaseStatus_DustBagState
+   22 smartModuleState: enum RobotBaseStatus_SmartModuleState
+   23 cleanWaterTankState: enum RobotBaseStatus_CleanWaterTankState
+   24 sewageTankState: enum RobotBaseStatus_SewageTankState
+   25 deviceStatusCodeList: message RobotBaseStatus_DeviceStatusCodeList
+   26 fanLevel: enum FanLevel
+   27 energyCertificationModeStatus: bool
+   28 robotWaterTankState: enum RobotBaseStatus_RobotWaterTankState
+   29 mopHumidity: enum MopHumidity
+   30 mapId: uint32
+   31 manualControlStatus: enum RobotBaseStatus_ManualControlStatus
+   32 robotTaskStatusList: repeated message RobotTaskStatus
+   33 multiLiquidStatus: enum RobotBaseStatus_MultiLiquidStatus
+   34 dryBoxFinishFlag: bool
+   35 stationBagHealthScore: float
+   36 stationBagHealthResetTime: uint32
+   37 manualControlFanCooldownTime: uint32
+   38 curingAgentConsumptionPercent: uint32
+   39 stationBagStatus: enum RobotBaseStatus_StationBagStatus
+   40 heavyDetergentStatus: enum RobotBaseStatus_HeavyDetergentStatus
+   41 heavyDetergentRemainPercent: uint32
+   42 streamingStatus: enum RobotBaseStatus_StreamingStatus
+   43 streamingExtraData: string
+   44 hasStation: bool
+   45 isRobotAtOrigin: bool
+   46 robotTaskStatusListV2: message RobotTaskStatusV2
+   47 chargingStatus: enum RobotBaseStatus_ChargingStatus
+   48 robotTaskListExternalV2: message RobotTaskStatusExternalV2
+   49 batteryCooling: enum RobotBaseStatus_BatteryCooling
+   50 ambientLightStatus: enum AmbientLightCtrlType
+}
+message RobotBaseStatus.DeviceStatusCodeList {
+    1 dustBag: message
+    2 dustBox: message DeviceStatusCode
+    3 detergent: message DeviceStatusCode
+    4 smartModule: message DeviceStatusCode
+    5 cleanWaterTank: message DeviceStatusCode
+    6 sewageTank: message DeviceStatusCode
+}
+
+// mqtt/msg/status/RobotTaskStatus.pb.dart
+message RobotTaskStatus {
+    1 task: enum
+    2 pauseStatus: bool
+    3 idleStatus: enum RobotTaskStatus_IdleStatus
+    4 sweepStatus: enum RobotTaskStatus_SweepStatus
+    5 mopStatus: enum RobotTaskStatus_MopStatus
+    6 sweepAndMopStatus: enum RobotTaskStatus_SweepAndMopStatus
+    7 sweepThenMopStatus: enum RobotTaskStatus_SweepThenMopStatus
+    8 smartCleanStatus: enum RobotTaskStatus_SmartCleanStatus
+    9 buildMapStatus: enum RobotTaskStatus_BuildMapStatus
+   10 recallStatus: enum RobotTaskStatus_RecallStatus
+   11 chargingStatus: enum RobotTaskStatus_ChargingStatus
+   12 washAndDryStatus: enum RobotTaskStatus_WashAndDryStatus
+   13 recallToWashStatus: enum RobotTaskStatus_RecallToWashStatus
+   14 cleanStatus: enum RobotTaskStatus_CleanStatus
+   15 updateMapStatus: enum RobotTaskStatus_UpdateMapStatus
+   16 waitCommandStatus: enum RobotTaskStatus_WaitingCommandStatus
+   17 compositeCleanStatus: enum RobotTaskStatus_CompositeCleanStatus
+   18 dustGatheringStatus: enum RobotTaskStatus_DustGatheringStatus
+   19 telecontrolStatus: enum RobotTaskStatus_TelecontrolStatus
+   20 maintainFloorStatus: enum RobotTaskStatus_MaintainFloorStatus
+   21 searchPersonStatus: enum RobotTaskStatus_SearchPersonStatus
+   22 videoCruiseStatus: enum RobotTaskStatus_VideoCruiseStatus
+   23 searchPetStatus: enum RobotTaskStatus_SearchPetStatus
+   40 cleanWithBuildingMap: bool
+}
+
+// mqtt/msg/status/RobotTaskStatusBaseV2.pb.dart
+message RobotTaskStatusBaseV2.StatusInfo {
+    1 status: enum RobotTaskStatusBaseV2_StatusType
+    2 clean: message RobotTaskStatusBaseV2_CleanDetail
+    3 washMop: message RobotTaskStatusBaseV2_WashMopDetail
+    4 recall: message RobotTaskStatusBaseV2_RecallDetail
+    5 telecontrol: message RobotTaskStatusBaseV2_TelecontrolDetail
+    6 waitCommand: message RobotTaskStatusBaseV2_WaitingCommandDetail
+    7 buildMap: message RobotTaskStatusBaseV2_BuildMapDetail
+   30 isPaused: bool
+   31 pauseDetail: message RobotTaskStatusBaseV2_PauseDetail
+}
+message RobotTaskStatusBaseV2.PauseDetail {
+    1 pauseReason: enum
+    2 errorCode: uint32
+    3 errorMsg: string
+}
+message RobotTaskStatusBaseV2.WaitingCommandDetail {
+    1 status: enum
+}
+message RobotTaskStatusBaseV2.RecallDetail {
+    1 isManual: bool
+    2 isNaviToStation: bool
+}
+message RobotTaskStatusBaseV2.TelecontrolDetail {
+    1 isClean: bool
+}
+message RobotTaskStatusBaseV2.BuildMapDetail {
+    1 isUpdateMap: bool
+}
+message RobotTaskStatusBaseV2.WashMopDetail {
+    1 isManual: bool
+    2 isHotWater: bool
+    3 isMaintainInject: bool
+    4 isHeavyDirty: bool
+}
+message RobotTaskStatusBaseV2.CleanDetail {
+    1 cleanMode: enum
+    2 zoneType: enum RobotTaskStatusBaseV2_ZoneType
+    3 isSmart: bool
+    4 isHeavyDirty: bool
+    5 visualDirtyClean: enum RobotTaskStatusBaseV2_VisualDirtyClean
+    6 cleanWithBuildingMap: bool
+}
+
+// mqtt/msg/status/RobotTaskStatusExternalV2.pb.dart
+message RobotTaskStatusExternalV2 {
+    1 taskList: repeated message
+}
+message RobotTaskStatusExternalV2.Task {
+    1 isPaused: bool
+    2 pauseDetail: message RobotTaskStatusBaseV2_PauseDetail
+    5 clean: message RobotTaskStatusExternalV2_CleanTask
+    6 buildMap: message RobotTaskStatusExternalV2_BuildMapTask
+    7 dustGathering: message RobotTaskStatusExternalV2_DustGatheringTask
+    8 departure: message RobotTaskStatusExternalV2_DepartureTask
+    9 recall: message RobotTaskStatusExternalV2_RecallTask
+   10 dryStationBag: message RobotTaskStatusExternalV2_DryStationBagTask
+   13 stationBagSterilization: message RobotTaskStatusExternalV2_StationBagSterilizationTask
+   14 dryRobotBag: message RobotTaskStatusExternalV2_DryRobotBagTask
+   15 washAndDryMop: message RobotTaskStatusExternalV2_WashAndDryMopTask
+   16 pointNavi: message RobotTaskStatusExternalV2_PointNaviTask
+   17 telecontrol: message RobotTaskStatusExternalV2_TelecontrolTask
+   18 videoCruise: message RobotTaskStatusExternalV2_VideoCruiseTask
+   19 searchPerson: message RobotTaskStatusExternalV2_SearchPersonTask
+   20 netConfig: message RobotTaskStatusExternalV2_NetConfigTask
+   21 matchStation: message RobotTaskStatusExternalV2_MatchStationTask
+   22 pumpTroubleshooting: message RobotTaskStatusExternalV2_PumpTroubleshootingTask
+   23 robotSewageBoxPumpTroubleshooting: message RobotTaskStatusExternalV2_RobotSewageBoxPumpTroubleshootingTask
+   24 waitingCommand: message RobotTaskStatusExternalV2_WaitingCommandTask
+   25 searchPet: message RobotTaskStatusExternalV2_SearchPetTask
+}
+message RobotTaskStatusExternalV2.RobotSewageBoxPumpTroubleshootingTask {
+}
+message RobotTaskStatusExternalV2.PumpTroubleshootingTask {
+}
+message RobotTaskStatusExternalV2.MatchStationTask {
+}
+message RobotTaskStatusExternalV2.NetConfigTask {
+}
+message RobotTaskStatusExternalV2.SearchPersonTask {
+    5 selfCheckSubTask: message
+    6 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+    7 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    8 relocalizationSubTask: message RobotTaskStatusExternalV2_RelocalizationTask
+    9 chargeSubTask: message RobotTaskStatusExternalV2_ChargeTask
+   10 cleanSubTask: message RobotTaskStatusExternalV2_CleanTask
+   11 dustGatheringSubTask: message RobotTaskStatusExternalV2_DustGatheringTask
+   12 washMopSubTask: message RobotTaskStatusExternalV2_WashMopTask
+}
+message RobotTaskStatusExternalV2.SearchPetTask {
+    5 selfCheckSubTask: message
+    6 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+    7 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    8 relocalizationSubTask: message RobotTaskStatusExternalV2_RelocalizationTask
+    9 chargeSubTask: message RobotTaskStatusExternalV2_ChargeTask
+}
+message RobotTaskStatusExternalV2.VideoCruiseTask {
+    5 selfCheckSubTask: message
+    6 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+    7 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    8 relocalizationSubTask: message RobotTaskStatusExternalV2_RelocalizationTask
+    9 chargeSubTask: message RobotTaskStatusExternalV2_ChargeTask
+}
+message RobotTaskStatusExternalV2.TelecontrolTask {
+    1 detail: message
+}
+message RobotTaskStatusExternalV2.PointNaviTask {
+    5 selfCheckSubTask: message
+    6 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+}
+message RobotTaskStatusExternalV2.WashAndDryMopTask {
+    5 selfCheckSubTask: message
+    6 washMopSubTask: message RobotTaskStatusExternalV2_WashMopTask
+    7 dryMopSubTask: message RobotTaskStatusExternalV2_DryMopTask
+}
+message RobotTaskStatusExternalV2.DryRobotBagTask {
+    5 selfCheckSubTask: message
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    7 robotBagHumidityDetectSubTask: message RobotTaskStatusExternalV2_RobotBagHumidityDetectTask
+}
+message RobotTaskStatusExternalV2.RobotBagHumidityDetectTask {
+}
+message RobotTaskStatusExternalV2.StationBagSterilizationTask {
+}
+message RobotTaskStatusExternalV2.DryStationBagTask {
+}
+message RobotTaskStatusExternalV2.CleanTask {
+    1 detail: message
+    5 selfCheckSubTask: message RobotTaskStatusExternalV2_SelfCheckTask
+    6 dustGatheringSubTask: message RobotTaskStatusExternalV2_DustGatheringTask
+    7 washMopSubTask: message RobotTaskStatusExternalV2_WashMopTask
+    8 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    9 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+   10 relocalizationSubTask: message RobotTaskStatusExternalV2_RelocalizationTask
+   11 chargeSubTask: message RobotTaskStatusExternalV2_ChargeTask
+   12 telecontrolSubTask: message RobotTaskStatusExternalV2_TelecontrolTask
+}
+message RobotTaskStatusExternalV2.BuildMapTask {
+    5 selfCheckSubTask: message
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+    7 departureSubTask: message RobotTaskStatusExternalV2_DepartureTask
+    8 relocalizationSubTask: message RobotTaskStatusExternalV2_RelocalizationTask
+    9 chargeSubTask: message RobotTaskStatusExternalV2_ChargeTask
+}
+message RobotTaskStatusExternalV2.ChargeTask {
+    5 selfCheckSubTask: message
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+}
+message RobotTaskStatusExternalV2.WashMopTask {
+    1 detail: message
+    5 selfCheckSubTask: message RobotTaskStatusExternalV2_SelfCheckTask
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+}
+message RobotTaskStatusExternalV2.DryMopTask {
+    5 selfCheckSubTask: message
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+}
+message RobotTaskStatusExternalV2.DustGatheringTask {
+    5 selfCheckSubTask: message
+    6 recallSubTask: message RobotTaskStatusExternalV2_RecallTask
+}
+message RobotTaskStatusExternalV2.WaitingCommandTask {
+}
+message RobotTaskStatusExternalV2.RecallTask {
+    1 detail: message
+    5 selfCheckSubTask: message RobotTaskStatusExternalV2_SelfCheckTask
+}
+message RobotTaskStatusExternalV2.DepartureTask {
+    5 selfCheckSubTask: message
+}
+message RobotTaskStatusExternalV2.SelfCheckTask {
+}
+message RobotTaskStatusExternalV2.RelocalizationTask {
+}
+
+// mqtt/msg/status/RobotTaskStatusV2.pb.dart
+message RobotTaskStatusV2 {
+    1 statusList: repeated message
+}
+message RobotTaskStatusV2.TaskStatus {
+    1 taskId: uint64
+    2 infoList: repeated message RobotTaskStatusBaseV2_StatusInfo
+    3 isPaused: bool
+    4 pauseDetail: message RobotTaskStatusBaseV2_PauseDetail
+}
+
+// mqtt/msg/status/StreamingActiveEvent.pb.dart
+message StreamingActiveEvent {
+    1 streamingEventType: enum
+}
+
+// mqtt/msg/status/StreamingInfo.pb.dart
+message StreamingInfo {
+    1 timestamp: int64
+    2 isVideoLinkConnected: bool
+    3 isVideoRunning: bool
+    4 isTransferringVideoStream: bool
+    5 isTransferringAudioStream: bool
+    6 mediaStatus: uint32
+    7 ispStatus: uint32
+    8 audioStauts: uint32
+}
+
+// mqtt/msg/status/TimeLineStatus.pb.dart
+message TimeLineStatus {
+    1 robotEventList: repeated message
+}
+message RobotEventNode {
+    1 eventTime: int64
+    2 primaryTask: enum PrimaryTaskType
+    3 secondaryCleanEvent: message SecondaryCleanEvent
+    4 secondarySelfCheck: enum SelfCheckEventType
+    5 taskResult: enum TaskResult
+    6 errorCode: message ErrorCode
+    7 isPrimaryNode: bool
+    8 nodeKey: uint64
+}
+message SecondaryCleanEvent {
+    1 secondaryEvent: enum
+    2 zoneInfo: message EventZoneInfo
+    3 fanLevel: enum FanLevel
+    4 mopHumidity: enum MopHumidity
+    5 zoneCleanInfo: message ZoneCleanInfo
+    6 smartCleanStartStrategy: message SmartCleanStartStrategy
+    7 smartCleanStopStrategy: message SmartCleanStopStrategy
+    8 trappedInfo: message TrappedInfo
+}
+message TrappedInfo {
+    1 trappedReason: enum
+    2 trappedPoint: message Point
+}
+message SmartCleanStopStrategy {
+    1 stationSelfClean: bool
+    2 dustBinAntibacterial: bool
+    3 dynamicDustBinAntibacterial: bool
+    4 mopDrying: bool
+    5 stationDustBagSterilization: bool
+    6 highTemperatureDisinfection: bool
+}
+message SmartCleanStartStrategy {
+    1 routePlan: bool
+    2 whaleIntelligentPerception: bool
+    3 fullyIntelligentSpacePerception: bool
+    4 autoAdjustCleanParameter: bool
+    5 dynamicHotWaterMop: bool
+    6 deepCornerClean: bool
+    7 petHeatAreaClean: bool
+    8 smartAdjustMopHumidity: bool
+    9 thinkingContent: string
+}
+message ZoneCleanInfo {
+    1 groundMaterial: enum
+    2 heavyDirtyClean: bool
+    3 longTimeNoClean: bool
+    4 fanLevel: enum FanLevel
+    5 mopHumidity: enum MopHumidity
+    6 mopStrengthLevel: enum MopStrengthLevel
+    7 addCleanTimes: bool
+    8 usePowerfulDetergent: bool
+    9 useMuteRoomStrategy: bool
+}
+message EventZoneInfo {
+    1 zoneType: enum
+    2 zoneId: uint32
+    3 cleanCount: uint32
+    4 cleanMode: enum CleanMode
+    5 groundMaterial: enum RoomGroundMaterial
+    6 isSmartClean: bool
+}
+
+// mqtt/msg/status/WorkingStatus.pb.dart
+message WorkingStatus {
+    1 workingProgress: float
+    2 coveredArea: float
+    3 timeConsuming: uint32
+    4 remainedTime: uint32
+    5 roomCleanedTimes: repeated message RoomCleanedTimes
+    6 cleaningZoneId: uint32
+    7 taskExtra: string
+    8 dryingTime: uint32
+    9 totalDryingTime: uint32
+   10 dryingBagTime: uint32
+   11 totalDryingBagTime: uint32
+   12 dryStationBagTime: uint32
+   13 totalDryStationBagTime: uint32
+   14 stationBagSterilizationTime: uint32
+   15 totalStationBagSterilizationTime: uint32
+   16 dustBagDetectTime: uint32
+   17 totalDustBagDetectTime: uint32
+   18 dryMopWorkingStatus: message DryMopWorkingStatus
+   19 dryDustBagWorkingStatus: message DryDustBagWorkingStatus
+   20 videoCruiseTaskStatus: message VideoCruiseStatus
+   21 searchPetTaskStatus: message SearchPetStatus
+   22 waitUserStatus: message WaitingUserStatus
+   23 cleanTaskRoomParamChangeTimestamp: uint64
+}
+message WaitingUserStatus {
+    1 elapsedWaitSeconds: uint32
+    2 waitTimeoutSeconds: uint32
+}
+message SearchPetStatus {
+    1 searchPetTaskId: uint64
+    2 searchPetDurationTime: uint32
+    3 totalRoomsNumber: uint32
+    4 successRoomsNumber: uint32
+    5 successResourceNumber: uint32
+    6 resourceTotalNumber: uint32
+    7 searchRoomId: repeated uint32
+    8 notFoundRoomId: repeated uint32
+}
+message VideoCruiseStatus {
+    1 videoCruiseTaskId: uint64
+    2 videoCruiseDurationTime: uint32
+    3 totalPointsNumber: uint32
+    4 successPointsNumber: uint32
+}
+message DryDustBagWorkingStatus {
+    1 level: enum
+}
+message DryMopWorkingStatus {
+    1 detectStage: enum
+    2 level: enum DryDustBagLevel
+    3 dryDustBagTimeBeforeDropMopEnd: uint32
+}
+message RoomCleanedTimes {
+    1 roomId: uint32
+    2 sweepTimes: uint32
+    3 mopTimes: uint32
+    4 sweepMopSyncTimes: uint32
+    5 secondCleanTimes: uint32
+}
+
+// mqtt/msg/telecontrol/TelecontrolVelocity.pb.dart
+message TelecontrolVelocity {
+    1 linearVelocity: int32
+    2 angularVelocity: int32
+    3 type: enum TelecontrolVelocity_VelocityType
+    4 actualLinearVelocity: float
+    5 actualAngularVelocity: float
+}
+
+// mqtt/msg/upgrade/OTAUpgradeStatus.pb.dart
+message OTAUpgradeStatus {
+    1 type: int32
+    2 status: int32
+    3 progress: int32
+    4 stage: int32
+    5 errorCode: int32
+    6 detailErrorCode: int32
+    7 currentVersion: string
+    8 targetVersion: string
+}
+
+// mqtt/srv/Header.pb.dart
+message Header {
+    1 extendedString: string
+    2 uuid: string
+    3 source: enum Header_Source
+    4 url: string
+    5 properties: message Properties
+    6 urlId: int32
+}
+message Properties {
+    1 responseUrl: string
+    2 correlationData: string
+}
+
+// mqtt/srv/Service.pb.dart
+message Service.Response {
+    1 innerUrl: string
+    2 data: bytes
+}
+message Service.Request {
+    1 innerUrl: string
+    2 data: bytes
+}
+
+// mqtt/srv/bind/SetUuid.pb.dart
+message SetUuid.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetUuid.Request {
+    1 uuid: string
+}
+
+// mqtt/srv/clean/GetCurrentCleanTask.pb.dart
+message GetCurrentCleanTask.Response {
+    1 result: enum
+    2 cleanTask: message CleanTask
+    3 unifiedErrorCode: uint32
+}
+message GetCurrentCleanTask.Request {
+}
+
+// mqtt/srv/clean/SetFanLevel.pb.dart
+message SetFanLevel.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetFanLevel.Request {
+    1 level: enum
+    2 gearValue: int32
+    3 operationType: enum ConfigOperationType
+}
+
+// mqtt/srv/clean/SetMopHumidity.pb.dart
+message SetMopHumidity.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetMopHumidity.Request {
+    1 mopHumidity: enum
+    2 gearValue: int32
+    3 operationType: enum ConfigOperationType
+}
+
+// mqtt/srv/clean/SetSweepIntensityLevel.pb.dart
+message SetSweepIntensityLevel.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetSweepIntensityLevel.Request {
+    1 level: enum
+}
+
+// mqtt/srv/clean/StartClean.pb.dart
+message StartClean.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message StartClean.Request {
+    1 task: message
+    2 customInfo: message CustomInfo
+}
+
+// mqtt/srv/clean/StartEasyClean.pb.dart
+message StartEasyClean.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message StartEasyClean.Request {
+    1 cleanMode: enum
+    2 mapId: uint32
+    3 cleanAreaOptions: repeated message CleanAreaOption
+}
+
+// mqtt/srv/clean/StartMaintainFloor.pb.dart
+message StartMaintainFloor.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message StartMaintainFloor.Request {
+    1 roomIds: repeated int32
+}
+
+// mqtt/srv/clean/plan/DeleteCleanPlan.pb.dart
+message DeleteCleanPlan.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DeleteCleanPlan.Request {
+    1 id: uint32
+}
+
+// mqtt/srv/clean/plan/GetCleanPlans.pb.dart
+message GetCleanPlans.Response {
+    1 result: enum
+    2 cleanPlans: repeated message CleanPlan
+    3 unifiedErrorCode: uint32
+}
+message GetCleanPlans.Request {
+}
+
+// mqtt/srv/clean/plan/GetCurPlan.pb.dart
+message GetCurPlan.Response {
+    1 result: enum
+    2 cleanPlan: message CleanPlan
+    3 unifiedErrorCode: uint32
+}
+message GetCurPlan.Request {
+}
+
+// mqtt/srv/clean/plan/SetCleanPlan.pb.dart
+message SetCleanPlan.Response {
+    1 result: enum
+    2 id: uint32
+    3 unifiedErrorCode: uint32
+}
+message SetCleanPlan.Request {
+    1 cleanPlan: message
+}
+
+// mqtt/srv/clean/plan/SetCleanPlanWithSchedule.pb.dart
+message SetCleanPlanWithSchedule.Response {
+    1 result: enum
+    2 id: uint32
+    3 unifiedErrorCode: uint32
+}
+message SetCleanPlanWithSchedule.Request {
+    1 cleanPlan: message
+    2 cleanSchedules: repeated message CleanSchedule
+}
+
+// mqtt/srv/clean/plan/StartWithPlan.pb.dart
+message StartWithPlan.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message StartWithPlan.Request {
+    1 planId: uint32
+    2 mapId: uint32
+}
+
+// mqtt/srv/clean/plan/StartWithPlanAndCalibrationParam.pb.dart
+message StartWithPlanAndCalibrationParam.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message StartWithPlanAndCalibrationParam.Request {
+    1 planId: uint32
+    2 isNeedCalibration: bool
+    3 mapId: uint32
+}
+
+// mqtt/srv/clean/plan/UpdateCurPlan.pb.dart
+message UpdateCurPlan.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message UpdateCurPlan.Request {
+    1 cleanAreaOptions: repeated message
+}
+
+// mqtt/srv/common/ActiveRobotPublish.pb.dart
+message ActiveRobotPublish.Response {
+    1 topicsDuration: message
+    2 publishDuration: uint32
+    3 firmwareVersion: string
+}
+message ActiveRobotPublish.Request {
+    1 topicsDuration: message
+    2 publishDuration: uint32
+    3 enableDebugMessage: bool
+    4 appFeatureList: message ActiveRobotPublish_AppFeatureList
+}
+message ActiveRobotPublish.AppFeatureList {
+    1 enableTaskInterceptInErrorState: bool
+}
+message ActiveRobotPublish.TopicDuration {
+    1 workStatusDuration: uint32
+    2 displayMapDuration: uint32
+    3 robotBaseStatusDuration: uint32
+    4 debugInfoDuration: uint32
+    5 upgradeStatusInfoDuration: uint32
+    6 downloadStatusInfoDuration: uint32
+    7 videoCruiseStatusDuration: uint32
+    8 robotSensorDataDuration: uint32
+    9 displayFrameInfoDuration: uint32
+}
+
+// mqtt/srv/common/GetFeatureList.pb.dart
+message GetFeatureList.Response {
+    1 supportMultiMap: bool
+    2 supportMapRotation: bool
+    3 supportCarpetCleanSetting: bool
+    4 supportFurniture: bool
+    5 supportCornerClean: bool
+    6 supportPetMode: bool
+    7 supportOverlapAdjust: bool
+    8 supportStationCleanMode: bool
+    9 supportRoomForbidden: bool
+   10 supportOperateLanguage: bool
+   11 supportUploadConfiguration: bool
+   12 supportCarpetRegionModify: bool
+   13 supportRotateRoomTexture: bool
+   14 supportPublishUpgradeStatus: bool
+   15 supportGetFirmwareVersion: bool
+   16 supportMultiLayerMap: bool
+   17 supportSetCustomVoice: bool
+   18 supportFloorTextureTatamiAndMarble: bool
+   19 supportCustomizeSmartCleanParam: bool
+   20 supportMaintainFloor: bool
+   21 supportQuietDustGathering: bool
+   22 supportParallelTask: bool
+   23 supportScheduledMaintainFloorTask: bool
+   24 supportAvoidModeConfig: bool
+   25 supportHeavyDirtyClean: bool
+   26 supportBuildNewMapAndClean: bool
+   27 supportRecallOnMapWithoutStation: bool
+   28 supportSpeechArgot: bool
+   29 supportAppUpdateMap: bool
+   30 supportFloorPlanEdit: bool
+   31 supportMultiZoneClean: bool
+   32 supportAutomaticPoweroffWhenDischarging: bool
+   33 supportValleyCharging: bool
+   34 supportDryMopAutoResume: bool
+   35 supportHeavyDirtyCleanByFrequency: bool
+   36 supportRobotWaterTankPumpControl: bool
+   37 supportBaseBoardClean: bool
+   38 supportSingleDryMop: bool
+   39 supportSegRoomCrossObstacles: bool
+   40 supportSegRoomCrossDoor: bool
+   41 supportVideoCruiseTask: bool
+   42 supportAiVoiceSoundEffect: bool
+   43 supportMassiveDeepClean: bool
+   44 supportTempHumidityDetectionForDryDustBag: bool
+   45 supportScheduledTaskExecuteOnce: bool
+   46 supportObjectExplore: bool
+   47 supportStopCleanTask: bool
+   48 supportCustomCleanOrderConfigure: bool
+   49 supportNarshVersion: int32
+   50 supportMultimapCustomCleanOrderConfigure: bool
+   51 supportAiVoiceSoundEffectForWaiting: bool
+   52 supportFlexibleMop: bool
+   53 supportBatteryHealthInfo: bool
+   54 supportVideoStreaming: bool
+   55 supportCleanTaskMassiveDirtyClean: bool
+   56 supportPetIconTypeSetting: bool
+   57 supportDustSensor: bool
+   58 supportChineseWakeWord: bool
+   59 supportPetHeatArea: bool
+   60 supportTelecontrolHeartbeat: bool
+   61 supportPetFurnitureHeatAreaExpansion: bool
+   62 supportAgoraVideoStreaming: bool
+   63 videoStreamingHasLdc: bool
+   64 supportPumpTroubleshooting: bool
+   65 supportHotWaterWash: bool
+   66 supportWashMopByRobotStatus: bool
+   67 streamingActiveShortcut: enum GetFeatureList_Response_StreamingActiveShortcut
+   68 supportMapConfiguration: bool
+   69 supportConsumablesOnCloud: bool
+   70 supportRobotWaterTank: bool
+   71 supportEditNotCurrentMap: bool
+   72 supportMapDistinctConfiguration: bool
+   73 supportRobotWaterTankAutoFill: bool
+   74 supportCleanWithBuildingMap: bool
+   75 supportCarpetCleanPriorityConfig: bool
+   76 supportCarpetDeepClean: bool
+   77 supportDirectDevOptionKeyMappingInterface: bool
+   78 supportConfigurableCycleScheduleTask: bool
+   79 supportTrackMop: bool
+   80 supportDryStationBag: bool
+   81 visionObsFeature: enum GetFeatureList_Response_VisionObsFeature
+   82 obsAvoidFeature: enum GetFeatureList_Response_OBS_AVOID_FEATURE
+   83 supportSpeech: bool
+   84 supportUserSetThreshold: bool
+   85 supportNavoIntelligenceAgent: bool
+   86 supportMaterialColorModify: bool
+   87 supportIssMapUpdate: bool
+   88 supportTeasePet: bool
+   89 supportMultiReplenish: bool
+   90 supportMultiMap20: bool
+   91 supportSearchPet: bool
+   92 supportNoStationMapRoomCleanParam: bool
+   93 supportNewObsRecognition: bool
+   94 supportAllThingsRecognition: bool
+   95 supportPreciousItemGuard: bool
+   96 supportBabyMode: bool
+   97 supportBackWashInNoStationMap: bool
+   98 supportNavoClean: bool
+   99 maxAmbientLightCtrlType: enum AmbientLightCtrlType
+  100 supportStationLightCtrl: bool
+  101 agoraVideoStreamingType: enum GetFeatureList_Response_AgoraVideoStreamingType
+  102 supportNoCarpetArea: bool
+  103 supportSlope: bool
+  104 supportVirtualWall: bool
+  105 disableSwitchMapButton: bool
+  106 supportedPetObsLabels: repeated enum VisionObsLabel
+  107 supportNewObsUploadLogic: bool
+  108 supportDisplayFrameInfo: bool
+  109 supportIndividualCarpetConfig: bool
+  110 supportCustomCarpetShape: bool
+  111 supportIgnoreCarpetWhenExplore: bool
+  112 supportAdaptCarpetOptionStrategy: bool
+  113 supportSweepIntensityLevel: bool
+  114 supportRealtimeReplenishMap: bool
+  115 supportReplenishCleanWhenHumanPetBlocked: bool
+  116 unifiedErrorCode: uint32
+  117 supportTrackForwardAssist: bool
+}
+
+// mqtt/srv/common/NotifyAppEvent.pb.dart
+message NotifyAppEvent.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message NotifyAppEvent.Request {
+    1 appEvent: enum
+}
+
+// mqtt/srv/common/RobotReboot.pb.dart
+message RobotReboot.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message RobotReboot.Request {
+}
+
+// mqtt/srv/common/RobotShutdown.pb.dart
+message RobotShutdown.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message RobotShutdown.Request {
+}
+
+// mqtt/srv/common/RobotYell.pb.dart
+message RobotYell.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message RobotYell.Request {
+}
+
+// mqtt/srv/common/SetEnergyCertificationMode.pb.dart
+message SetEnergyCertificationMode.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetEnergyCertificationMode.Request {
+    1 enable: bool
+}
+
+// mqtt/srv/common/upgrade/CheckFirmware.pb.dart
+message CheckFirmware.Response {
+    1 status: enum
+    2 firmwareStatus: int32
+}
+message CheckFirmware.Request {
+    1 targetVersion: string
+}
+
+// mqtt/srv/common/upgrade/FirmwareGroupMSG.pb.dart
+message FirmwareGroupMSG {
+    1 mcu: message
+    2 ble: message FirmwareVersionEntityMSG
+    3 cpu: message FirmwareVersionEntityMSG
+    4 media: message FirmwareVersionEntityMSG
+    5 sensorList: repeated message FirmwareVersionEntityMSG
+}
+message FirmwareVisionMSG {
+    1 ai: message
+    2 cpu: message FirmwareVersionEntityMSG
+}
+message FirmwareStationMSG {
+    1 mcu: message
+    2 ble: message FirmwareVersionEntityMSG
+    3 cpu: message FirmwareVersionEntityMSG
+    4 media: message FirmwareVersionEntityMSG
+    5 mediaB: message FirmwareVersionEntityMSG
+}
+message FirmwareVersionEntityMSG {
+    1 firmwareId: string
+    2 version: uint32
+    3 versionText: string
+}
+
+// mqtt/srv/common/upgrade/GetFirmwareVersion.pb.dart
+message GetFirmwareVersion.Response {
+    1 firmwareVersion: uint32
+    2 firmwareVersionText: string
+    3 robot: message FirmwareGroupMSG
+    4 station: message FirmwareStationMSG
+    5 vision: message FirmwareVisionMSG
+    6 unifiedErrorCode: uint32
+}
+message GetFirmwareVersion.Request {
+}
+
+// mqtt/srv/common/upgrade/StartUpgradeRobot.pb.dart
+message StartUpgradeRobot.Response {
+    1 result: enum
+    2 res: int32
+    3 unifiedErrorCode: uint32
+}
+message StartUpgradeRobot.Request {
+    1 targetVersion: string
+}
+
+// mqtt/srv/config/GetConfig.pb.dart
+message GetConfig.Response {
+    1 result: enum
+    2 config: message GetConfig_Response_Config
+    3 unifiedErrorCode: uint32
+}
+message GetConfig.Response.Config {
+    1 volumePercentage: uint32
+    2 language: enum Language
+    3 region: message Region
+    4 disturbMode: message DisturbMode
+    5 highAltitudeModeEnabled: bool
+    6 autoAddDetergentEnabled: bool
+    7 childLockEnabled: bool
+    8 cleanCarpetEnabled: bool
+    9 cleanCornerSetting: message CleanCornerSetting
+   10 boostCrossingModeEnabled: bool
+   11 smartCleanDetectionEnabled: bool
+   12 dryMopStrength: enum DryMopStrength
+   13 cleanMopFreq: enum CleanMopFreq
+   14 cleanCorner: message CleanCornerSetting
+   15 carpetCleanOption: enum CarpetCleanOption
+   16 carpetCleanCustomEnabled: bool
+   17 addCarpetCleanOption: enum CarpetCleanOption
+   18 customCleanStrategy: message CustomCleanStrategy
+   19 smartCleanSetting: enum SmartCleanSetting
+   20 switchBackToMainMapAfterTempMapClean: bool
+   21 stationCleanMode: enum CleanMode
+   22 petMode: bool
+   23 smartDeepCleanEnabled: bool
+   24 showVisionImageEnabled: bool
+   25 privacyPolicyEnabled: bool
+   26 moistureProofPadProtectEnabled: bool
+   27 dustGatheringEnabled: bool
+   28 smartDustGatheringEnabled: bool
+   29 smartCleanParam: message SmartCleanParam
+   30 quietDustGatheringEnabled: bool
+   31 dryRobotBagEnabled: bool
+   32 hotWaterWashEnabled: bool
+   33 massiveDirtyDeepCleanEnable: bool
+   34 avoidMode: enum AvoidMode
+   35 robotCleanMode: enum CleanMode
+   36 speechControlEnabled: bool
+   37 automaticPoweroffWhenDischarging: bool
+   38 valleyCharging: message ValleyCharging
+   39 aiVoiceSoundEffectEnabled: bool
+   40 aiVoiceSoundEffectForWaitingEnabled: bool
+   41 cornerCleanMode: enum CornerCleanMode
+   42 petIconType: enum PetIconType
+   43 enableDustSensorDirtyDetect: bool
+   44 mapConfiguration: message MapConfiguration
+   45 buildDateTime: string
+   46 carpetCleanPriorityOption: enum CarpetCleanPriorityOption
+   47 carpetDeepCleanOption: enum CarpetDeepCleanOption
+   48 wakeVoiceWords: repeated message WakeUpWord
+   49 allThingsRecognitionEnabled: bool
+   50 preciousItemGuardEnabled: bool
+   51 stationLightCtrlType: enum StationLightCtrlType
+   52 carpetOptionAdapatStrategy: enum CarpetOptionAdaptStrategy
+   53 carpetCleanSidebrushOption: enum CarpetCleanSidebrushOption
+   54 addCarpetDeepCleanOption: enum CarpetDeepCleanOption
+   55 humanPetBlockRepenishCleanEnabled: bool
+   56 trackForwardAssistEnabled: bool
+}
+message GetConfig.Request {
+}
+
+// mqtt/srv/config/GetCurrentVoiceInfo.pb.dart
+message GetCurrentVoiceInfo.Response {
+    1 result: enum
+    2 voiceInfo: message VoiceInfoMSG
+    3 unifiedErrorCode: uint32
+}
+message GetCurrentVoiceInfo.Request {
+}
+
+// mqtt/srv/config/GetKeyMapping.pb.dart
+message GetKeyMapping.Response {
+    1 result: enum
+    2 config: message KeyMapConfig
+    3 unifiedErrorCode: uint32
+}
+message GetKeyMapping.Request {
+}
+
+// mqtt/srv/config/GetLanguage.pb.dart
+message GetLanguage.Response {
+    1 result: enum
+    2 language: enum Language
+    3 unifiedErrorCode: uint32
+}
+message GetLanguage.Request {
+}
+
+// mqtt/srv/config/GetSupportedLanguages.pb.dart
+message GetSupportedLanguages.Response {
+    1 result: enum
+    2 languages: repeated enum Language
+    3 unifiedErrorCode: uint32
+}
+message GetSupportedLanguages.Request {
+}
+
+// mqtt/srv/config/SetConfig.pb.dart
+message SetConfig.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetConfig.Request {
+    1 volumePercentage: uint32
+    2 language: enum Language
+    3 region: message Region
+    5 disturbMode: message DisturbMode
+    6 highAltitudeModeEnabled: bool
+    7 autoAddDetergentEnabled: bool
+    8 childLockEnabled: bool
+    9 cleanCarpetEnabled: bool
+   10 cleanCornerSetting: message CleanCornerSetting
+   11 boostCrossingModeEnabled: bool
+   12 smartCleanDetectionEnabled: bool
+   13 dryMopStrength: enum DryMopStrength
+   14 cleanMopFreq: enum CleanMopFreq
+   15 carpetCleanOption: enum CarpetCleanOption
+   16 carpetCleanCustomEnabled: bool
+   17 addCarpetCleanOption: enum CarpetCleanOption
+   18 customCleanStrategy: message CustomCleanStrategy
+   19 smartCleanSetting: enum SmartCleanSetting
+   20 switchBackToMainMapAfterTempMapClean: bool
+   21 stationCleanMode: enum CleanMode
+   22 petMode: bool
+   23 smartDeepCleanEnabled: bool
+   24 showVisionImageEnabled: bool
+   25 privacyPolicyEnabled: bool
+   26 moistureProofPadProtectEnabled: bool
+   27 dustGatheringEnabled: bool
+   28 smartDustGatheringEnabled: bool
+   29 smartCleanParam: message SmartCleanParam
+   30 quietDustGatheringEnabled: bool
+   31 dryRobotBagEnabled: bool
+   32 hotWaterWashEnabled: bool
+   33 massiveDirtyDeepCleanEnable: bool
+   34 avoidMode: enum AvoidMode
+   35 robotCleanMode: enum CleanMode
+   36 speechControlEnabled: bool
+   37 automaticPoweroffWhenDischarging: bool
+   38 valleyCharging: message ValleyCharging
+   39 aiVoiceSoundEffectEnabled: bool
+   40 aiVoiceSoundEffectForWaitingEnabled: bool
+   41 cornerCleanMode: enum CornerCleanMode
+   42 petIconType: enum PetIconType
+   43 enableDustSensorDirtyDetect: bool
+   44 mapConfiguration: message MapConfiguration
+   45 carpetCleanPriorityOption: enum CarpetCleanPriorityOption
+   46 carpetDeepCleanOption: enum CarpetDeepCleanOption
+   47 allThingsRecognitionEnabled: bool
+   48 preciousItemGuardEnabled: bool
+   49 stationLightCtrlType: enum StationLightCtrlType
+   50 carpetOptionAdapatStrategy: enum CarpetOptionAdaptStrategy
+   51 carpetCleanSidebrushOption: enum CarpetCleanSidebrushOption
+   52 addCarpetDeepCleanOption: enum CarpetDeepCleanOption
+   53 humanPetBlockRepenishCleanEnabled: bool
+   54 trackForwardAssistEnabled: bool
+}
+
+// mqtt/srv/config/SetCustomVoice.pb.dart
+message SetCustomVoice.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetCustomVoice.Request {
+    1 language: string
+    2 timbreId: string
+    3 version: string
+}
+
+// mqtt/srv/config/SetKeyMapping.pb.dart
+message SetKeyMapping.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetKeyMapping.Request {
+    1 config: message
+}
+
+// mqtt/srv/config/SetLanguage.pb.dart
+message SetLanguage.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetLanguage.Request {
+    1 language: enum
+}
+
+// mqtt/srv/config/VoiceInfoMSG.pb.dart
+message VoiceInfoMSG {
+    1 language: string
+    2 version: string
+    3 describe: string
+    4 timbreId: string
+}
+
+// mqtt/srv/consumable/ConsumableInfoPayload.pb.dart
+message ConsumableInfoPayload {
+    1 maintainItems: repeated enum
+    2 replaceItems: repeated enum ConsumableReplaceItem
+}
+
+// mqtt/srv/consumable/GetConsumableInfo.pb.dart
+message GetConsumableInfo.Response {
+    1 consumableInfo: message
+    2 unifiedErrorCode: uint32
+}
+message GetConsumableInfo.Request {
+}
+
+// mqtt/srv/consumable/ResetConsumableInfo.pb.dart
+message ResetConsumableInfo.Response {
+    1 resultCode: enum
+}
+message ResetConsumableInfo.Request {
+    1 consumableInfo: message
+}
+
+// mqtt/srv/developer/CleanModuleControl.pb.dart
+message CleanModuleControl.Response {
+    1 res: enum
+    2 unifiedErrorCode: uint32
+}
+message CleanModuleControl.Request {
+    1 leftSideBrushRatio: uint32
+    2 rightSideBrushRatio: uint32
+    3 sweepUplift: uint32
+    4 rollBrushRatio: int32
+    5 fanRatio: uint32
+    6 mopUplift: uint32
+    7 wormRatio: int32
+    8 reset: bool
+    9 mopOutward: uint32
+   10 intakePortLift: int32
+   11 controlWithParam: bool
+   12 param: message CleanModule
+   13 motionModule: message MotionModule
+}
+
+// mqtt/srv/developer/GetDevelopOptions.pb.dart
+message GetDevelopOptions.Response {
+    1 result: enum
+    2 options: message DevelopOptions
+    3 unifiedErrorCode: uint32
+}
+message GetDevelopOptions.Request {
+}
+
+// mqtt/srv/developer/GetLaboratoryFeatureList.pb.dart
+message GetLaboratoryFeatureList.Response {
+    1 result: enum
+    2 featureList: repeated message LaboratoryFeature
+    3 unifiedErrorCode: uint32
+}
+message GetLaboratoryFeatureList.Request {
+}
+
+// mqtt/srv/developer/GetPlanningDebugInfo.pb.dart
+message GetPlanningDebugInfo.Response {
+    1 data: repeated message
+}
+message GetPlanningDebugInfo.Request {
+}
+
+// mqtt/srv/developer/GetRobotInfo.pb.dart
+message GetRobotInfo.Response {
+    1 errorCode: enum
+    2 robotInfo: repeated message StringPairs
+}
+message GetRobotInfo.Request {
+}
+
+// mqtt/srv/developer/LaboratoryFeature.pb.dart
+message LaboratoryFeature {
+    1 name: string
+    2 description: string
+    3 valueType: enum ValueType
+    4 value: string
+    5 tag: string
+}
+
+// mqtt/srv/developer/LedControl.pb.dart
+message LedControl.Response {
+    1 res: enum
+    2 unifiedErrorCode: uint32
+}
+message LedControl.Request {
+    1 ledFreeControl: message
+    2 stationLed: message StationLed
+}
+
+// mqtt/srv/developer/PingPong.pb.dart
+message PingPong {
+}
+message PingPong.Response {
+    1 unifiedErrorCode: uint32
+}
+
+// mqtt/srv/developer/PlayVoice.pb.dart
+message PlayVoice.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message PlayVoice.Request {
+    1 voiceFile: bytes
+    2 data: string
+    3 enableWakeUp: bool
+    4 resourceType: enum PlayVoice_Request_ResourceType
+    5 voiceResource: string
+    6 voiceText: string
+}
+
+// mqtt/srv/developer/SetDevelopOptions.pb.dart
+message SetDevelopOptions.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetDevelopOptions.Request {
+    1 options: message
+}
+
+// mqtt/srv/developer/SetLaboratoryFeature.pb.dart
+message SetLaboratoryFeature.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetLaboratoryFeature.Request {
+    1 feature: message
+}
+
+// mqtt/srv/dynamic_params/ApplyConfigFile.pb.dart
+message ApplyConfigFile.Response {
+    1 success: bool
+    2 msg: string
+    3 unifiedErrorCode: uint32
+}
+message ApplyConfigFile.Request {
+    1 fileInfo: message
+}
+
+// mqtt/srv/dynamic_params/FileInfo.pb.dart
+message ConfigFile {
+    1 oemPath: string
+    2 files: repeated message FileInfo
+}
+message FileInfo {
+    1 name: string
+    2 absolutePath: string
+    3 oemPath: string
+    4 isDefault: bool
+    5 isActivated: bool
+}
+
+// mqtt/srv/dynamic_params/GetConfigFileContent.pb.dart
+message GetConfigFileContent.Response {
+    1 fileInfo: message
+    2 content: string
+}
+message GetConfigFileContent.Request {
+    1 fileInfo: message
+}
+
+// mqtt/srv/dynamic_params/GetConfigFileList.pb.dart
+message GetConfigFileList.Response {
+    1 result: message
+    2 unifiedErrorCode: uint32
+}
+message GetConfigFileList.Request {
+}
+message Result {
+    1 nodeConfig: repeated message
+}
+message NodeConfig {
+    1 nodeName: string
+    2 configs: repeated message ConfigFile
+}
+
+// mqtt/srv/dynamic_params/SetConfigFileContent.pb.dart
+message SetConfigFileContent.Response {
+    1 fileInfo: message
+    2 success: bool
+    3 msg: string
+}
+message SetConfigFileContent.Request {
+    1 fileInfo: message
+    2 content: string
+}
+
+// mqtt/srv/dynamic_params/SnapshotConfigFile.pb.dart
+message SnapshotConfigFile.Response {
+    1 fileInfo: message
+    2 success: bool
+    3 msg: string
+}
+message SnapshotConfigFile.Request {
+    1 fileInfo: message
+    2 name: string
+}
+
+// mqtt/srv/info/GetBatteryInfo.pb.dart
+message GetBatteryInfo.Response {
+    1 fullChargeCapacity: uint64
+    2 chargeCycleCount: uint64
+    3 sn: string
+    4 soc: uint32
+    5 temperature: double
+    6 voltage: double
+    7 electricCurrent: double
+    8 healthState: uint32
+    9 ratedCapacity: uint64
+   10 unifiedErrorCode: uint32
+}
+message GetBatteryInfo.Request {
+}
+
+// mqtt/srv/info/GetCleanTimeLine.pb.dart
+message GetCleanTimeLine.Response {
+    1 result: enum
+    2 timeLineStatus: message TimeLineStatus
+    3 unifiedErrorCode: uint32
+}
+message GetCleanTimeLine.Request {
+    1 timeLineParam: enum
+}
+
+// mqtt/srv/map/BuildMap.pb.dart
+message BuildMap.Response {
+    1 result: enum
+    2 taskId: int32
+    3 unifiedErrorCode: uint32
+}
+message BuildMap.Request {
+    1 buildType: enum
+    2 mapExistStairs: bool
+    3 mapStairType: enum MapStairType
+    4 isRebuildCurrentMap: bool
+}
+
+// mqtt/srv/map/CheckMapUpdate.pb.dart
+message CheckMapUpdate.Response {
+    1 result: bool
+    2 map: message StaticMapPayload
+    3 unifiedErrorCode: uint32
+}
+message CheckMapUpdate.Request {
+}
+
+// mqtt/srv/map/DebugMapSetting.pb.dart
+message DebugMapSetting.Response {
+    1 bitVizConfig: repeated message
+}
+message DebugMapSetting.Response.BitVizConfig {
+    1 bitPos: uint32
+    2 text: string
+    3 argb: string
+}
+message DebugMapSetting.Request {
+    1 planningMapSwitch: bool
+    2 requestType: enum DebugMapSetting_Request_RequestType
+}
+
+// mqtt/srv/map/DeleteEventMap.pb.dart
+message DeleteEventMap.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DeleteEventMap.Request {
+    1 mapId: uint32
+    2 eventType: enum DeleteEventType
+}
+
+// mqtt/srv/map/DeleteMap.pb.dart
+message DeleteMap.Response {
+    1 result: enum
+    2 currentUseMapId: uint32
+    3 unifiedErrorCode: uint32
+}
+message DeleteMap.Request {
+    1 mapId: uint32
+}
+
+// mqtt/srv/map/EnableTempMap.pb.dart
+message EnableTempMap.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message EnableTempMap.Request {
+    1 type: enum EnableTempMap_Request_RequestType
+    2 queryMapExistRequest: message QueryMapExistRequest
+    3 saveTempMapRequest: message SaveTempMapRequest
+    4 deleteTempMapRequest: message DeleteTempMapRequest
+}
+message DeleteTempMapRequest {
+    1 mapId: uint32
+}
+message SaveTempMapRequest {
+    1 mapId: uint32
+    2 mapGenerateTime: uint64
+    3 customName: string
+    4 deleteMapId: uint32
+}
+message QueryMapExistRequest {
+    1 mapId: uint32
+    2 mapGenerateTime: uint64
+}
+
+// mqtt/srv/map/GetAllReducedMaps.pb.dart
+message GetAllReducedMaps.Response {
+    1 result: enum
+    2 maps: repeated message StaticMapPayload
+    3 unifiedErrorCode: uint32
+}
+message GetAllReducedMaps.Request {
+    1 mapRequestFormat: enum
+}
+
+// mqtt/srv/map/GetEditableMap.pb.dart
+message GetEditableMap.Response {
+    1 result: enum
+    2 map: message StaticMapPayload
+    3 editVersion: uint32
+    4 editConfig: message EditConfig
+    5 unifiedErrorCode: uint32
+}
+message GetEditableMap.Request {
+    1 mapId: uint32
+    2 enableShowManualAddCarpet: bool
+    3 enableFloorPlanData: bool
+    4 mapRequestFormat: enum MapRequestFormat
+}
+message EditConfig {
+    1 maxRoomNums: uint32
+}
+
+// mqtt/srv/map/GetMap.pb.dart
+message GetMap.Response {
+    1 result: enum
+    2 map: message StaticMapPayload
+    3 robotHasMap: bool
+    4 unifiedErrorCode: uint32
+}
+message GetMap.Request {
+    1 requestType: enum
+    2 enableShowManualAddCarpet: bool
+    3 mapRequestFormat: enum MapRequestFormat
+}
+
+// mqtt/srv/map/GetMatchedMap.pb.dart
+message GetMatchedMap.Response {
+    1 result: enum
+    2 mapId: uint32
+    3 unifiedErrorCode: uint32
+}
+message GetMatchedMap.Request {
+}
+
+// mqtt/srv/map/GetVisionImage.pb.dart
+message GetVisionImage.Response {
+    1 result: enum ServiceResult
+    2 originImage: bytes
+    3 url: string
+    4 box: message BoundingBox
+    5 imageRoi: message ImageROI
+    6 detectResultConfirmed: enum GetVisionImage_Response_DetectResultConfirmed
+    7 position: message Point
+    8 fileName: string
+    9 unifiedErrorCode: uint32
+}
+message GetVisionImage.Request {
+    1 type: enum
+    2 id: int32
+}
+
+// mqtt/srv/map/MapModify.pb.dart
+message MapOperation.Response {
+    1 result: enum
+    2 map: message StaticMapPayload
+    3 editVersion: uint32
+    4 errorCode: enum ErrorCode
+    5 unifiedErrorCode: uint32
+}
+message MapOperation.Request {
+    1 mapId: uint32
+    2 mapVersion: uint32
+    3 editVersion: uint32
+    4 operations: repeated message MapOperationPayload
+    5 enableShowManualAddCarpet: bool
+    6 enableFloorPlanData: bool
+    7 mapRequestFormat: enum MapRequestFormat
+}
+message MapOperationPayload {
+    1 roomSegOperation: message RoomSegOperation
+    2 roomMergeOperation: message RoomMergeOperation
+    3 roomInfoOperation: message RoomInfoOperation
+    4 forbiddenAreaOperation: message ForbiddenAreaOperation
+    5 mapRotateOperation: message MapRotateOperation
+    6 carpetOperation: message CarpetOperation
+    7 setMapNameOperation: message SetMapNameOperation
+    8 setFurnitureOperation: message SetFurnitureOperation
+    9 floorPlanOperation: message FloorPlanOperation
+   10 petHeatAreaOperation: message PetHeatAreaOperation
+   11 thresholdOperation: message ThresholdOperation
+   12 slopeOperation: message SlopeOperation
+   13 virtualWallOperation: message VirtualWallOperation
+   14 noCarpetAreaOperation: message NoCarpetAreaOperation
+}
+message FloorPlanOperation {
+    1 roomContours: repeated message
+}
+message SetFurnitureOperation {
+    1 opt: enum
+    2 furniture: message Furniture
+}
+message SetMapNameOperation {
+    1 customName: string
+}
+message CarpetOperation {
+    1 carpetId: uint32
+    2 carpetCleanOption: enum CarpetCleanOption
+    3 operation: enum CarpetOperation_Operation
+    4 carpetPolygon: repeated message Grid
+    5 carpetModifyPolygon: repeated message Grid
+    6 isFullRoomCarpet: bool
+    7 enableDeepClean: bool
+    8 sideBrushCleanEnabled: bool
+   12 roomId: uint32
+}
+message MapRotateOperation {
+    1 rotateAngle: int32
+}
+message NoCarpetAreaOperation {
+    1 operation: enum
+    2 noCarpetArea: message NoCarpetArea
+}
+message PetHeatAreaOperation {
+    1 operation: enum
+    2 petHeatArea: message PetHeatArea
+}
+message VirtualWallOperation {
+    1 operation: enum
+    2 virtualWallData: message VirtualWallData
+}
+message SlopeOperation {
+    1 operation: enum
+    2 slopeData: message SlopeData
+}
+message ThresholdOperation {
+    1 operation: enum
+    2 thresholdData: message ThresholdData
+}
+message ForbiddenAreaOperation {
+    1 operation: enum
+    2 forbidden: message ForbiddenArea
+}
+message RoomInfoOperation {
+    1 roomInfo: message
+}
+message RoomMergeOperation {
+    1 roomId1: uint32
+    2 roomId2: uint32
+    3 newRoomId: uint32
+}
+message RoomSegOperation {
+    1 startSegPoint: message
+    2 endSegPoint: message Point
+    3 leftRoomId: uint32
+    4 rightRoomId: uint32
+}
+
+// mqtt/srv/map/SaveMapUpdate.pb.dart
+message SaveMapUpdate.Response {
+    1 result: bool
+    2 unifiedErrorCode: uint32
+}
+message SaveMapUpdate.Request {
+}
+
+// mqtt/srv/map/SetUpdateMapRegions.pb.dart
+message SetUpdateMapRegions.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetUpdateMapRegions.Request {
+    1 mapId: uint32
+    2 regions: repeated message EditMapRegion
+}
+message EditMapRegion {
+    1 opt: enum
+    2 region: message UpdateMapRegion
+}
+
+// mqtt/srv/map/StartUpdateMap.pb.dart
+message StartUpdateMap.Response {
+    1 result: enum
+    2 taskId: int32
+    3 unifiedErrorCode: uint32
+}
+message StartUpdateMap.Request {
+    1 mapId: uint32
+    2 regions: repeated message UpdateMapRegion
+}
+
+// mqtt/srv/map/SwitchMap.pb.dart
+message SwitchMap.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SwitchMap.Request {
+    1 mapId: uint32
+}
+
+// mqtt/srv/map/ThresholdPassableConfirm.pb.dart
+message ThresholdPassableConfirm.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message ThresholdPassableConfirm.Request {
+    1 thresholdId: uint32
+    2 ignoreCliffEnable: bool
+}
+
+// mqtt/srv/map/VisionDetectionConfirm.pb.dart
+message VisionDetectionConfirm.Response {
+    1 result: enum
+    2 errorCode: enum VisionDetectionConfirm_Response_ErrorCode
+    3 unifiedErrorCode: uint32
+}
+message VisionDetectionConfirm.Request {
+    1 type: enum
+    2 id: int32
+    3 detectCorrect: bool
+    4 correctLabel: enum VisionObsLabel
+}
+
+// mqtt/srv/multimedia/StreamingAccessKey.pb.dart
+message StreamingAccessKey {
+    1 productKey: string
+    2 deviceName: string
+    3 deviceSecret: string
+}
+
+// mqtt/srv/multimedia/StreamingCommand.pb.dart
+message StreamingCommand.Response {
+    1 result: uint32
+    2 streamingAccessKey: message StreamingAccessKey
+    3 streamingToken: message StreamingToken
+    4 payload: string
+    5 unifiedErrorCode: uint32
+}
+message StreamingCommand.Request {
+    1 action: uint32
+    2 payload: string
+    3 type: uint32
+    4 extraData: string
+    5 debugMode: bool
+}
+
+// mqtt/srv/multimedia/StreamingToken.pb.dart
+message StreamingToken {
+    1 token: string
+}
+
+// mqtt/srv/schedule/AddCleanSchedule.pb.dart
+message AddCleanSchedule.Response {
+    1 errorCode: message
+    2 taskId: uint32
+}
+message AddCleanSchedule.Request {
+    1 cleanScheduleParam: message
+}
+
+// mqtt/srv/schedule/CleanSchedule.pb.dart
+message CleanSchedule {
+    1 taskId: uint32
+    2 cleanScheduleParam: message CleanScheduleParam
+}
+
+// mqtt/srv/schedule/CleanScheduleParam.pb.dart
+message CleanScheduleParam {
+    1 crontab: message
+    2 cleanPlanId: uint32
+    3 cleanMode: enum CleanMode
+    4 isCustomPlan: bool
+    5 customName: string
+}
+
+// mqtt/srv/schedule/Crontab.pb.dart
+message Crontab {
+    1 cron: string
+    2 remindingTime: int32
+    3 enabled: bool
+}
+
+// mqtt/srv/schedule/DeleteCleanSchedules.pb.dart
+message DeleteCleanSchedules.Response {
+    1 errorCode: message
+}
+message DeleteCleanSchedules.Request {
+    1 taskIds: repeated uint32
+}
+
+// mqtt/srv/schedule/GetCleanSchedules.pb.dart
+message GetCleanSchedules.Response {
+    1 errorCode: message
+    2 cleanSchedules: repeated message CleanSchedule
+}
+message GetCleanSchedules.Request {
+}
+
+// mqtt/srv/schedule/ScheduleErrorCode.pb.dart
+message ScheduleErrorCode {
+    1 code: enum
+    2 message: string
+}
+
+// mqtt/srv/schedule/UpdateCleanSchedule.pb.dart
+message UpdateCleanSchedule.Response {
+    1 errorCode: message
+}
+message UpdateCleanSchedule.Request {
+    1 cleanSchedule: message
+}
+
+// mqtt/srv/status/GetDeviceBaseStatus.pb.dart
+message GetDeviceBaseStatus.Response {
+    1 result: enum
+    2 robotBaseStatus: message RobotBaseStatus
+    3 unifiedErrorCode: uint32
+}
+message GetDeviceBaseStatus.Request {
+}
+
+// mqtt/srv/supply/AmbientLightCtrl.pb.dart
+message AmbientLightCtrl.Response {
+    1 status: uint32
+}
+message AmbientLightCtrl.Request {
+    1 ambientLightCtrlType: enum
+}
+
+// mqtt/srv/supply/DryDustBag.pb.dart
+message DryDustBag.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DryDustBag.Request {
+}
+
+// mqtt/srv/supply/DryMop.pb.dart
+message DryMop.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DryMop.Request {
+}
+
+// mqtt/srv/supply/DryStationBag.pb.dart
+message DryStationBag.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DryStationBag.Request {
+}
+
+// mqtt/srv/supply/DustGathering.pb.dart
+message DustGathering.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message DustGathering.Request {
+}
+
+// mqtt/srv/supply/GetDryMopRemainTime.pb.dart
+message GetDryMopRemainTime.Response {
+    1 result: enum
+    2 remainTime: uint32
+    3 unifiedErrorCode: uint32
+}
+message GetDryMopRemainTime.Request {
+}
+
+// mqtt/srv/supply/PumpTroubleshooting.pb.dart
+message PumpTroubleshooting.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message PumpTroubleshooting.Request {
+}
+
+// mqtt/srv/supply/Recall.pb.dart
+message Recall.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message Recall.Request {
+}
+
+// mqtt/srv/supply/RobotSewageBoxPumpTroubleshooting.pb.dart
+message RobotSewageBoxPumpTroubleshooting.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message RobotSewageBoxPumpTroubleshooting.Request {
+}
+
+// mqtt/srv/supply/RobotWaterTankPumpControl.pb.dart
+message RobotWaterTankPumpControl.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message RobotWaterTankPumpControl.Request {
+    1 ratio: int32
+    2 workDurationMs: int32
+}
+
+// mqtt/srv/supply/SearchPet.pb.dart
+message SearchPet.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SearchPet.Request {
+}
+
+// mqtt/srv/supply/WashAndDryMop.pb.dart
+message WashAndDryMop.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message WashAndDryMop.Request {
+}
+
+// mqtt/srv/supply/WashMop.pb.dart
+message WashMop.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message WashMop.Request {
+}
+
+// mqtt/srv/task/CancelTask.pb.dart
+message CancelTask.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message CancelTask.Request {
+    1 taskType: enum
+}
+
+// mqtt/srv/task/ContinueTask.pb.dart
+message ContinueTask.Response {
+    1 code: enum
+    2 result: enum ServiceResult
+    3 unifiedErrorCode: uint32
+}
+message ContinueTask.Request {
+    1 continueTask: bool
+}
+
+// mqtt/srv/task/ForceEndTask.pb.dart
+message ForceEndTask.Response {
+    1 result: enum
+    2 parallelTaskResult: repeated enum ServiceResult
+    3 unifiedErrorCode: uint32
+    4 parallelUnifiedErrorCode: repeated uint32
+}
+message ForceEndTask.Request {
+    1 tasks: repeated enum
+    2 exceptTasks: repeated enum ParallelTaskType
+}
+
+// mqtt/srv/task/GetContinueTask.pb.dart
+message GetContinueTask.Response {
+    1 taskRes: enum
+    2 errorCode: uint32
+    3 cleanMode: enum CleanMode
+    4 taskType: enum GetContinueTask_Response_TaskType
+    5 taskStopTimestamp: int64
+    6 task: message CleanTask
+    7 mapId: uint32
+    8 robotTerminatedPose: message PoseData
+    9 finishedZoneIds: repeated int32
+}
+message GetContinueTask.Request {
+}
+
+// mqtt/srv/task/PauseTask.pb.dart
+message PauseTask.Response {
+    1 result: enum
+    2 parallelTaskResult: repeated enum ServiceResult
+    3 unifiedErrorCode: uint32
+    4 parallelUnifiedErrorCode: repeated uint32
+}
+message PauseTask.Request {
+    1 tasks: repeated enum
+}
+
+// mqtt/srv/task/ResumeTask.pb.dart
+message ResumeTask.Response {
+    1 result: enum
+    2 parallelTaskResult: repeated enum ServiceResult
+    3 unifiedErrorCode: uint32
+    4 parallelUnifiedErrorCode: repeated uint32
+}
+message ResumeTask.Request {
+    1 tasks: repeated enum
+}
+
+// mqtt/srv/telecontrol/GetTwoRoomsCrossingPoint.pb.dart
+message GetTwoRoomsCrossingPoint.Response {
+    1 point1: message
+    2 point2: message Point
+}
+message GetTwoRoomsCrossingPoint.Request {
+    1 roomId1: uint32
+    2 roomId2: uint32
+}
+
+// mqtt/srv/telecontrol/PerformChoreography.pb.dart
+message PerformChoreography.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message PerformChoreography.Request {
+    1 function: message
+}
+
+// mqtt/srv/telecontrol/PointNavi.pb.dart
+message PointNavi.Response {
+    1 result: enum
+    2 taskId: uint32
+    3 unifiedErrorCode: uint32
+}
+message PointNavi.Request {
+    1 poseData: message
+    2 avoidCarpetMask: uint32
+    4 exploreMode: enum PointNavi_Request_ExploreMode
+    5 points: repeated message PoseData
+    6 repeatTimes: uint32
+    7 cleanMode: enum PointNavi_Request_CleanMode
+    8 worldCoordPoints: repeated message PoseData
+    9 maxLinearVel: float
+   10 maxAngularVel: float
+   11 robotRadius: float
+}
+
+// mqtt/srv/telecontrol/SeManualControlMode.pb.dart
+message SetManualControlMode.Response {
+    1 result: enum
+    2 unifiedErrorCode: uint32
+}
+message SetManualControlMode.Request {
+    1 manualControlMode: enum
+}
+
+// mqtt/srv/voice/GetVoiceList.pb.dart
+message GetVoiceList.Response {
+    1 voiceList: repeated message
+    2 unifiedErrorCode: uint32
+}
+message GetVoiceList.Request {
+    1 voiceType: enum
+}
+message GetVoiceList.VoiceList {
+    1 iconUrl: string
+    2 infoType: enum GetVoiceList_VoiceList_InfoType
+    3 infoList: repeated message GetVoiceList_VoiceInfo
+}
+message GetVoiceList.VoiceInfo {
+    1 voiceText: string
+    2 voiceResource: string
+    3 extendInfo: string
+}

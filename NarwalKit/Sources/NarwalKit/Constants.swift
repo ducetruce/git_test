@@ -8,6 +8,9 @@ public enum NarwalDefaults {
     public static let bonjourType = "_narwal_sweeper._tcp"
 
     public static let commandTimeout: TimeInterval = 5
+    /// How long a command waits for a dropped socket to be replaced. The
+    /// reconnect backoff is 1-2 s, or ~12 s when the robot refuses a client.
+    public static let reconnectWait: TimeInterval = 15
     /// A timed-out command keeps its place in the response order this much
     /// longer, so its late answer is dropped instead of misattributed.
     public static let lateResponseGrace: TimeInterval = 10
@@ -79,6 +82,27 @@ public enum Topic {
     public static let appHeartbeat = "status/app_status_heartbeat"
     public static let getBaseStatus = "status/get_device_base_status"
     public static let getConsumableInfo = "consumable/get_consumable_info"
+    public static let getConfig = "config/get"
+    /// Takes SetConfig.Request, whose field numbers differ from config/get's.
+    public static let setConfig = "config/set"
+    /// GetLanguage.Response {1 result, 2 language}: the robot's live
+    /// language. config/get's language (2) goes stale on the Z10 Ultra.
+    public static let getLanguage = "config/language/get"
+    /// SetLanguage.Request {1 language}.
+    public static let setLanguage = "config/language/set"
+    public static let mapOperation = "map/operation"
+    public static let getVisionImage = "map/get_vision_image"
+    /// Probably the Narwal app's "issue resolved" button; payload unknown,
+    /// sent empty.
+    public static let confirmWarning = "clean_system/confirm_warning"
+    public static let getCleanTimeLine = "info/get_clean_time_line"
+    public static let getCleanSchedules = "schedule/clean_schedule/get"
+    public static let addCleanSchedule = "schedule/clean_schedule/add"
+    public static let updateCleanSchedule = "schedule/clean_schedule/update"
+    public static let deleteCleanSchedules = "schedule/clean_schedule/delete"
+    public static let getCleanPlans = "clean/plan/get"
+    public static let setCleanPlan = "clean/plan/set"
+    public static let deleteCleanPlan = "clean/plan/delete"
 
     // Task control
     public static let pause = "task/pause"
@@ -91,6 +115,9 @@ public enum Topic {
     /// Never use it for room cleaning; see `startClean`.
     public static let planStart = "clean/plan/start"
     public static let startClean = "clean/start_clean"
+    /// Refused by the Z10 Ultra: 2 when empty, 3 with {1 cleanMode, 2 mapId,
+    /// 3 whole-house CleanAreaOption}, even idle on the dock. Whole-house
+    /// cleans use `startClean` with every room instead.
     public static let easyClean = "clean/easy_clean/start"
     public static let setFanLevel = "clean/set_fan_level"
     public static let setMopHumidity = "clean/set_mop_humidity"
@@ -108,10 +135,25 @@ public enum Topic {
     // Map
     public static let getMap = "map/get_map"
     public static let getAllMaps = "map/get_all_reduced_maps"
+    public static let switchMap = "map/switch_map"
+    public static let deleteMap = "map/delete_map"
+    public static let buildMap = "map/build_map/start"
+
+    // Floor care, device, parts
+    public static let startFloorMaintenance = "clean/floor_maintenance/start"
+    public static let getContinueTask = "task/get_continue_task"
+    public static let continueTask = "task/continue_task"
+    public static let getFirmwareVersion = "common/upgrade/get_firmware_version"
+    public static let batteryInfo = "info/battery_info"
+    public static let resetConsumable = "consumable/reset_consumable_info"
+    public static let dryMopRemainTime = "supply/get_dry_mop_remain_time"
+    /// Narwal's "Dock Base Drainage": on the Z10 Ultra it runs the dock's
+    /// pump (task type 25, TASK_TYPE_PUMP_TROUBLESHOOTING) and never answers.
+    public static let pumpTroubleshooting = "supply/pump_troubleshooting"
 
     /// The robot never answers these, so they must not take a place in the
     /// response order or they would swallow the next real answer.
-    public static let unacknowledged: Set<String> = [appHeartbeat]
+    public static let unacknowledged: Set<String> = [appHeartbeat, pumpTroubleshooting]
 }
 
 public enum CommandResult: Int, Sendable {
@@ -237,9 +279,10 @@ public enum AmbientLightMode: Int, Sendable, CaseIterable {
 /// RoomType names from the Narwal app's own strings.
 public enum RoomType {
     public static let names: [Int: String] = [
-        0: "Room", 1: "Master bedroom", 2: "Secondary bedroom", 3: "Living room",
-        4: "Kitchen", 5: "Bathroom", 6: "Toilet", 7: "Balcony", 8: "Dining room",
-        9: "Closet", 10: "Corridor", 11: "Study", 12: "Kids' room",
-        13: "Entertainment room", 14: "Storage room", 15: "Others",
+        // Title case and "Hallway", as the Narwal app shows them.
+        0: "Room", 1: "Primary Bedroom", 2: "Bedroom", 3: "Living Room",
+        4: "Kitchen", 5: "Bathroom", 6: "Toilet", 7: "Balcony", 8: "Dining Room",
+        9: "Closet", 10: "Hallway", 11: "Study", 12: "Kids' Room",
+        13: "Entertainment Room", 14: "Storage Room", 15: "Other",
     ]
 }
