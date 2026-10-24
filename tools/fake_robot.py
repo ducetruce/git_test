@@ -195,7 +195,11 @@ class Robot:
         self.started = 0.0
         self.x, self.y, self.heading = 5.0, 5.0, 0.0
         # config/get varint fields by get number, plus DisturbMode bytes.
-        self.config: dict[int, int] = {1: 29, 6: 1}
+        # Like the Z10 Ultra: language (2) is a stale 1 (Simplified Chinese);
+        # config/language/get has the live one. 12 drying Smart, 13 and 18
+        # rewash every 108 ft², 41 corners Wiggle.
+        self.config: dict[int, int] = {1: 29, 2: 1, 6: 1, 12: 3, 13: 2, 41: 2}
+        self.language = 3
         self.carpet_option = 0
         self.nogo: list[bytes] = [DEFAULT_NOGO]
         self.names: dict[int, str] = {}
@@ -205,7 +209,7 @@ class Robot:
         self.schedules: list[tuple[int, bytes]] = []
         self.disturb = f_varint(2, 79_200) + f_varint(3, 28_800)
         # Message-valued config fields by get number, e.g. 29 smartCleanParam.
-        self.config_messages: dict[int, bytes] = {29: f_bytes(99, b"keep")}
+        self.config_messages: dict[int, bytes] = {29: f_bytes(99, b"keep"), 18: f_varint(1, 1) + f_varint(2, 2)}
 
     @property
     def cleaning(self) -> bool:
@@ -241,6 +245,13 @@ class Robot:
             body = b"".join(f_varint(k, v) for k, v in sorted(self.config.items()) if v)
             body += b"".join(f_bytes(k, v) for k, v in sorted(self.config_messages.items()))
             return response(f_varint(1, 1) + f_bytes(2, body + f_bytes(4, self.disturb)))
+        elif short == "config/language/get":
+            return response(f_varint(1, 1) + f_varint(2, self.language))
+        elif short == "config/language/set":
+            self.language = parse_fields(payload).get(1, self.language)
+        elif short == "info/battery_info":
+            # The Z10 Ultra's shape: no ratedCapacity (9); healthState (8) is a percent.
+            return response(f_varint(1, 4393) + f_varint(2, 131) + f_varint(4, int(self.battery)) + f_varint(8, 84))
         elif short == "config/set":
             # SetConfig.Request: one field, numbered differently from config/get.
             field, wire, value = parse_single_field(payload)

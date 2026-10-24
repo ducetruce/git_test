@@ -87,6 +87,22 @@ final class FakeRobotTests: XCTestCase {
         let frequency = try XCTUnwrap(RobotSetting.named("autoEmptyFrequency"))
         let smartEmpty = try await connection.setSetting(frequency.choices[0])
         XCTAssertEqual(smartEmpty?.value(frequency), "Smart")
+        // The language comes from config/language/get, not config/get's
+        // stale copy, and changes go to config/language/set.
+        let language = try XCTUnwrap(RobotSetting.named("language"))
+        XCTAssertEqual(before?.value(language), "English")
+        let german = try XCTUnwrap(language.choices.first { $0.label == "Deutsch" })
+        let switched = try await connection.setSetting(german)
+        XCTAssertEqual(switched?.value(language), "Deutsch")
+        // Rewash by area writes 18 and the older 13 together.
+        let rewash = try XCTUnwrap(RobotSetting.named("rewashStrategy"))
+        XCTAssertEqual(before?.value(rewash), "Every 108 ft²")
+        let narrow = try XCTUnwrap(rewash.choices.first { $0.label == "Every 86 ft²" })
+        let rewashed = try await connection.setSetting(narrow)
+        XCTAssertEqual(rewashed?.value(rewash), "Every 86 ft²")
+        XCTAssertEqual(rewashed?.int(path: [13]), 3)
+        let battery = try await connection.batteryHealth()
+        XCTAssertEqual(battery?.capacityPercent, 84)
         let quiet = RobotSettings.DoNotDisturb(enabled: true, begin: 75_600, end: 25_200)
         let withQuiet = try await connection.setDoNotDisturb(quiet)
         XCTAssertEqual(withQuiet?.doNotDisturb, quiet)
