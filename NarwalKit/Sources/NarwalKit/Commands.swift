@@ -40,7 +40,14 @@ extension NarwalConnection {
     }
 
     public func settings() async throws -> RobotSettings? {
-        RobotSettings(response: try await send(Topic.getConfig).message)
+        guard var settings = RobotSettings(response: try await send(Topic.getConfig).message) else { return nil }
+        // The Z10 Ultra's config/get reports 1 (Simplified Chinese) while it
+        // speaks English; config/language/get has the live language.
+        if let reply = try? await send(Topic.getLanguage, lateGrace: 0), reply.accepted,
+           let language = reply.message.int(2), language != 0 {
+            settings.setLanguage(language)
+        }
+        return settings
     }
 
     /// Recent cleaning events. An empty answer means no history.
@@ -51,10 +58,11 @@ extension NarwalConnection {
         return CleaningHistory(events: [])
     }
 
-    /// Robot-stored schedules. Read-only, but the Z10 Ultra hasn't answered
-    /// this yet, so nothing in the app calls it.
+    /// Robot-stored schedules. Read-only, but the Z10 Ultra never answers
+    /// it, so nothing in the app calls it. No late grace: a request the
+    /// robot ignores would otherwise take the next query's answer.
     public func cleanSchedules() async throws -> [CleanSchedule] {
-        CleanSchedule.list(response: try await send(Topic.getCleanSchedules, timeout: 10).message)
+        CleanSchedule.list(response: try await send(Topic.getCleanSchedules, timeout: 10, lateGrace: 0).message)
     }
 
     public func cleanPlans() async throws -> [CleanPlan] {
@@ -168,7 +176,12 @@ extension NarwalConnection {
         // Nested settings are written from the robot's current config, so
         // read it fresh rather than trust what the app last saw.
         guard let current = try await settings() else { throw NarwalError.timeout("config/get") }
-        for request in RobotSetting.requests(for: choice, current: current) {
+        // The language has its own topic; config/get's copy of it goes stale.
+        if let language = choice.writes.first(where: { $0.path == [2] }) {
+            try await perform(Topic.setLanguage, Payloads.singleVarint(language.value), timeout: 10)
+        }
+        let rest = RobotSetting.Choice(choice.label, choice.writes.filter { $0.path != [2] })
+        for request in RobotSetting.requests(for: rest, current: current) {
             try await perform(Topic.setConfig, request)
         }
         return try await settings()

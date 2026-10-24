@@ -85,6 +85,11 @@ public enum Topic {
     public static let getConfig = "config/get"
     /// Takes SetConfig.Request, whose field numbers differ from config/get's.
     public static let setConfig = "config/set"
+    /// GetLanguage.Response {1 result, 2 language}: the robot's live
+    /// language. config/get's language (2) goes stale on the Z10 Ultra.
+    public static let getLanguage = "config/language/get"
+    /// SetLanguage.Request {1 language}.
+    public static let setLanguage = "config/language/set"
     public static let mapOperation = "map/operation"
     public static let getVisionImage = "map/get_vision_image"
     /// Probably the Narwal app's "issue resolved" button; payload unknown,

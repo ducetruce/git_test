@@ -1008,6 +1008,18 @@ final class FloorCareTests: XCTestCase {
         XCTAssertEqual(station.cartridges.map(\.label), ["Not installed"], "an empty shared slot shows once")
     }
 
+    func testLiveLanguageReplacesConfigCopy() throws {
+        // config/get says 1 (Simplified Chinese); config/language/get says 3.
+        var settings = try XCTUnwrap(RobotSettings(response: try message { w in
+            w.varint(1, 1); w.message(2) { $0.varint(2, 1); $0.varint(7, 1) }
+        }))
+        let language = try XCTUnwrap(RobotSetting.named("language"))
+        XCTAssertEqual(settings.value(language), "简体中文")
+        settings.setLanguage(3)
+        XCTAssertEqual(settings.value(language), "English")
+        XCTAssertEqual(settings.int(path: [7]), 1, "the rest of the config is kept")
+    }
+
     func testBatteryHealthWithoutRatedCapacity() throws {
         // What the Z10 Ultra sends: no ratedCapacity (9), healthState 84.
         let z10 = try message { $0.varint(1, 4393); $0.varint(2, 131); $0.varint(4, 21); $0.varint(8, 84) }

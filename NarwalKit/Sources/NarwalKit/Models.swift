@@ -61,6 +61,12 @@ public struct RobotSettings: Equatable, Sendable {
 
     public func value(_ setting: RobotSetting) -> String { setting.label(in: self) }
 
+    /// Replaces config/get's language (2) with config/language/get's.
+    public mutating func setLanguage(_ language: Int) {
+        values[2] = language
+        config = config.setting(path: [2], int: language)
+    }
+
     public init?(response: ProtoMessage) {
         guard let settings = response.message(2) else { return nil }
         config = settings

@@ -125,6 +125,11 @@ final class FakeRobotTests: XCTestCase {
         // The real robot refuses easy clean, empty or not.
         let refused = try await connection.send(Topic.easyClean)
         XCTAssertFalse(refused.accepted)
+        // Requests the robot ignores must not take the next query's answer.
+        try await connection.drainDockBase()
+        XCTAssertNotNil(try await connection.deviceInfo(), "drainage takes no place in the reply order")
+        _ = try? await connection.send(Topic.pumpTroubleshooting, timeout: 2, lateGrace: 0)
+        XCTAssertNotNil(try await connection.deviceInfo(), "an ignored probe with no late grace")
         // Wood floor maintenance on its own.
         try await connection.startFloorMaintenance(rooms: [1], cleanFirst: false)
 

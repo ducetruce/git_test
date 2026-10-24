@@ -601,7 +601,9 @@ final class RobotStore {
             return ProbeResult(topic: topic, outcome: "Not connected", leaves: [])
         }
         do {
-            let response = try await connection.send(topic, timeout: 15)
+            // Some probes are never answered (schedule/clean_schedule/get on
+            // the Z10 Ultra); with a late grace they'd take the next answer.
+            let response = try await connection.send(topic, timeout: 15, lateGrace: 0)
             let outcome = response.raw.isEmpty ? "Answered (empty)" : "Answered, \(response.raw.count) bytes"
             appendLog("Probe \(topic): \(outcome)")
             return ProbeResult(topic: topic, outcome: outcome, leaves: Research.flatten(response.message))

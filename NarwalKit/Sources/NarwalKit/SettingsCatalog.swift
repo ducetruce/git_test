@@ -237,22 +237,18 @@ extension RobotSetting {
         // Navo Voice Assistant
         .toggle("speechControlEnabled", "Navo Voice Assistant", .voice, 36,
                 footnote: "Wake the robot with \"Hey, Nawa\", then speak a command."),
+        // The languages config/supported_languages/get lists on the Z10 Ultra.
         RobotSetting(id: "language", title: "Robot Language", menu: .voice, choices: [
             Choice("English", [Write([2], 3)]),
             Choice("Español", [Write([2], 10)]),
             Choice("Français", [Write([2], 9)]),
             Choice("Deutsch", [Write([2], 6)]),
             Choice("Italiano", [Write([2], 8)]),
-            Choice("Polski", [Write([2], 12)]),
             Choice("Русский", [Write([2], 11)]),
-            Choice("Türkçe", [Write([2], 13)]),
             Choice("עברית", [Write([2], 7)]),
             Choice("日本語", [Write([2], 5)]),
             Choice("한국어", [Write([2], 4)]),
             Choice("简体中文", [Write([2], 1)]),
-            Choice("繁體中文", [Write([2], 2)]),
-            Choice("ไทย", [Write([2], 14)]),
-            Choice("Tiếng Việt", [Write([2], 15)]),
         ], footnote: "The robot needs that language's voice installed. If it isn't, the Narwal app downloads it."),
 
         // Stored, but not in the Narwal app for this robot.
