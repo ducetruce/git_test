@@ -20,9 +20,24 @@ final class ScreenshotTests: XCTestCase {
             sleep(3)
             shot(tab)
         }
+        cleanSetup()
         for row in ["Schedules", "Freo Mind Mode", "Floor Cleaning", "Dock", "Navo Voice Assistant", "Device"] {
             open(row)
         }
+    }
+
+    /// The clean setup sheet, scrolled to show its settings, then cancelled.
+    private func cleanSetup() {
+        app.tabBars.buttons["Clean"].tap()
+        let start = app.buttons["Clean whole house…"]
+        guard start.waitForExistence(timeout: 5), start.isHittable else { return shot("Missing - Clean setup") }
+        start.tap()
+        sleep(2)
+        shot("Clean setup")
+        app.swipeUp()
+        sleep(1)
+        shot("Clean setup - scrolled")
+        app.buttons["Cancel"].tap()
     }
 
     /// Opens a row under More, screenshots it and goes back.
