@@ -27,7 +27,9 @@ final class EncodingTests: XCTestCase {
 
     func testWakePayloadsMatchReference() {
         XCTAssertEqual(hexString(Payloads.topicSubscription(duration: 600)), GoldenVectors.subscription600)
-        XCTAssertEqual(hexString(Payloads.singleVarint(1)), GoldenVectors.notifyAppEvent)
+        XCTAssertEqual(hexString(Payloads.singleVarint(AppEvent.start.rawValue)), GoldenVectors.notifyAppEvent)
+        // NotifyAppEvent.Request {1: APP_EVENT_ENTER_DEVICE_PAGE}.
+        XCTAssertEqual(hexString(Payloads.singleVarint(AppEvent.enterDevicePage.rawValue)), "0802")
         XCTAssertEqual(hexString(Payloads.singleVarint(600)), GoldenVectors.activeRobotDuration600)
     }
 

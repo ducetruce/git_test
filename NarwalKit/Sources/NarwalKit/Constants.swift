@@ -236,6 +236,12 @@ public enum MopStrength: Int, Sendable, CaseIterable, Codable {
     public var label: String { self == .normal ? "Normal" : "High" }
 }
 
+/// NotifyAppEvent.Request field 1.
+public enum AppEvent: Int, Sendable {
+    case start = 1
+    case enterDevicePage = 2
+}
+
 public enum CleaningRoute: Int, Sendable, CaseIterable, Codable {
     case standard = 1
     case meticulous = 2

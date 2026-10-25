@@ -467,7 +467,11 @@ public actor NarwalConnection {
     private func sendWakeBurst() async {
         await acquireCommandSlot()
         defer { releaseCommandSlot() }
-        sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(1))
+        // APP_EVENT_START, then APP_EVENT_ENTER_DEVICE_PAGE: the Narwal app
+        // sends the second when its robot page opens.
+        sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(AppEvent.start.rawValue))
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        sendUnawaited(Topic.notifyAppEvent, Payloads.singleVarint(AppEvent.enterDevicePage.rawValue))
         try? await Task.sleep(nanoseconds: 200_000_000)
         sendUnawaited(Topic.activeRobotPublish, Payloads.topicSubscription())
         try? await Task.sleep(nanoseconds: 200_000_000)

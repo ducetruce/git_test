@@ -226,6 +226,13 @@ final class RobotStore {
         }
     }
 
+    private func refreshAfterWake() {
+        Task {
+            await refreshAll()
+            if history == nil { await reloadHistory() }
+        }
+    }
+
     func refreshAll() async {
         guard let connection else { return }
         if let polled = try? await connection.baseStatus() { applyStatus(polled) }
@@ -380,18 +387,18 @@ final class RobotStore {
                 waitingSince = nil
             }
             appendLog("Connection: \(state)")
-            if state == .awake || state == .connected {
-                Task {
-                    await refreshAll()
-                    if history == nil { await reloadHistory() }
-                }
-            }
+            // Not on .connected: the first wake-up ack comes while the robot
+            // is still waking, and queries it ignores then hold the command
+            // slot for their timeouts, delaying the wake-ups queued behind.
+            if state == .awake { refreshAfterWake() }
         case .identity(_, let id):
             rememberDeviceId(id, source: "the robot's broadcast")
         case .deviceInfo(let info):
             deviceInfo = info
             rememberDeviceId(info.deviceId, source: "the robot")
             appendLog("Robot \(info.productKey) / fw \(info.firmware)")
+            // It answers queries now, even if it never broadcasts.
+            refreshAfterWake()
         case .baseStatus(let status):
             applyStatus(status)
         case .progress(let progress):
