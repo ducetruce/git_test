@@ -39,8 +39,6 @@ struct MapScreen: View {
     @AppStorage("mapShowFurniture") private var showFurniture = true
     @AppStorage("mapShowCarpets") private var showCarpets = true
     @AppStorage("map3D") private var show3D = true
-    @State private var showingPixelTypes = false
-    @State private var highlightPixelType: Int?
     @State private var showingCarpets = false
     @State private var highlightCarpet: Int?
     @State private var tool = EditTool.select
@@ -104,7 +102,6 @@ struct MapScreen: View {
                         zoom: zoom,
                         showFurniture: showFurniture,
                         showCarpets: showCarpets,
-                        highlightPixelType: highlightPixelType,
                         highlightCarpet: highlightCarpet,
                         onDrawLine: mode == .edit && (tool == .wall || tool == .split)
                             ? { a, b in drewLine(a, b, map) } : nil,
@@ -173,16 +170,9 @@ struct MapScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        // The counts say whether the robot sent any, which
-                        // tells an empty layer apart from a drawing bug.
-                        Section(store.map.map {
-                            "Robot map: \($0.carpetCellCount) carpet cells, \($0.carpets.count) carpet shapes, \($0.furniture.count) furniture"
-                        } ?? "Layers") {
-                            Toggle("Carpets", isOn: $showCarpets)
-                            Toggle("Furniture", isOn: $showFurniture)
-                        }
-                        Button("Carpets…") { showingCarpets = true }
-                        Button("Map key…") { showingPixelTypes = true }
+                        Toggle("Carpets", isOn: $showCarpets)
+                        Toggle("Furniture", isOn: $showFurniture)
+                        Button("Carpet settings…") { showingCarpets = true }
                     } label: {
                         Image(systemName: "square.3.layers.3d")
                     }
@@ -254,13 +244,6 @@ struct MapScreen: View {
                 if let map = store.map {
                     CarpetsSheet(map: map, highlight: $highlightCarpet)
                         .presentationDetents([.medium, .large])
-                        .presentationBackgroundInteraction(.enabled)
-                }
-            }
-            .sheet(isPresented: $showingPixelTypes) {
-                if let map = store.map {
-                    PixelTypesSheet(map: map, highlight: $highlightPixelType)
-                        .presentationDetents([.medium])
                         .presentationBackgroundInteraction(.enabled)
                 }
             }
@@ -582,8 +565,10 @@ struct CarpetsSheet: View {
     @Binding var highlight: Int?
     @Environment(\.dismiss) private var dismiss
 
+    /// CarpetCleanOption, in the Narwal app's order and words; 0 follows
+    /// the setting for all carpets.
     static let options: [(Int, String)] = [
-        (0, "Same as all carpets"), (1, "Cross over"), (2, "Boost suction"), (3, "Ignore"), (4, "Avoid"),
+        (0, "Default"), (2, "Clean"), (4, "Avoid"), (1, "Cross"), (3, "Vacuum & Mop"),
     ]
 
     var body: some View {
@@ -591,11 +576,13 @@ struct CarpetsSheet: View {
         NavigationStack {
             List {
                 if current.carpets.isEmpty {
-                    Text("The robot's map has no individual carpets. Carpets it only marks on the floor (the dotted areas) can't be set one by one.")
+                    Text("The robot hasn't mapped any carpets yet.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(current.carpets) { carpet in
                     Section {
+                        Button("Show on map") { highlight = carpet.id }
+                            .foregroundStyle(highlight == carpet.id ? Theme.teal : Theme.text)
                         if store.allowsWrites {
                             Picker("When cleaning", selection: Binding(
                                 get: { carpet.cleanOption },
@@ -610,18 +597,17 @@ struct CarpetsSheet: View {
                         } else {
                             LabeledContent("When cleaning", value: Self.options.first { $0.0 == carpet.cleanOption }?.1 ?? "Not set")
                         }
-                        Button(highlight == carpet.id ? "Shown on map" : "Show on map") { highlight = carpet.id }
                     } header: {
                         Text(title(carpet, in: current))
                     }
                 }
             }
-            .navigationTitle("Carpets")
+            .navigationTitle("Carpet settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done") { dismiss() } }
             .safeAreaInset(edge: .bottom) {
                 if !store.allowsWrites {
-                    Text("Turn on Settings > Change robot settings to edit carpets.")
+                    Text("Turn on More > Change robot settings to edit carpets.")
                         .font(.footnote).foregroundStyle(.secondary).padding()
                 }
             }
@@ -633,57 +619,6 @@ struct CarpetsSheet: View {
         let squareMeters = carpet.area * pow(Double(map.resolution) / 1000, 2)
         let size = squareMeters > 0 ? " · " + AreaFormat.string(squareMeters: squareMeters) : ""
         return (room.map { "Carpet in \($0)" } ?? "Carpet \(carpet.id)") + size
-    }
-}
-
-/// Lists the map's pixel types; tapping one paints it magenta on the map,
-/// to match types against what the Narwal app shows (carpets, etc.).
-struct PixelTypesSheet: View {
-    let map: RobotMap
-    @Binding var highlight: Int?
-    @Environment(\.dismiss) private var dismiss
-
-    /// What each kind of map square means, as far as it's been worked out.
-    static func meaning(_ type: Int) -> String {
-        switch type {
-        case 0x20: return "Floor outside any room"
-        case 0x28: return "Obstacle"
-        default:
-            var parts: [String] = []
-            parts.append(type & Int(RobotMap.carpetFlag) != 0 ? "Carpet" : "Floor")
-            if type & 0x10 != 0 { parts.append("lighter area") }
-            if type & ~(0x10 | Int(RobotMap.carpetFlag)) != 0 { parts.append("unknown marking") }
-            return parts.joined(separator: ", ")
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List(map.pixelTypeCounts(), id: \.type) { entry in
-                Button {
-                    highlight = highlight == entry.type ? nil : entry.type
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(Self.meaning(entry.type))
-                            Text(String(format: "Type 0x%02lX", entry.type))
-                                .font(.caption2.monospaced()).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text("\(entry.count) cells").foregroundStyle(.secondary)
-                        if highlight == entry.type {
-                            Image(systemName: "checkmark").foregroundStyle(Color.pink)
-                        }
-                    }
-                }
-                .tint(.primary)
-            }
-            .navigationTitle("Map key")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button("Done") { highlight = nil; dismiss() }
-            }
-        }
     }
 }
 

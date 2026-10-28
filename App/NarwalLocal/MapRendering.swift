@@ -11,7 +11,6 @@ enum MapPalette {
     static let unknown: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
     static let floor: (UInt8, UInt8, UInt8) = (205, 210, 218)
     static let obstacle: (UInt8, UInt8, UInt8) = (90, 95, 105)
-    static let carpet = Color(red: 0.45, green: 0.33, blue: 0.22)
     static let furnitureLine = Color(red: 0.28, green: 0.30, blue: 0.36)
 
     static func color(forRoom id: Int) -> Color {
@@ -30,9 +29,9 @@ extension Furniture {
 extension RobotMap {
     /// RGBA image, flipped so north is up (map rows grow upward).
     /// Unselected rooms are dimmed while a selection exists. Carpet cells
-    /// get the Narwal app's fine checked texture; `highlight` paints one
-    /// low-byte pixel type magenta (Map > Layers > Pixel types).
-    func image(selected: Set<Int> = [], carpets: Bool = true, highlight: Int? = nil) -> CGImage? {
+    /// get the Narwal app's fine checked texture: that's the one way carpets
+    /// are drawn.
+    func image(selected: Set<Int> = [], carpets: Bool = true) -> CGImage? {
         guard width > 0, height > 0 else { return nil }
         var rgba = [UInt8](repeating: 0, count: width * height * 4)
         for y in 0..<height {
@@ -63,9 +62,6 @@ extension RobotMap {
                         r = UInt8(Int(r) * k / 100); g = UInt8(Int(g) * k / 100); b = UInt8(Int(b) * k / 100)
                     }
                     c = (r, g, b, dim ? 90 : 255)
-                }
-                if let highlight, Int(pixels[y * width + x] & 0xFF) == highlight, c.3 > 0 {
-                    c = (255, 0, 200, 255)
                 }
                 rgba[o] = c.0
                 rgba[o + 1] = c.1
@@ -100,8 +96,6 @@ struct MapCanvas: View {
     var zoom: CGFloat = 1
     var showFurniture = true
     var showCarpets = true
-    /// Low-byte pixel type to paint magenta, for diagnosis.
-    var highlightPixelType: Int?
     /// Carpet to outline, e.g. while it's being edited.
     var highlightCarpet: Int?
     /// Edit mode: a drag draws a line (map coordinates) instead of a box.
@@ -138,20 +132,11 @@ struct MapCanvas: View {
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
-                // Carpets: diagonal hatching inside a solid outline.
-                ForEach(Array((showCarpets ? map.carpets : []).enumerated()), id: \.offset) { _, carpet in
-                    let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
-                    polygonPath(points).fill(MapPalette.carpet.opacity(0.25))
-                    hatching(over: points, spacing: max(3, 4 / zoom))
-                        .stroke(MapPalette.carpet.opacity(0.7), lineWidth: max(0.5, 1 / zoom))
-                        .clipShape(polygonPath(points))
-                    polygonPath(points).stroke(MapPalette.carpet, lineWidth: max(0.75, 1.5 / zoom))
-                }
-
+                // Carpets show as the checked texture in the image above;
+                // the one being edited gets an outline.
                 if let id = highlightCarpet, let carpet = map.carpets.first(where: { $0.id == id }) {
                     let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
-                    polygonPath(points).fill(Color.yellow.opacity(0.3))
-                    polygonPath(points).stroke(Color.yellow, lineWidth: max(1.5, 3 / zoom))
+                    polygonPath(points).stroke(Theme.teal, lineWidth: max(1.5, 3 / zoom))
                 }
 
                 // Furniture: a floor-plan drawing of each piece, rotated into place.
@@ -310,8 +295,8 @@ struct MapCanvas: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected,
-                            carpets: showCarpets, highlight: highlightPixelType)) {
-            image = map.image(selected: Set(selected), carpets: showCarpets, highlight: highlightPixelType)
+                            carpets: showCarpets)) {
+            image = map.image(selected: Set(selected), carpets: showCarpets)
             centroids = map.roomCentroids()
         }
     }
@@ -325,26 +310,10 @@ struct MapCanvas: View {
         }
     }
 
-    /// Diagonal lines covering a polygon's bounding box.
-    private func hatching(over points: [CGPoint], spacing: CGFloat) -> Path {
-        Path { path in
-            guard let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
-                  let minY = points.map(\.y).min(), let maxY = points.map(\.y).max() else { return }
-            let height = maxY - minY
-            var x = minX - height
-            while x <= maxX {
-                path.move(to: CGPoint(x: x, y: maxY))
-                path.addLine(to: CGPoint(x: x + height, y: minY))
-                x += spacing
-            }
-        }
-    }
-
     private struct RenderKey: Equatable {
         let mapId: Int
         let pixels: Int
         let selected: [Int]
         let carpets: Bool
-        let highlight: Int?
     }
 }
