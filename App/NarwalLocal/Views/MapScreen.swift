@@ -81,8 +81,11 @@ struct MapScreen: View {
                         Map3DView(map: map, selected: selected, pose: store.pose)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
+                            .layoutPriority(-1)
                         RoomChips(map: map, selected: $selected)
+                            .frame(height: 56)
                             .background(Theme.background)
+                            .zIndex(1)
                     } else {
                     MapCanvas(
                         map: map,
@@ -130,7 +133,9 @@ struct MapScreen: View {
                             .onEnded { _ in panAtGestureStart = pan },
                         including: mode == .rooms || (mode == .edit && tool == .select) ? .all : .subviews
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
+                    .layoutPriority(-1)
                     .overlay(alignment: .topTrailing) {
                         if zoom > 1 {
                             Button {
@@ -443,7 +448,9 @@ struct MapScreen: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
+        .fixedSize(horizontal: false, vertical: true)
         .background(Theme.background)
+        .zIndex(1)
         .disabled(store.busyAction != nil)
     }
 
@@ -484,7 +491,9 @@ struct MapScreen: View {
             }
         }
         .padding()
+        .fixedSize(horizontal: false, vertical: true)
         .background(Theme.background)
+        .zIndex(1)
     }
 }
 

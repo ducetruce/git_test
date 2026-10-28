@@ -17,6 +17,8 @@ struct Map3DView: UIViewRepresentable {
     func makeUIView(context: Context) -> SCNView {
         let view = SCNView()
         view.backgroundColor = .clear
+        // Never draw past its own frame, onto the room tiles below.
+        view.clipsToBounds = true
         view.antialiasingMode = .multisampling4X
         view.allowsCameraControl = true
         view.defaultCameraController.interactionMode = .orbitTurntable
