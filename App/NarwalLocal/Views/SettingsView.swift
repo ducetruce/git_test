@@ -24,19 +24,7 @@ struct SettingsView: View {
                     Picker("Area units", selection: $areaUnit) {
                         ForEach(AreaFormat.Unit.allCases) { Text($0.label).tag($0) }
                     }
-                }
-
-                Section {
-                    NavigationLink("Test checklist") { ChecklistView() }
-                    NavigationLink("Connection") { connection }
-                    NavigationLink("Feature lab") { LabView() }
-                    NavigationLink("Hidden settings") { HiddenSettingsView() }
-                    NavigationLink("Connection log") { LogView() }
-                    NavigationLink("Crash reports") { CrashReportsView() }
-                } header: {
-                    Text("Diagnostics")
-                } footer: {
-                    Text("The feature lab helps decode settings this app doesn't support yet.")
+                    NavigationLink { diagnostics } label: { Label("Diagnostics", systemImage: "stethoscope") }
                 }
 
                 Section {
@@ -53,6 +41,26 @@ struct SettingsView: View {
                 Button("Forget", role: .destructive) { store.forgetRobot() }
             }
         }
+    }
+
+    /// Troubleshooting tools, kept off the main list.
+    private var diagnostics: some View {
+        List {
+            Section {
+                NavigationLink("Connection") { connection }
+                NavigationLink("Connection log") { LogView() }
+                NavigationLink("Crash reports") { CrashReportsView() }
+            }
+            Section {
+                NavigationLink("Test checklist") { ChecklistView() }
+                NavigationLink("Feature lab") { LabView() }
+                NavigationLink("Hidden settings") { HiddenSettingsView() }
+            } footer: {
+                Text("The feature lab and hidden settings help decode what the robot stores. They aren't needed day to day.")
+            }
+        }
+        .navigationTitle("Diagnostics")
+        .themedList()
     }
 
     private var connection: some View {
@@ -104,8 +112,6 @@ struct SettingsView: View {
 /// The robot's settings, in the Narwal app's menus and order.
 private struct RobotSettingsSections: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
-    @State private var confirmWrites = false
 
     var body: some View {
         Section {
@@ -127,22 +133,6 @@ private struct RobotSettingsSections: View {
             NavigationLink { DeviceView() } label: { Label("Device", systemImage: "info.circle") }
         }
 
-        Section {
-            Toggle("Change robot settings", isOn: Binding(
-                get: { allowWrites },
-                set: { on in if on { confirmWrites = true } else { allowWrites = false } }
-            ))
-        } footer: {
-            Text(store.robotSettings == nil
-                 ? "Pull down to load the robot's settings."
-                 : "After each change the app reads the setting back and tells you if the robot didn't apply it.")
-        }
-        .alert("Change robot settings?", isPresented: $confirmWrites) {
-            Button("Turn on") { allowWrites = true }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Voice volume has been confirmed on your robot; the rest is part of this test round. Any setting can be changed back in the Narwal app.")
-        }
     }
 }
 

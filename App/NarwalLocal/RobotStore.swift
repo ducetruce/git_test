@@ -46,6 +46,8 @@ final class RobotStore {
     // UI
     private(set) var busyAction: String?
     var lastError: String?
+    /// What failed, for the error's title ("Starting clean didn't work").
+    var lastErrorTitle: String?
     private(set) var log: [String] = []
 
     let alerts = AlertMonitor()
@@ -261,9 +263,6 @@ final class RobotStore {
         if let fetched = try? await connection.settings() { robotSettings = fetched }
     }
 
-    /// Off until the owner turns on Settings > Change robot settings:
-    /// writes haven't been tried on a real robot yet.
-    var allowsWrites: Bool { UserDefaults.standard.bool(forKey: "allowRobotWrites") }
 
     func changeSetting(_ setting: RobotSetting, to choice: RobotSetting.Choice) async {
         await write(setting.title, expecting: { setting.choice(in: $0) == choice }) { try await $0.setSetting(choice) }
@@ -300,7 +299,7 @@ final class RobotStore {
     }
 
     func setCarpetOption(_ carpetId: Int, to option: Int) async {
-        guard allowsWrites, let current = map else { return }
+        guard let current = map else { return }
         await run("Carpet") { connection in
             let updated = try await connection.setCarpetCleanOption(carpetId, to: option, on: current)
             await MainActor.run {
@@ -315,7 +314,7 @@ final class RobotStore {
 
     /// Sends one map edit, fetches the map back and checks the edit shows.
     func applyMapEdit(_ edit: MapEdit, _ title: String) async {
-        guard allowsWrites, let before = map else { return }
+        guard let before = map else { return }
         await run(title) { connection in
             let after = try await connection.editMap([edit], on: before)
             await MainActor.run {
@@ -350,7 +349,6 @@ final class RobotStore {
     /// request without applying it.
     private func write(_ title: String, expecting applied: @escaping (RobotSettings) -> Bool,
                        _ send: @escaping (NarwalConnection) async throws -> RobotSettings?) async {
-        guard allowsWrites else { return }
         await run(title) { connection in
             let after: RobotSettings?
             do {
@@ -477,6 +475,7 @@ final class RobotStore {
             appendLog("\(label): ok")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastErrorTitle = "\(label) didn't work"
             lastError = message
             appendLog("\(label): \(message)")
         }
@@ -515,7 +514,6 @@ final class RobotStore {
     }
 
     func switchMap(to id: Int) async {
-        guard allowsWrites else { return }
         await run("Switch map") { connection in
             try await connection.switchMap(to: id)
             let fetched = try await connection.fetchMap()
@@ -525,13 +523,11 @@ final class RobotStore {
     }
 
     func deleteMap(_ id: Int) async {
-        guard allowsWrites else { return }
         await run("Delete map") { try await $0.deleteMap(id) }
         await reloadMaps()
     }
 
     func startMapping(rebuildCurrent: Bool) async {
-        guard allowsWrites else { return }
         let stairs = !(robotSettings?.noStairs(mapId: map?.mapId ?? 0) ?? false)
         await run(rebuildCurrent ? "Remapping" : "New secondary map") {
             try await $0.startMapping(rebuildCurrent: rebuildCurrent, hasStairs: stairs)
@@ -547,19 +543,16 @@ final class RobotStore {
     }
 
     func reboot() async {
-        guard allowsWrites else { return }
         await run("Restart robot") { try await $0.reboot() }
     }
 
     func replacedPart(_ part: PartLife) async {
         part.setStart(hoursLeft: part.ratedHours)
-        guard allowsWrites else { return }
         await run("\(part.name) replaced") { try await $0.resetConsumable(part.item) }
         await refreshAll()
     }
 
     func drainDockBase() async {
-        guard allowsWrites else { return }
         await run("Dock Base Drainage") { try await $0.drainDockBase() }
     }
 

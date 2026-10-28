@@ -180,12 +180,13 @@ struct MapScreen: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(show3D ? "2D" : "3D") { show3D.toggle() }
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .accessibilityLabel(show3D ? "Show flat map" : "Show 3D map")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await store.reloadMap() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(store.busyAction != nil)
+                        .accessibilityLabel("Reload map")
                 }
             }
             .confirmationDialog(pickedTitle, isPresented: Binding(get: { picked != nil }, set: { if !$0 { picked = nil } }),
@@ -425,7 +426,7 @@ struct MapScreen: View {
                     .pickerStyle(.menu)
                 }
             }
-            Text(store.allowsWrites ? tool.hint : "Turn on Settings > Change robot settings to edit the map.")
+            Text(tool.hint)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -454,14 +455,13 @@ struct MapScreen: View {
                 if mode == .zones, !zones.isEmpty {
                     Button("Undo") { zones.removeLast() }.buttonStyle(.bordered)
                 }
-                if mode == .rooms {
+                if mode == .rooms, selected.isEmpty || store.woodRooms.contains(where: { selected.contains($0.id) }) {
                     Button {
                         showingMaintenance = true
                     } label: {
-                        Image(systemName: "sparkles")
+                        Label("Floor care", systemImage: "sparkles")
                     }
                     .buttonStyle(.bordered)
-                    .accessibilityLabel("Floor maintenance")
                     .disabled(store.busyAction != nil || store.isCleaning)
                 }
                 Button {
@@ -494,7 +494,7 @@ struct RoomChips: View {
                         if let i = selected.firstIndex(of: room.id) { selected.remove(at: i) } else { selected.append(room.id) }
                     } label: {
                         Text(order.map { "\($0) · \(room.displayName)" } ?? room.displayName)
-                            .font(.system(size: 14, weight: order == nil ? .regular : .semibold))
+                            .font(.subheadline.weight(order == nil ? .regular : .semibold))
                             .foregroundStyle(order == nil ? Theme.text : Theme.background)
                             .padding(.horizontal, 14)
                             .frame(height: 36)
@@ -583,20 +583,16 @@ struct CarpetsSheet: View {
                     Section {
                         Button("Show on map") { highlight = carpet.id }
                             .foregroundStyle(highlight == carpet.id ? Theme.teal : Theme.text)
-                        if store.allowsWrites {
-                            Picker("When cleaning", selection: Binding(
-                                get: { carpet.cleanOption },
-                                set: { option in
-                                    highlight = carpet.id
-                                    Task { await store.setCarpetOption(carpet.id, to: option) }
-                                }
-                            )) {
-                                ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
+                        Picker("When cleaning", selection: Binding(
+                            get: { carpet.cleanOption },
+                            set: { option in
+                                highlight = carpet.id
+                                Task { await store.setCarpetOption(carpet.id, to: option) }
                             }
-                            .disabled(store.busyAction != nil)
-                        } else {
-                            LabeledContent("When cleaning", value: Self.options.first { $0.0 == carpet.cleanOption }?.1 ?? "Not set")
+                        )) {
+                            ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
                         }
+                        .disabled(store.busyAction != nil)
                     } header: {
                         Text(title(carpet, in: current))
                     }
@@ -605,12 +601,6 @@ struct CarpetsSheet: View {
             .navigationTitle("Carpet settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done") { dismiss() } }
-            .safeAreaInset(edge: .bottom) {
-                if !store.allowsWrites {
-                    Text("Turn on More > Change robot settings to edit carpets.")
-                        .font(.footnote).foregroundStyle(.secondary).padding()
-                }
-            }
         }
     }
 

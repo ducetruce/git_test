@@ -50,9 +50,9 @@ struct RootView: View {
         // One look everywhere: dark, with the calm teal accent.
         .preferredColorScheme(.dark)
         .tint(Theme.teal)
-        .alert("Something went wrong", isPresented: Binding(
+        .alert(store.lastErrorTitle ?? "The robot didn't do that", isPresented: Binding(
             get: { store.lastError != nil },
-            set: { if !$0 { store.lastError = nil } }
+            set: { if !$0 { store.lastError = nil; store.lastErrorTitle = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {

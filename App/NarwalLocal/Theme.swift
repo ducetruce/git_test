@@ -17,7 +17,7 @@ enum Theme {
     /// Small spaced capitals, for section labels.
     static func label(_ text: String, color: Color = Theme.tertiary) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .tracking(1.3)
             .foregroundStyle(color)
     }
@@ -73,7 +73,7 @@ struct PillButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: filled ? .semibold : .regular))
+            .font(.subheadline.weight(filled ? .semibold : .regular))
             .foregroundStyle(filled ? Theme.background : Theme.text)
             .padding(.horizontal, 20)
             .frame(minHeight: 46)
@@ -99,12 +99,12 @@ struct RoundAction: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 19, weight: .regular))
+                    .font(.title3.weight(.regular))
                     .frame(width: 54, height: 54)
                     .background(Theme.card, in: Circle())
                     .foregroundStyle(Theme.text)
                 Text(title)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

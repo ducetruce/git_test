@@ -11,7 +11,7 @@ struct StationView: View {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 6) {
                         Theme.label(store.isDocked ? "Robot docked" : "Robot away")
-                        Text("Station").font(.system(size: 28)).foregroundStyle(Theme.text)
+                        Text("Station").font(.title).foregroundStyle(Theme.text)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
@@ -27,13 +27,13 @@ struct StationView: View {
                         if let minutes = store.dryingMinutesLeft {
                             Card {
                                 Theme.label("Drying mops", color: Theme.teal)
-                                Text("\(minutes) min left").font(.system(size: 19)).foregroundStyle(Theme.text)
+                                Text("\(minutes) min left").font(.title3).foregroundStyle(Theme.text)
                             }
                         }
                         actions.padding(.vertical, 8)
                         if !store.isDocked {
                             Text("Station actions need the robot on its dock.")
-                                .font(.system(size: 13)).foregroundStyle(Theme.tertiary)
+                                .font(.footnote).foregroundStyle(Theme.tertiary)
                         }
                         cartridges
                         maintenance
@@ -90,11 +90,11 @@ struct StationView: View {
             AnyView(VStack(alignment: .leading, spacing: 8) {
                 Theme.label(problems.contains { $0.alert != nil } ? "Needs you" : "Coming up", color: Theme.amber)
                 ForEach(problems, id: \.part) { p in
-                    Text("\(p.part): \(p.state.lowercased())").font(.system(size: 17)).foregroundStyle(Theme.text)
+                    Text("\(p.part): \(p.state.lowercased())").font(.body).foregroundStyle(Theme.text)
                 }
                 if !problems.contains(where: { $0.alert != nil }) {
                     Text("Nothing to do yet. You'll get one alert when it actually needs you.")
-                        .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                        .font(.subheadline).foregroundStyle(Theme.secondary)
                 }
             })
         }
@@ -111,11 +111,11 @@ struct StationView: View {
             } label: {
                 VStack(spacing: 8) {
                     Image(systemName: "sun.max")
-                        .font(.system(size: 19))
+                        .font(.title3)
                         .frame(width: 54, height: 54)
                         .background(Theme.card, in: Circle())
                         .foregroundStyle(Theme.text)
-                    Text("Dry bags").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    Text("Dry bags").font(.caption).foregroundStyle(Theme.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -132,17 +132,17 @@ struct StationView: View {
             Theme.label("Cartridges")
             let list = store.status?.station.cartridges ?? []
             if list.isEmpty {
-                Text("Not reported yet.").font(.system(size: 16)).foregroundStyle(Theme.secondary)
+                Text("Not reported yet.").font(.callout).foregroundStyle(Theme.secondary)
             }
             ForEach(list) { c in
                 HStack {
-                    Text(c.name).font(.system(size: 16)).foregroundStyle(Theme.text)
+                    Text(c.name).font(.callout).foregroundStyle(Theme.text)
                     Spacer()
-                    Text(c.label).font(.system(size: 14)).foregroundStyle(c.needsCare ? Theme.amber : Theme.secondary)
+                    Text(c.label).font(.subheadline).foregroundStyle(c.needsCare ? Theme.amber : Theme.secondary)
                 }
             }
             Text("The Wood Floor Maintenance Solution and the Heavy-duty Stain Remover share one slot.")
-                .font(.system(size: 13)).foregroundStyle(Theme.tertiary)
+                .font(.footnote).foregroundStyle(Theme.tertiary)
         }
     }
 
@@ -151,24 +151,24 @@ struct StationView: View {
             Theme.label("Parts")
             if let alerts = store.consumables {
                 if alerts.maintain.isEmpty && alerts.replace.isEmpty {
-                    Text("Nothing needs attention.").font(.system(size: 16)).foregroundStyle(Theme.text)
+                    Text("Nothing needs attention.").font(.callout).foregroundStyle(Theme.text)
                 }
                 ForEach(alerts.replaceLabels, id: \.self) {
-                    Text("Replace \($0)").font(.system(size: 16)).foregroundStyle(Theme.amber)
+                    Text("Replace \($0)").font(.callout).foregroundStyle(Theme.amber)
                 }
                 ForEach(alerts.maintainLabels, id: \.self) {
-                    Text("Clean \($0)").font(.system(size: 16)).foregroundStyle(Theme.text)
+                    Text("Clean \($0)").font(.callout).foregroundStyle(Theme.text)
                 }
             } else {
-                Text("Not loaded yet.").font(.system(size: 16)).foregroundStyle(Theme.secondary)
+                Text("Not loaded yet.").font(.callout).foregroundStyle(Theme.secondary)
             }
             NavigationLink {
                 PartsView()
             } label: {
                 HStack {
-                    Text("Parts and Consumables").font(.system(size: 15)).foregroundStyle(Theme.teal)
+                    Text("Parts and Consumables").font(.subheadline).foregroundStyle(Theme.teal)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(Theme.tertiary)
+                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Theme.tertiary)
                 }
             }
             .padding(.top, 4)
@@ -180,7 +180,7 @@ struct StationView: View {
             Theme.label("Dock settings")
             ForEach(RobotSetting.menu(.dock)) { setting in
                 SettingRow(setting: setting)
-                    .font(.system(size: 15))
+                    .font(.subheadline)
                     .foregroundStyle(Theme.text)
                     .tint(Theme.teal)
                     .padding(.vertical, 2)
@@ -188,9 +188,9 @@ struct StationView: View {
             Button {
                 Task { await store.drainDockBase() }
             } label: {
-                Text("Dock Base Drainage").font(.system(size: 15)).foregroundStyle(Theme.teal)
+                Text("Dock Base Drainage").font(.subheadline).foregroundStyle(Theme.teal)
             }
-            .disabled(!store.allowsWrites || store.busyAction != nil)
+            .disabled(store.busyAction != nil)
             .padding(.vertical, 2)
         }
         .task { if store.robotSettings == nil { await store.reloadSettings() } }

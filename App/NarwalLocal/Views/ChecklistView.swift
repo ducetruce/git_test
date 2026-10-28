@@ -101,7 +101,7 @@ struct ChecklistView: View {
     var body: some View {
         List {
             Section {
-                Text("Turn on More > Change robot settings first. Every change can be undone in the Narwal app. Mark each item, then share the report.")
+                Text("Every change can be undone in the Narwal app. Mark each item, then share the report.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             ForEach(Self.sections.indices, id: \.self) { index in

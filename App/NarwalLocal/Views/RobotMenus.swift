@@ -2,16 +2,15 @@ import NarwalKit
 import SwiftUI
 
 /// One robot setting: a switch, or a row that opens its choices. Shows the
-/// current value only until the owner turns on "Change robot settings".
+/// current value until the robot's settings have loaded.
 struct SettingRow: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
     let setting: RobotSetting
 
     var body: some View {
         let settings = store.robotSettings
         Group {
-            if let settings, allowWrites {
+            if let settings {
                 if setting.isToggle {
                     Toggle(setting.title, isOn: Binding(
                         get: { setting.choice(in: settings)?.label == "On" },
@@ -97,11 +96,10 @@ struct RobotMenuView: View {
 /// General: Do Not Disturb, Plateau Mode, Child Lock, Auto Power-Off.
 struct GeneralMenuView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
 
     var body: some View {
         List {
-            QuietHoursSection(settings: store.robotSettings, editable: allowWrites && store.robotSettings != nil)
+            QuietHoursSection(settings: store.robotSettings, editable: store.robotSettings != nil)
                 .disabled(store.busyAction != nil)
             ForEach(RobotSetting.menu(.general)) { setting in
                 Section {
@@ -120,7 +118,6 @@ struct GeneralMenuView: View {
 /// Navo Voice Assistant: the assistant, robot language and volume.
 struct VoiceMenuView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
     @State private var volume: Double?
 
     var body: some View {
@@ -133,7 +130,7 @@ struct VoiceMenuView: View {
             }
             Section {
                 if let language = RobotSetting.named("language") { SettingRow(setting: language) }
-                if allowWrites, let settings {
+                if let settings {
                     VStack(alignment: .leading) {
                         LabeledContent("Volume", value: "\(Int(volume ?? Double(settings.voiceVolume)))%")
                         // Controls stay in place while a write runs: swapping a
@@ -164,7 +161,6 @@ struct VoiceMenuView: View {
 /// Device: location, locate, restart, firmware and battery.
 struct DeviceView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
     @State private var confirmRestart = false
 
     var body: some View {
@@ -173,7 +169,6 @@ struct DeviceView: View {
                 LabeledContent("Device Location", value: store.robotSettings?.timeZone ?? "–")
                 Button("Locate Robot") { Task { await store.run("Locate") { try await $0.locate() } } }
                 Button("Restart Robot") { confirmRestart = true }
-                    .disabled(!allowWrites)
             } footer: {
                 Text("Locate plays a voice prompt so you can find the robot.")
             }
@@ -214,7 +209,6 @@ struct DeviceView: View {
 /// Map management: maps, cleaning order, No stairs, mapping.
 struct MapManagementView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
     @State private var confirm: Confirm?
 
     enum Confirm: Identifiable {
@@ -241,12 +235,11 @@ struct MapManagementView: View {
                         get: { store.robotSettings?.noStairs(mapId: current.mapId) ?? false },
                         set: { on in Task { await store.changeNoStairs(on, mapId: current.mapId) } }
                     ))
-                    .disabled(!allowWrites || store.robotSettings == nil || store.busyAction != nil)
+                    .disabled(store.robotSettings == nil || store.busyAction != nil)
                     Button("Rotate map 90°") {
                         Task { await store.applyMapEdit(.rotateMap(degrees: (current.rotation + 90) % 360), "Rotate map") }
                     }
-                    .disabled(!allowWrites)
-                    Button("Remapping") { confirm = .remap }.disabled(!allowWrites)
+                    Button("Remapping") { confirm = .remap }
                 } header: {
                     Text("Map in use")
                 } footer: {
@@ -272,12 +265,12 @@ struct MapManagementView: View {
                             } label: {
                                 Image(systemName: "ellipsis.circle")
                             }
-                            .disabled(!allowWrites)
+                            
                         }
                     }
                 }
                 if (store.maps?.count ?? 0) < 4 {
-                    Button("New secondary map") { confirm = .newMap }.disabled(!allowWrites)
+                    Button("New secondary map") { confirm = .newMap }
                 }
             } header: {
                 Text("Saved maps")
@@ -356,7 +349,6 @@ struct MapManagementView: View {
 /// House Cleaning Order: drag rooms into the order whole-house cleans use.
 struct CleaningOrderView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("allowRobotWrites") private var allowWrites = false
     @State private var order: [Int] = []
 
     var body: some View {
@@ -364,7 +356,7 @@ struct CleaningOrderView: View {
             Section {
                 ForEach(Array(order.enumerated()), id: \.element) { index, id in
                     HStack(spacing: 14) {
-                        Text("\(index + 1)").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.teal)
+                        Text("\(index + 1)").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.teal)
                             .frame(width: 24)
                         Text(store.map?.rooms.first { $0.id == id }?.displayName ?? "Room \(id)")
                     }
@@ -379,7 +371,7 @@ struct CleaningOrderView: View {
         .themedList()
         .toolbar {
             Button("Save") { Task { await store.saveCleaningOrder(order) } }
-                .disabled(!allowWrites || order == store.cleaningOrder || store.busyAction != nil)
+                .disabled(order == store.cleaningOrder || store.busyAction != nil)
         }
         .onAppear { order = store.cleaningOrder }
     }

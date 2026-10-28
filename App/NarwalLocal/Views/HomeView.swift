@@ -40,10 +40,21 @@ struct TodayView: View {
                             Card {
                                 Theme.label("Dock", color: Theme.amber)
                                 Text("\(cartridge.name): \(cartridge.label.lowercased())")
-                                    .font(.system(size: 17)).foregroundStyle(Theme.text)
+                                    .font(.body).foregroundStyle(Theme.text)
                             }
                         }
 
+                        if store.connectionState == .disconnected, !store.autoConnectPaused {
+                            Card {
+                                Theme.label("Offline", color: Theme.amber)
+                                Text("Can't reach the robot.").font(.title3).foregroundStyle(Theme.text)
+                                Text("Check that this phone is on your home Wi-Fi and the Narwal app is closed.")
+                                    .font(.subheadline).foregroundStyle(Theme.secondary)
+                                Button("Reconnect") { store.connect(force: true) }
+                                    .buttonStyle(PillButtonStyle())
+                                    .padding(.top, 6)
+                            }
+                        }
                         if showSilentHint { SilentRobotHint() }
                         if store.autoConnectPaused { PausedCard() }
 
@@ -82,7 +93,7 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Theme.label(statusLine, color: statusColor)
                 Text(store.deviceInfo == nil ? "Narwal" : "Freo Z10 Ultra")
-                    .font(.system(size: 28, weight: .regular))
+                    .font(.title.weight(.regular))
                     .foregroundStyle(Theme.text)
             }
             Spacer()
@@ -157,7 +168,7 @@ struct TodayView: View {
             if let stale = stalestRoom, (stale.days ?? 99) >= 2 {
                 Text(stale.days.map { "The \(stale.room.displayName) hasn't been cleaned in \($0) days." }
                      ?? "The \(stale.room.displayName) hasn't been cleaned recently.")
-                    .font(.system(size: 19)).foregroundStyle(Theme.text)
+                    .font(.title3).foregroundStyle(Theme.text)
                 HStack(spacing: 10) {
                     Button("Clean it now") {
                         Task { await store.cleanRooms([stale.room.id], settings: CleanSettings(workMode: currentMode), perRoom: [:]) }
@@ -170,9 +181,9 @@ struct TodayView: View {
                 .disabled(store.busyAction != nil || store.connectionState == .disconnected)
             } else {
                 Text(store.isDocked ? "All rooms are up to date." : "Ready when you are.")
-                    .font(.system(size: 19)).foregroundStyle(Theme.text)
+                    .font(.title3).foregroundStyle(Theme.text)
                 Text("Start a clean below, or pick rooms in Clean.")
-                    .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                    .font(.subheadline).foregroundStyle(Theme.secondary)
             }
         }
     }
@@ -212,8 +223,8 @@ struct TodayView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(preset.name).font(.system(size: 16)).foregroundStyle(Theme.text)
-                            Text(summary(preset)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                            Text(preset.name).font(.callout).foregroundStyle(Theme.text)
+                            Text(summary(preset)).font(.footnote).foregroundStyle(Theme.secondary)
                         }
                         Spacer()
                         Image(systemName: "play.circle").font(.title3).foregroundStyle(Theme.secondary)
@@ -269,14 +280,14 @@ private struct CleaningCard: View {
                           fraction: progress.progressPercent.map { Double($0) / 100 }, size: 100)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(store.currentRoomName ?? "Cleaning")
-                        .font(.system(size: 19)).foregroundStyle(Theme.text)
+                        .font(.title3).foregroundStyle(Theme.text)
                     if let remaining = progress.remainingSeconds, remaining > 0 {
                         Text("About \(Duration.seconds(remaining).formatted(.units(allowed: [.hours, .minutes]))) left")
-                            .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                            .font(.subheadline).foregroundStyle(Theme.secondary)
                     }
                     if let area = progress.areaSquareMeters {
                         Text("\(AreaFormat.string(squareMeters: Double(area))) so far")
-                            .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                            .font(.subheadline).foregroundStyle(Theme.secondary)
                     }
                 }
             }
@@ -294,9 +305,9 @@ private struct FaultCard: View {
     var body: some View {
         Card {
             Theme.label("Needs you", color: Theme.amber)
-            Text(alert.title).font(.system(size: 19)).foregroundStyle(Theme.text)
+            Text(alert.title).font(.title3).foregroundStyle(Theme.text)
             if !alert.detail.isEmpty {
-                Text(alert.detail).font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                Text(alert.detail).font(.subheadline).foregroundStyle(Theme.secondary)
             }
             if alert.code != nil {
                 HStack(spacing: 10) {
@@ -350,7 +361,7 @@ private struct LiveTuning: View {
 
     private func row<P: View>(_ title: String, @ViewBuilder _ picker: () -> P) -> some View {
         HStack {
-            Text(title).font(.system(size: 15)).foregroundStyle(Theme.text)
+            Text(title).font(.subheadline).foregroundStyle(Theme.text)
             Spacer()
             picker().pickerStyle(.menu).tint(Theme.secondary)
         }
@@ -369,7 +380,7 @@ private struct SilentRobotHint: View {
             2. Switch straight back here (don't close the Narwal app).
             This app then reads the device ID from the robot and remembers it.
             """)
-            .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+            .font(.subheadline).foregroundStyle(Theme.secondary)
         }
     }
 }
@@ -381,7 +392,7 @@ private struct PausedCard: View {
         Card {
             Theme.label("Not connected", color: Theme.amber)
             Text("The app closed unexpectedly last time, so it didn't connect automatically.")
-                .font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                .font(.subheadline).foregroundStyle(Theme.secondary)
             HStack(spacing: 10) {
                 Button("Connect now") { store.resumeAutoConnect() }.buttonStyle(PillButtonStyle())
                 Button("Pick the robot again") { store.forgetRobot() }.buttonStyle(PillButtonStyle(filled: false))
@@ -400,7 +411,7 @@ private struct ResumeCard: View {
             Theme.label("Unfinished clean", color: Theme.amber)
             Text(task.stoppedAt.map { "A clean stopped \($0.formatted(.relative(presentation: .named)))." }
                  ?? "A clean stopped before it finished.")
-                .font(.system(size: 19)).foregroundStyle(Theme.text)
+                .font(.title3).foregroundStyle(Theme.text)
             HStack(spacing: 10) {
                 Button("Continue") { Task { await store.continueInterruptedClean(true) } }
                     .buttonStyle(PillButtonStyle())
