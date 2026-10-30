@@ -14,13 +14,65 @@ order of risk:
 Settings → Diagnostics → Connection log has a share button for sending
 logs back.
 
+## Owner priorities
+
+Built in one batch from the app's schema, untested on the robot. The owner
+checks it in one pass with Settings > Diagnostics > Test checklist, which
+produces a shareable report.
+
+- **Status:** relocalization ("Finding its position"), station activities
+  (washing/drying mops, emptying, drying bags) from the task sub-statuses,
+  "Charging" from chargingStatus. Base-station alerts held back 90 s;
+  "Mark resolved" sends `clean_system/confirm_warning` (payload a guess).
+- **Settings:** every `RobotSettingKey` plus volume and quiet hours, with
+  read-back. Volume confirmed on the robot.
+- **Map editing** (`map/operation`, Map > Edit): add/delete no-go zones and
+  virtual walls, rename/split/merge rooms, per-carpet handling, add/delete
+  carpets, whole-room carpet, not-a-carpet areas, retype/delete furniture.
+  Each edit fetches the map back and `MapEdit.isApplied` checks it.
+  Guesses: split's left/right room ids, carpet `Grid` frame for new carpets.
+- **Schedules** (Home > Schedules): a routine is saved as a robot clean plan
+  (`clean/plan/set`), then scheduled (`schedule/clean_schedule/add`); toggle
+  and delete too. Guesses: cron format (5 fields, 0 = Sunday, or 6 when the
+  robot's own schedules use 6), and whether `schedule/clean_schedule/get`
+  answers at all.
+
+## Decoded so far (Z10 Ultra)
+
+The full message schema, recovered from the Narwal Android app, is in
+[docs/schema/](schema/README.md): field names and numbers for settings,
+schedules, no-go zones, virtual walls, room edits and cleaning history.
+Checked against the live robot:
+
+| Setting | Where | Notes |
+|---|---|---|
+| Voice volume | `config/get` 2.1 `volumePercentage` | 0–100; seen 0 → 29 → 96 while moving the slider. Decoded by `RobotSettings`. |
+| Timezone | `config/get` 2.3 `region` | IANA name, UTC offset, country, city. |
+| Do-not-disturb | `config/get` 2.4 `disturbMode` | enabled / begin / end, seconds after midnight. Decoded by `RobotSettings`. |
+| No-go zones | `map/get_map` 2.9 `forbiddens` | Decoded (`NoGoZone`) and drawn on the map; position confirmed against the Narwal app on the owner's map. |
+| Furniture, carpets, doors | `map/get_map` 2.32.1, 2.26, 2.11 | Decoded and drawn: furniture as floor-plan drawings per type; carpets from pixel bit 0x04 (unconfirmed) as a checked texture, plus any carpet shapes. Carpet/door `Grid` points accepted as pixels or map coordinates. Map → Layers shows how many the robot sent. |
+| Tank / bag states | `robot_base_status` 20, 21, 23, 24, 39 | Now read with the app's enums. Station bag 2 = not installed (no alert); 3 = replace. |
+| Virtual walls | `map/get_map` 2.50 `virtualWalls` | Decoded (`VirtualWall`) and drawn on the map. |
+| Cleaning history | `info/get_clean_time_line` 2 `timeLineStatus` | Decoded (`CleaningHistory`); Home → Cleaning history. Also broadcast on `status/time_line_status`. **`eventTime` unit unknown**: the Z10 Ultra's values read as the year 5,828,963 in ms, so the app shows the raw "time code" until a capture settles it. |
+| Schedules | `schedule/clean_schedule/get` 2 `cleanSchedules` | Decoder only (`CleanSchedule`); the robot hasn't answered this topic. |
+
+Still open: `schedule/clean_schedule/get` gets no answer on the Z10 Ultra.
+
+Settings writes (untried on a robot): Settings shows every setting in
+`RobotSettingKey.all` plus volume and quiet hours. They stay read-only until
+the owner turns on **Change robot settings** (off by default). Each write
+reads `config/get` back and reports a change the robot didn't apply. Try
+voice volume first and confirm it in the Narwal app. With writes on, a
+"can't find the base station" alert also offers **Mark resolved**, which
+sends an empty `clean_system/confirm_warning` (payload a guess).
+
 ## Features that need decoding first
 
 These exist on the robot but their payloads are unknown:
 
 | Feature | Where it probably lives | Lab experiment |
 |---|---|---|
-| Voice volume, do-not-disturb, carpet boost, child lock… | `config/get` | Change each setting once, one at a time |
+| Do-not-disturb, carpet boost, child lock… | `config/get` | Change each setting once, one at a time |
 | Schedules | `schedule/clean_schedule/get` | Add a schedule, then change its time, then delete it |
 | No-go zones / virtual walls | `map/get_map` | Add one no-go zone, then add one wall |
 | Room rename / split / merge | `map/get_map` | Rename one room |
@@ -46,10 +98,12 @@ query the lab doesn't send yet. You can type extra query topics in the lab.
 
 ### Step 2: write side
 
-Reading a setting isn't the same as changing it. For most settings the
-`…/set` command is expected to take the same message `…/get` returns. That
-will be tested one harmless setting at a time (volume first), with the
-result confirmed in the Narwal app before anything else is attempted.
+Reading a setting isn't the same as changing it, and `config/set` does
+**not** take the message `config/get` returns: `SetConfig.Request` numbers its
+fields differently and accepts one setting per request (see
+[docs/schema/](schema/README.md)). Writes will be tried one harmless setting at
+a time (volume first), with the result confirmed in the Narwal app before
+anything else is attempted.
 
 ### Optional: exact capture of the Narwal app (needs any PC with USB, no Mac)
 

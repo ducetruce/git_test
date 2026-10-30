@@ -28,7 +28,10 @@ run_case() {
   local started; started=$(date "+%Y-%m-%d %H:%M:%S")
   xcrun simctl launch "$UDID" "$BUNDLE"
   sleep 25
-  if xcrun simctl spawn "$UDID" launchctl list | grep -q "$BUNDLE"; then
+  # Capture first: grep -q exits early, and under pipefail the writer's
+  # SIGPIPE would read as "not running".
+  local running; running=$(xcrun simctl spawn "$UDID" launchctl list)
+  if grep -q "$BUNDLE" <<<"$running"; then
     echo "alive after 25 s"
   else
     echo "::error::$name: app is not running (crashed)"

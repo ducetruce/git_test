@@ -1,94 +1,198 @@
 import NarwalKit
 import SwiftUI
 
-struct DockView: View {
+/// The station in 3D, its supplies as rings, and its actions.
+struct StationView: View {
     @Environment(RobotStore.self) private var store
-    @AppStorage("dockLight") private var dockLight = AmbientLightMode.off.rawValue
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Station") {
-                    station("Wash mop", "drop.triangle") { try await $0.washMop() }
-                    station("Dry mop", "wind") { try await $0.dryMop() }
-                    station("Empty dustbin", "arrow.down.to.line") { try await $0.emptyDustbin() }
-                    station("Dry dust bag", "sun.max") { try await $0.dryDustBag() }
-                    station("Dry station bag", "sun.max.fill") { try await $0.dryStationBag() }
-                }
-                .disabled(store.busyAction != nil || !store.isDocked)
-
-                if !store.isDocked {
-                    Text("Station actions need the robot on its dock.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-
-                Section("Tanks & bags") {
-                    let s = store.status?.station
-                    tank("Clean water", s?.cleanWaterTank, bad: 2...4)
-                    tank("Dirty water", s?.sewageTank, bad: 2...3)
-                    tank("Dust bag", s?.dustBag, bad: 2...4)
-                    tank("Station bag", s?.stationBag, bad: 2...4)
-                    if let health = s?.dustBagHealth, health.isFinite {
-                        LabeledContent("Dust bag health", value: "\(Int(health))%")
+            ScrollView {
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Theme.label(store.isDocked ? "Robot docked" : "Robot away")
+                        Text("Station").font(.title).foregroundStyle(Theme.text)
                     }
-                    if let detergent = s?.detergentRemaining {
-                        LabeledContent("Detergent", value: "\(detergent)%")
-                    }
-                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
 
-                Section {
-                    if let alerts = store.consumables {
-                        if alerts.maintain.isEmpty && alerts.replace.isEmpty {
-                            Label("Nothing needs attention", systemImage: "checkmark.circle")
+                    RobotModelView(shot: .station, mood: store.status?.isCharging == true ? .charging : .idle)
+                        .frame(height: 250)
+                        .accessibilityLabel("The station")
+
+                    VStack(spacing: 14) {
+                        rings.padding(.bottom, 8)
+                        if let note = comingUp { note }
+                        if let minutes = store.dryingMinutesLeft {
+                            Card {
+                                Theme.label("Drying mops", color: Theme.teal)
+                                Text("\(minutes) min left").font(.title3).foregroundStyle(Theme.text)
+                            }
                         }
-                        ForEach(alerts.replaceLabels, id: \.self) { Label("Replace \($0)", systemImage: "arrow.triangle.2.circlepath") }
-                        ForEach(alerts.maintainLabels, id: \.self) { Label("Clean \($0)", systemImage: "sparkles") }
-                    } else {
-                        Text("Not loaded yet").foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Maintenance")
-                } footer: {
-                    Text("The robot reports which parts want attention, not how worn they are. Remaining-life percentages only come from Narwal's cloud.")
-                }
-
-                Section("Station light") {
-                    Picker("Light", selection: Binding(
-                        get: { AmbientLightMode(rawValue: store.status?.dockLightMode ?? dockLight) ?? .off },
-                        set: { mode in
-                            dockLight = mode.rawValue
-                            Task { await store.run("Station light") { try await $0.setAmbientLight(mode) } }
+                        actions.padding(.vertical, 8)
+                        if !store.isDocked {
+                            Text("Station actions need the robot on its dock.")
+                                .font(.footnote).foregroundStyle(Theme.tertiary)
                         }
-                    )) {
-                        Text("Off").tag(AmbientLightMode.off)
-                        Text("Night light").tag(AmbientLightMode.nightLight)
-                        Text("Warm").tag(AmbientLightMode.winterWarmth)
-                        Text("Purple").tag(AmbientLightMode.purple)
+                        cartridges
+                        maintenance
+                        settings
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
                 }
             }
-            .navigationTitle("Station")
-            .refreshable { await store.refreshAll() }
+            .background(Theme.background.ignoresSafeArea())
+            .refreshable {
+                await store.refreshAll()
+                await store.reloadDryingTime()
+            }
+            .task { await store.reloadDryingTime() }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
-    private func station(_ title: String, _ icon: String,
-                         _ perform: @escaping (NarwalConnection) async throws -> Void) -> some View {
-        Button {
-            Task { await store.run(title, perform) }
-        } label: {
-            Label(title, systemImage: icon)
+    private var readings: [StationState.Reading] { store.status?.station.readings ?? [] }
+
+    private func reading(_ part: String) -> StationState.Reading? {
+        readings.first { $0.part.localizedCaseInsensitiveContains(part) }
+    }
+
+    private var rings: some View {
+        HStack {
+            tankRing(reading("Clean water"), label: "Clean water", color: Theme.blue)
+            Spacer()
+            tankRing(reading("Dirty water"), label: "Dirty water", color: Theme.teal)
+            Spacer()
+            let bag = store.status?.station.dustBagHealth.flatMap { $0.isFinite ? Double($0) : nil }
+            ScoreRing(value: bag.map { "\(Int($0.rounded()))" } ?? "–", label: "Bag health",
+                      fraction: bag.map { $0 / 100 }, color: Theme.amber)
+        }
+        .padding(.horizontal, 8)
+    }
+
+    /// Tanks report a state, not a level: a full ring when fine, short and
+    /// amber when they need you.
+    private func tankRing(_ reading: StationState.Reading?, label: String, color: Color) -> some View {
+        guard let reading else {
+            return ScoreRing(value: "–", label: label, fraction: nil, color: color)
+        }
+        let fine = !reading.needsCare && reading.state != "Unknown"
+        return ScoreRing(value: fine ? "OK" : reading.state, label: label,
+                         fraction: fine ? 1 : 0.15, color: fine ? color : Theme.amber)
+    }
+
+    private var comingUp: Card<AnyView>? {
+        let problems = readings.filter(\.needsCare)
+        guard !problems.isEmpty else { return nil }
+        return Card {
+            AnyView(VStack(alignment: .leading, spacing: 8) {
+                Theme.label(problems.contains { $0.alert != nil } ? "Needs you" : "Coming up", color: Theme.amber)
+                ForEach(problems, id: \.part) { p in
+                    Text("\(p.part): \(p.state.lowercased())").font(.body).foregroundStyle(Theme.text)
+                }
+                if !problems.contains(where: { $0.alert != nil }) {
+                    Text("Nothing to do yet. You'll get one alert when it actually needs you.")
+                        .font(.subheadline).foregroundStyle(Theme.secondary)
+                }
+            })
         }
     }
 
-    @ViewBuilder
-    private func tank(_ name: String, _ value: Int?, bad: ClosedRange<Int>) -> some View {
-        LabeledContent(name) {
-            switch value {
-            case nil: Text("Unknown").foregroundStyle(.secondary)
-            case let v? where bad.contains(v): Text("Check").foregroundStyle(.orange)
-            case _?: Text("OK").foregroundStyle(.green)
+    private var actions: some View {
+        HStack(spacing: 4) {
+            RoundAction(title: "Wash mops", icon: "drop") { run("Wash mops") { try await $0.washMop() } }
+            RoundAction(title: "Dry mops", icon: "wind") { run("Dry mops") { try await $0.dryMop() } }
+            RoundAction(title: "Empty bin", icon: "arrow.down.to.line") { run("Empty dustbin") { try await $0.emptyDustbin() } }
+            Menu {
+                Button("Dry the dust bag") { run("Dry dust bag") { try await $0.dryDustBag() } }
+                Button("Dry the station bag") { run("Dry station bag") { try await $0.dryStationBag() } }
+            } label: {
+                VStack(spacing: 8) {
+                    Image(systemName: "sun.max")
+                        .font(.title3)
+                        .frame(width: 54, height: 54)
+                        .background(Theme.card, in: Circle())
+                        .foregroundStyle(Theme.text)
+                    Text("Dry bags").font(.caption).foregroundStyle(Theme.secondary)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
+        .disabled(store.busyAction != nil || !store.isDocked)
+    }
+
+    private func run(_ title: String, _ action: @escaping (NarwalConnection) async throws -> Void) {
+        Task { await store.run(title, action) }
+    }
+
+    private var cartridges: some View {
+        Card {
+            Theme.label("Cartridges")
+            let list = store.status?.station.cartridges ?? []
+            if list.isEmpty {
+                Text("Not reported yet.").font(.callout).foregroundStyle(Theme.secondary)
+            }
+            ForEach(list) { c in
+                HStack {
+                    Text(c.name).font(.callout).foregroundStyle(Theme.text)
+                    Spacer()
+                    Text(c.label).font(.subheadline).foregroundStyle(c.needsCare ? Theme.amber : Theme.secondary)
+                }
+            }
+            Text("The Wood Floor Maintenance Solution and the Heavy-duty Stain Remover share one slot.")
+                .font(.footnote).foregroundStyle(Theme.tertiary)
+        }
+    }
+
+    private var maintenance: some View {
+        Card {
+            Theme.label("Parts")
+            if let alerts = store.consumables {
+                if alerts.maintain.isEmpty && alerts.replace.isEmpty {
+                    Text("Nothing needs attention.").font(.callout).foregroundStyle(Theme.text)
+                }
+                ForEach(alerts.replaceLabels, id: \.self) {
+                    Text("Replace \($0)").font(.callout).foregroundStyle(Theme.amber)
+                }
+                ForEach(alerts.maintainLabels, id: \.self) {
+                    Text("Clean \($0)").font(.callout).foregroundStyle(Theme.text)
+                }
+            } else {
+                Text("Not loaded yet.").font(.callout).foregroundStyle(Theme.secondary)
+            }
+            NavigationLink {
+                PartsView()
+            } label: {
+                HStack {
+                    Text("Parts and Consumables").font(.subheadline).foregroundStyle(Theme.teal)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Theme.tertiary)
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private var settings: some View {
+        Card {
+            Theme.label("Dock settings")
+            ForEach(RobotSetting.menu(.dock)) { setting in
+                SettingRow(setting: setting)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.text)
+                    .tint(Theme.teal)
+                    .padding(.vertical, 2)
+            }
+            Button {
+                Task { await store.drainDockBase() }
+            } label: {
+                Text("Dock Base Drainage").font(.subheadline).foregroundStyle(Theme.teal)
+            }
+            .disabled(store.busyAction != nil)
+            .padding(.vertical, 2)
+        }
+        .task { if store.robotSettings == nil { await store.reloadSettings() } }
     }
 }

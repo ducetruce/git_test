@@ -20,7 +20,9 @@ targets:
     dependencies:
       - package: NarwalKit
     # Shared scheme so command-line builds (CI) can find it.
-    scheme: {}
+    scheme:
+      testTargets:
+        - NarwalLocalUITests
     settings:
       base:
         # Change to something unique to you, e.g. com.yourname.narwal
@@ -30,6 +32,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.9"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: NarwalLocal/Info.plist
       properties:
@@ -44,3 +47,17 @@ targets:
         NSAppTransportSecurity:
           # The robot only speaks plain ws:// on the LAN.
           NSAllowsLocalNetworking: true
+  # Screenshots of the main screens against the fake robot (CI only).
+  NarwalLocalUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - NarwalLocalUITests
+    dependencies:
+      - target: NarwalLocal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.narwal.NarwalLocalUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"

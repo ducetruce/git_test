@@ -10,8 +10,11 @@ Wi-Fi as the robot (a cloud session can't reach it). Read the README first.
   device ID (shown in the app under Settings, also in its connection log);
   another model's product key makes it hang up; it accepts one connection
   per source IP and refuses reconnects for ~10 s after dropping one.
-- Read-side decoding is the next job: settings, schedules, no-go zones,
-  room edits, cleaning history (table in `docs/ROADMAP.md`).
+- The message schema is decoded from the Narwal Android app
+  (`docs/schema/`), so field meanings no longer need one diff per setting.
+  NarwalKit decodes no-go zones, virtual walls, cleaning history and
+  (untested) schedules. Next: the first write, voice volume (section 1b),
+  and checking the no-go zone outline against the Narwal app.
 
 ## 1. Snapshot and diff from the Mac
 
@@ -34,6 +37,21 @@ the owner's home, so don't commit them.
 
 If computer use and iPhone Mirroring are available, the session can make
 the Narwal app changes itself; otherwise the owner does them on request.
+
+## 1b. First write: voice volume
+
+`NarwalConnection.setVoiceVolume(_:)` is prepared but has never reached the
+robot. To try it, send one frame on the existing connection's topic prefix:
+
+```
+topic   /<product key>/<device id>/config/set
+payload 08 <volume>          # SetConfig.Request field 1, e.g. 08 1e = 30%
+```
+
+then `config/get` and check field 2.1 (and the Narwal app). Expect
+`SetConfig.Response {1: result}`. Try 30, then put it back. Don't send any
+other `config/set` field yet: the set numbering differs from get (see
+`docs/schema/README.md`), and one wrong number changes the wrong setting.
 
 ## 2. Capture the Narwal app's own commands (write side)
 

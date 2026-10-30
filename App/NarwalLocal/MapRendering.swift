@@ -11,6 +11,7 @@ enum MapPalette {
     static let unknown: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
     static let floor: (UInt8, UInt8, UInt8) = (205, 210, 218)
     static let obstacle: (UInt8, UInt8, UInt8) = (90, 95, 105)
+    static let furnitureLine = Color(red: 0.28, green: 0.30, blue: 0.36)
 
     static func color(forRoom id: Int) -> Color {
         let c = rooms[(id - 1 + rooms.count) % rooms.count]
@@ -18,10 +19,19 @@ enum MapPalette {
     }
 }
 
+extension Furniture {
+    /// Robot floats can be NaN or absurd; such a piece is skipped, not drawn.
+    var isDrawable: Bool {
+        [center.x, center.y, width, height, angle].allSatisfy(\.isFinite) && width > 0 && height > 0
+    }
+}
+
 extension RobotMap {
     /// RGBA image, flipped so north is up (map rows grow upward).
-    /// Unselected rooms are dimmed while a selection exists.
-    func image(selected: Set<Int> = []) -> CGImage? {
+    /// Unselected rooms are dimmed while a selection exists. Carpet cells
+    /// get the Narwal app's fine checked texture: that's the one way carpets
+    /// are drawn.
+    func image(selected: Set<Int> = [], carpets: Bool = true) -> CGImage? {
         guard width > 0, height > 0 else { return nil }
         var rgba = [UInt8](repeating: 0, count: width * height * 4)
         for y in 0..<height {
@@ -42,7 +52,15 @@ extension RobotMap {
                     if case .wall = pixel(x: x, y: y) { isWall = true } else { isWall = false }
                     let dim = !selected.isEmpty && !selected.contains(room)
                     var r = base.0, g = base.1, b = base.2
-                    if isWall { r /= 2; g /= 2; b /= 2 }
+                    // 0x10 cells are a lighter shade in the Narwal app.
+                    if isWall {
+                        r = UInt8((Int(r) * 3 + 255) / 4); g = UInt8((Int(g) * 3 + 255) / 4); b = UInt8((Int(b) * 3 + 255) / 4)
+                    }
+                    if carpets, isCarpet(x: x, y: y) {
+                        // Carpet: darker overall with a fine checked weave.
+                        let k = (x + y) % 2 == 0 ? 55 : 80
+                        r = UInt8(Int(r) * k / 100); g = UInt8(Int(g) * k / 100); b = UInt8(Int(b) * k / 100)
+                    }
                     c = (r, g, b, dim ? 90 : 255)
                 }
                 rgba[o] = c.0
@@ -73,6 +91,17 @@ struct MapCanvas: View {
     var zones: [Payloads.Zone] = []
     var onTapRoom: ((Int) -> Void)?
     var onDrawZone: ((Payloads.Zone) -> Void)?
+    /// The surrounding zoom level: labels and icons are counter-scaled so
+    /// they stay readable instead of growing with the map.
+    var zoom: CGFloat = 1
+    var showFurniture = true
+    var showCarpets = true
+    /// Carpet to outline, e.g. while it's being edited.
+    var highlightCarpet: Int?
+    /// Edit mode: a drag draws a line (map coordinates) instead of a box.
+    var onDrawLine: ((MapPoint, MapPoint) -> Void)?
+    /// Edit mode: a tap anywhere, in map coordinates.
+    var onTapPoint: ((MapPoint) -> Void)?
 
     @State private var image: CGImage?
     @State private var centroids: [Int: MapPoint] = [:]
@@ -103,6 +132,67 @@ struct MapCanvas: View {
                 }
                 .stroke(Color.white.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
+                // Carpets show as the checked texture in the image above;
+                // the one being edited gets an outline.
+                if let id = highlightCarpet, let carpet = map.carpets.first(where: { $0.id == id }) {
+                    let points = carpet.polygon.map { toScreen(map.gridPoint(for: $0)) }
+                    polygonPath(points).stroke(Theme.teal, lineWidth: max(1.5, 3 / zoom))
+                }
+
+                // Furniture: a floor-plan drawing of each piece, rotated into place.
+                ForEach(Array((showFurniture ? map.furniture.filter(\.isDrawable) : []).enumerated()), id: \.offset) { _, item in
+                    FurnitureView(item: item, lineWidth: max(0.5, 1 / zoom))
+                        .frame(width: max(CGFloat(item.width) * scale, 4), height: max(CGFloat(item.height) * scale, 4))
+                        // Map angles are counter-clockwise with y up; screen y is down.
+                        .rotationEffect(.degrees(-item.angle))
+                        .position(toScreen(map.gridPoint(for: item.center)))
+                }
+
+                // Doorways: a short dark bar across the opening.
+                ForEach(Array(map.doorways.enumerated()), id: \.offset) { _, door in
+                    if let first = door.points.first, let last = door.points.last, door.points.count > 1 {
+                        Path { path in
+                            path.move(to: toScreen(map.gridPoint(for: first)))
+                            path.addLine(to: toScreen(map.gridPoint(for: last)))
+                        }
+                        .stroke(Color.black.opacity(0.55), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    }
+                }
+
+                // Robot-stored no-go zones and virtual walls (read-only).
+                // Keyed by position: robots may repeat ids (e.g. 0).
+                ForEach(Array(map.noGoZones.enumerated()), id: \.offset) { _, zone in
+                    let points = zone.polygon.map { toScreen(map.gridPoint(for: $0)) }
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        points.dropFirst().forEach { path.addLine(to: $0) }
+                        path.closeSubpath()
+                    }
+                    .fill(Color.red.opacity(0.18))
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        points.dropFirst().forEach { path.addLine(to: $0) }
+                        path.closeSubpath()
+                    }
+                    .stroke(Color.red, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    if zone.kind != .unspecified, zone.kind != .noVacuumOrMop, !points.isEmpty {
+                        Text(zone.kind.label)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .position(x: points.map(\.x).reduce(0, +) / CGFloat(points.count),
+                                      y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
+                    }
+                }
+                ForEach(Array(map.virtualWalls.enumerated()), id: \.offset) { _, wall in
+                    Path { path in
+                        path.move(to: toScreen(map.gridPoint(for: wall.start)))
+                        path.addLine(to: toScreen(map.gridPoint(for: wall.end)))
+                    }
+                    .stroke(Color.red, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                }
+
                 ForEach(Array(zones.enumerated()), id: \.offset) { index, zone in
                     let a = toScreen(MapPoint(x: Double(zone.x1 - map.originX), y: Double(zone.y1 - map.originY)))
                     let b = toScreen(MapPoint(x: Double(zone.x2 - map.originX), y: Double(zone.y2 - map.originY)))
@@ -116,10 +206,18 @@ struct MapCanvas: View {
                 }
 
                 if let start = dragStart, let end = dragEnd {
-                    Rectangle()
-                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .frame(width: abs(end.x - start.x), height: abs(end.y - start.y))
-                        .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                    if onDrawLine != nil {
+                        Path { path in
+                            path.move(to: start)
+                            path.addLine(to: end)
+                        }
+                        .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 4]))
+                    } else {
+                        Rectangle()
+                            .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .frame(width: abs(end.x - start.x), height: abs(end.y - start.y))
+                            .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                    }
                 }
 
                 ForEach(map.rooms) { room in
@@ -129,6 +227,7 @@ struct MapCanvas: View {
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 4)
                             .background(.ultraThinMaterial, in: Capsule())
+                            .scaleEffect(1 / zoom)
                             .position(toScreen(c))
                     }
                 }
@@ -137,6 +236,7 @@ struct MapCanvas: View {
                     Image(systemName: "bolt.circle.fill")
                         .foregroundStyle(.green, .white)
                         .font(.title3)
+                        .scaleEffect(1 / zoom)
                         .position(toScreen(dock))
                 }
 
@@ -147,6 +247,7 @@ struct MapCanvas: View {
                         // Heading is counter-clockwise from +x with y up;
                         // the symbol points north, i.e. +90°.
                         .rotationEffect(.radians(.pi / 2 - pose.heading))
+                        .scaleEffect(1 / zoom)
                         .position(toScreen(map.gridPoint(for: pose.position)))
                         .animation(.easeInOut(duration: 1.2), value: pose.position.x)
                 }
@@ -154,6 +255,11 @@ struct MapCanvas: View {
             .frame(width: size.width, height: size.height)
             .contentShape(Rectangle())
             .onTapGesture { location in
+                if let onTapPoint {
+                    onTapPoint(MapPoint(x: Double(location.x / scale) + Double(map.originX),
+                                        y: Double((size.height - location.y) / scale) + Double(map.originY)))
+                    return
+                }
                 guard let onTapRoom, onDrawZone == nil else { return }
                 let gx = Int(location.x / scale)
                 let gy = Int((size.height - location.y) / scale)
@@ -175,17 +281,32 @@ struct MapCanvas: View {
                         }
                         let a = world(value.startLocation)
                         let b = world(value.location)
+                        if let onDrawLine {
+                            guard hypot(Double(a.0 - b.0), Double(a.1 - b.1)) >= 3 else { return }
+                            onDrawLine(MapPoint(x: Double(a.0), y: Double(a.1)), MapPoint(x: Double(b.0), y: Double(b.1)))
+                            return
+                        }
                         // Ignore slivers: at least ~3 cells each way.
                         guard abs(a.0 - b.0) >= 3, abs(a.1 - b.1) >= 3 else { return }
                         onDrawZone?(Payloads.Zone(x1: a.0, y1: a.1, x2: b.0, y2: b.1))
                     },
-                including: onDrawZone == nil ? .subviews : .all
+                including: onDrawZone == nil && onDrawLine == nil ? .subviews : .all
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected)) {
-            image = map.image(selected: Set(selected))
+        .task(id: RenderKey(mapId: map.mapId, pixels: map.pixels.count, selected: selected,
+                            carpets: showCarpets)) {
+            image = map.image(selected: Set(selected), carpets: showCarpets)
             centroids = map.roomCentroids()
+        }
+    }
+
+    private func polygonPath(_ points: [CGPoint]) -> Path {
+        Path { path in
+            guard let first = points.first else { return }
+            path.move(to: first)
+            points.dropFirst().forEach { path.addLine(to: $0) }
+            path.closeSubpath()
         }
     }
 
@@ -193,5 +314,6 @@ struct MapCanvas: View {
         let mapId: Int
         let pixels: Int
         let selected: [Int]
+        let carpets: Bool
     }
 }
