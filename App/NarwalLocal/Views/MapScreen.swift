@@ -80,6 +80,7 @@ struct MapScreen: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
                             .layoutPriority(-1)
+                            .padding(.bottom, 8)
                         RoomChips(map: map, selected: $selected)
                             .frame(height: 56)
                             .background(Theme.background)

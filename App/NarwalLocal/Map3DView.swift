@@ -1,5 +1,6 @@
 import NarwalKit
 import SceneKit
+import simd
 import SwiftUI
 import UIKit
 
@@ -83,10 +84,17 @@ struct Map3DView: UIViewRepresentable {
 
         let camera = SCNNode()
         camera.camera = SCNCamera()
-        camera.camera?.fieldOfView = 40
-        camera.camera?.zFar = 500
-        let span = Float(max(w, h))
-        camera.position = SCNVector3(span * 0.15, span * 0.85, span * 0.75)
+        // Fit the whole map, walls included, inside the view with a margin:
+        // the field of view is set across the width (the narrow side on a
+        // phone), and the camera stands back far enough that a sphere
+        // around the map fits inside it from any angle.
+        camera.camera?.projectionDirection = .horizontal
+        camera.camera?.fieldOfView = 44
+        let radius = Float((w * w + h * h).squareRoot() / 2) + 1
+        let distance = radius / sin(Float(44.0 / 2 * .pi / 180)) * 1.08
+        let direction = simd_normalize(SIMD3<Float>(0.15, 0.85, 0.75))
+        camera.position = SCNVector3(direction * distance)
+        camera.camera?.zFar = Double(distance * 3)
         camera.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(camera)
 
